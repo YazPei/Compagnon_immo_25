@@ -1,0 +1,8 @@
+# Ignorer tous les fichiers CSV et Excel
+*.csv
+*.xlsx
+
+# Ignorer les notebooks Jupyter
+# *.ipynb
+
+.venv312/

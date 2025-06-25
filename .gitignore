@@ -4,5 +4,18 @@
 
 # Ignorer les notebooks Jupyter
 # *.ipynb
-
+*.venv/
 .venv312/
+venv/
+
+# Ignorer les fichiers de configuration de l'environnement virtuel
+.env
+# Ignorer les fichiers de configuration de l'IDE
+.idea/
+.vscode/
+# Ignorer les fichiers de log
+*.log
+
+# Ignorer les fichiers de cache
+__pycache__/
+*.pyc

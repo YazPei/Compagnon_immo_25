@@ -31,3 +31,4 @@ __pycache__/
 *.so
 
 dvc_storage/
+*.pub/

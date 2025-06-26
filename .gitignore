@@ -30,3 +30,4 @@ __pycache__/
 *.pyc
 *.so
 
+dvc_storage/

@@ -1,21 +1,32 @@
 # Ignorer tous les fichiers CSV et Excel
 *.csv
 *.xlsx
+*.parquet
+*.zip
+*.tar.gz
+*.pt
 
 # Ignorer les notebooks Jupyter
+.ipynb_checkpoints/
+
 # *.ipynb
 *.venv/
 .venv312/
 venv/
 
 # Ignorer les fichiers de configuration de l'environnement virtuel
-.env
+.env/
+env/
 # Ignorer les fichiers de configuration de l'IDE
 .idea/
 .vscode/
+
 # Ignorer les fichiers de log
 *.log
 
 # Ignorer les fichiers de cache
 __pycache__/
+*.pycdvc_storage/
 *.pyc
+*.so
+

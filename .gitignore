@@ -13,6 +13,7 @@
 *.venv/
 .venv312/
 venv/
+*.cfg
 
 # Ignorer les fichiers de configuration de l'environnement virtuel
 .env/

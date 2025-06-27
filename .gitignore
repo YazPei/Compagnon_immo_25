@@ -18,6 +18,8 @@ venv/
 # Ignorer les fichiers de configuration de l'environnement virtuel
 .env/
 env/
+*.cfg
+
 # Ignorer les fichiers de configuration de l'IDE
 .idea/
 .vscode/

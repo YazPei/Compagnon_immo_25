@@ -1,7 +1,7 @@
-# Environnement Python recommandé : 3.11
+# Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
 
 # Core Scientific & Data Manipulation
-numpy>=2.2.0                    # Calcul scientifique
+numpy==1.26.4                    # Calcul scientifique
 pandas>=2.2.0                   # Manipulation de données
 scipy==1.15.2                   # Outils mathématiques complémentaires
 scikit-learn>=1.4.0             # Machine learning généraliste
@@ -29,21 +29,23 @@ joblib>=1.3.0                   # Sauvegarde de modèles
 
 # API + Frontend
 fastapi==0.111.0                # API REST
+uvloop
 uvicorn[standard]==0.29.0       # Serveur ASGI pour FastAPI
 python-multipart==0.0.9         # Pour gérer les fichiers FastAPI
 pydantic==2.7.1                 # Validation de données (FastAPI, modèles)
 streamlit==1.35.0               # Interface utilisateur web interactive
+httptools==0.5.0
 
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML
-dvc[gdrive]==3.50.1             # Versionning des données avec Google Drive
-
+dvc==3.44.0             # Versionning stable de base de DVC
+dvc-gdrive==2.20.0      # Extension Google Drive compatible
 # Monitoring et observabilité
 prometheus-client==0.20.0       # Monitoring de métriques (Prometheus)
 
 # Dev & Jupyter
 ipykernel==6.29.5               # Jupyter Kernel Python
-ipython==9.2.0                  # Shell interactif
+ipython==8.18.1                  # Shell interactif
 jupyter_client==8.6.3           # Client Jupyter
 jupyter_core==5.7.2             # Core du Jupyter Kernel
 debugpy==1.8.14                 # Débogage Jupyter
@@ -56,11 +58,11 @@ setuptools==80.3.1              # Packaging
 wheel==0.45.1                   # Build de wheels
 six==1.17.0                     # Compatibilité Python 2/3
 typing_extensions==4.13.2       # Typage dynamique
-pytz==2025.2                    # Fuseaux horaires
+pytz==2023.3                    # Fuseaux horaires
 tzdata==2025.2                  # Données de fuseaux
 urllib3==2.4.0                  # Requêtes HTTP
 requests==2.32.3                # Requêtes API
-packaging==25.0                 # Parsing versions
+packaging==24.0                 # Parsing versions
 
 # Accélération, GPU, etc.
 numba>=0.59.0                   # Compilation JIT (accélération)

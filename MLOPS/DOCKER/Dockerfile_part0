@@ -1,0 +1,17 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Installer dépendances système
+RUN apt-get update && apt-get install -y git && apt-get clean
+
+# Copier les fichiers nécessaires
+COPY requirements.txt ./
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+COPY run_part_0_with_mlflow.py ./
+COPY src/ ./src/
+COPY data/ ./data/
+COPY mlruns/ ./mlruns/
+
+CMD ["python", "run_part_0_with_mlflow.py"]

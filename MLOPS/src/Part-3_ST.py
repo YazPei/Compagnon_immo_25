@@ -1,9 +1,11 @@
-# Generated from notebook: Part-3_ST_verif copy.ipynb
-import mlflow
-mlflow.set_experiment('companion_immo')
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Modélisation - Séries Temporelles avec SARIMAX
+
+# In[1]:
 
 
-# ---- CODE CELL ----
 import regex as re
 import os
 import pandas as pd
@@ -22,14 +24,12 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-%matplotlib
-
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+get_ipython().run_line_magic('matplotlib', '')
 
 
-# ---- CODE CELL ----
+# In[2]:
+
+
 from numba import njit, prange
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -59,12 +59,10 @@ def somme_racines(n):
         tmp[i] = np.sqrt(i)
     return np.sum(tmp)
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[3]:
 
 
-# ---- CODE CELL ----
 import numpy as np
 from numba import njit, prange
 
@@ -79,12 +77,11 @@ def somme_racines(n):
 print(somme_racines(100_000_000))
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# Les données des jeu de test et train sont déjà standardisé et agrégé par mois
+
+# In[4]:
 
 
-# ---- CODE CELL ----
 ## paths
 # folder_path_M = '/Users/maximehenon/Documents/GitHub/MAR25_BDS_Compagnon_Immo/'
 folder_path_Y = ("C:/Users/charl/OneDrive/Documents/Yasmine/DATASCIENTEST/FEV25-BDS-COMPAGNON")
@@ -133,22 +130,17 @@ test_periodique_q12 = pd.concat(chunk for chunk in chunks_test).sort_values(by="
 display(train_periodique_q12.head())
 display(test_periodique_q12.head())
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 # cluster et labels
 Cluster = train_periodique_q12.groupby("cluster","cl").astype("category")
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# In[5]:
 
 
-# ---- CODE CELL ----
 # Les "facteurs exogènes" ici sont en réalité endogène mais elle servent de variables explicatives externes utilisées dans un but prédictif, 
 # #connues à l’avance, mais potentiellement endogènes structurellement.
 var_targ = ['prix_m2_vente', "taux_rendement_n7", 'taux', "loyer_m2_median_n7","y_geo", "x_geo", "z_geo", "dpeL", "nb_pieces", 'IPS_primaire','rental_yield_pct',]
@@ -196,12 +188,14 @@ for col in features_lag:
 # Supprimer les premières lignes avec NaN dues au lag
 test_periodique_q12 = test_periodique_q12.dropna(subset=features + ["prix_m2_vente"])
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## Modélisation - SARIMAX
+
+# ### Choisir le modèle qui donne les résidus les plus stationnaires
+
+# In[6]:
 
 
-# ---- CODE CELL ----
 for cluster in sorted(train_periodique_q12["cluster"].dropna().unique()):
     print(f"\n=== Traitement du cluster {cluster} ===")
 
@@ -226,12 +220,13 @@ for cluster in sorted(train_periodique_q12["cluster"].dropna().unique()):
     plt.tight_layout()
     plt.show();
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# La série corrigée de ses variations saisonnières
+# 
+
+# In[7]:
 
 
-# ---- CODE CELL ----
 for cluster in sorted(train_periodique_q12["cluster"].dropna().unique()):
     print(f"\n=== Correction saisonnière – Cluster {cluster} ===")
 
@@ -261,12 +256,13 @@ for cluster in sorted(train_periodique_q12["cluster"].dropna().unique()):
     plt.tight_layout()
     plt.show()
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# Vérification de la stationnarité pour utiliser le modèle SARIMAX
+# 
+
+# In[8]:
 
 
-# ---- CODE CELL ----
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -290,12 +286,12 @@ for cluster in sorted(train_periodique_q12["cluster"].dropna().unique()):
     plt.tight_layout()
     plt.show()
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ### Différenciation
+
+# In[9]:
 
 
-# ---- CODE CELL ----
 print("\n==============================")
 print("\n=== Différenciation - Cluster 0 ===")
 print("\n==============================")
@@ -490,12 +486,12 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ### Test AD Fuller
+
+# In[10]:
 
 
-# ---- CODE CELL ----
 # Fonction pour effectuer le test ADF
 def test_stationarity(timeseries, window=12):
     # Calculer la moyenne mobile et l'écart type mobile
@@ -529,12 +525,10 @@ def test_stationarity(timeseries, window=12):
         print("La série n'est pas stationnaire (p-value >= 0.05)")
         return False
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[11]:
 
 
-# ---- CODE CELL ----
 # Effectuer le test ADF sur les time series
 cluster_to_fix = []
 print("\n==============================")
@@ -593,12 +587,12 @@ if not result:
         f"Warning ! - Cluster #{cluster} La série n'est pas stationnaire (p-value >= 0.05)\n"
     )
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ### ACF et PACF
+
+# In[12]:
 
 
-# ---- CODE CELL ----
 from statsmodels.graphics.tsaplots import plot_pacf, plot_acf
 
 print("\n==============================")
@@ -705,12 +699,27 @@ else:
         )
         plt.show()
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# | Cluster # | p | q | P | Q | d | D | S |
+# |---------|---|---|---|---|---|---|---|
+# | 0       | 1  | 2 | 0 | 0 | 1 | 0 | 0 |
+# | 1       | 1 | 1 | 0 | 0 | 0 | 0| 12 | 
+# | 2       | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 
+# | 3       | 2 | 1 | 0 | 0 | 1 | 0 | 12 | 
+# 
+# CLUSTER 0 : La PACF présente deux pics significatifs hors de l’intervalle de confiance (aux lags 1 et 2), puis retombe dans le bruit : c’est le signe typique d’un AR(2). ET pas de coupure nette à     
+#                                      q=1mais plutôt un amortissement, ce qui milite pour q = 0
+# CLUSTER 1 : Saisonalité suggéré par les pic en lag 1 puis 12. PACF: Lag 1 sort nettement de la bande de confiance (≈ –0.45). ACF: coupure nette en lag 1 > q=1
+# CLUSTER 2: 
+# CLUSTER 3: PACF 2 lags significatifs p=2 ACF q=1, n petit rebond à 12 dans la PACF s=12, ACF est un pic net et non un amortissement lent aux lags multiples, D = 0 et P = 0
+
+# ### SARIMAX
+
+# #### Grid Search (avec parallelisation sur tous les coeurs)
+
+# In[13]:
 
 
-# ---- CODE CELL ----
 import os
 import warnings
 from itertools import combinations, product
@@ -839,12 +848,12 @@ if __name__ == "__main__":
         joblib.dump(best_model, filename)
         print(f"Modèle sauvegardé sous '{filename}'")
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# #### Chargement des modèles
+
+# In[16]:
 
 
-# ---- CODE CELL ----
 import joblib
 clusters = [0, 1, 2, 3]
     # Section Chargement et diagnostics de tous les modèles
@@ -858,12 +867,11 @@ for cluster in clusters:
     plt.show()
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# ## Prédictions et diagnostique du prix m2 des clusters 
+
+# In[19]:
 
 
-# ---- CODE CELL ----
 from sklearn.metrics import mean_absolute_error
 dico = {"0": "Banlieue - Zone Mixte",
         "1":"Centre Urbain établis, zones résidentielles",
@@ -941,12 +949,13 @@ for cluster in clusters:
 #     plt.show()
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# ## Evaluation de la performance
+
+# ### Evaluation de la précision
+
+# In[21]:
 
 
-# ---- CODE CELL ----
 # ─── EVALUATION DES MODELES PAR CLUSTER ─────────────────────────────────────────
 
 from sklearn.metrics import mean_absolute_error
@@ -986,12 +995,11 @@ metrics_df = pd.DataFrame(results)
 display(metrics_df)
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# ### Evaluation du surapprentissage <-- Cette partie est en cours 
+
+# In[23]:
 
 
-# ---- CODE CELL ----
 import pandas as pd
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import numpy as np
@@ -1076,12 +1084,15 @@ for n,o in zip(clusters,dico.values()):
     plt.show()
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# ## Enregistrement des résultats
+
+# 
+
+# ## Prophet cluster 2 -Zone Rurale
+
+# In[26]:
 
 
-# ---- CODE CELL ----
 # 1. Imports et chargement -------------------------------------------------
 from prophet import Prophet
 from prophet.diagnostics import cross_validation, performance_metrics
@@ -1180,12 +1191,9 @@ print(m.extra_regressors)
 plot_components(m, forecast)
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# In[25]:
 
 
-# ---- CODE CELL ----
 ###################CLUSTER 3###################################
 # 1. Imports et chargement -------------------------------------------------
 from prophet import Prophet
@@ -1283,7 +1291,84 @@ plot_components(m, forecast)
 
 
 
-with mlflow.start_run(run_name='Part-3_ST_verif copy'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
-
+# Conclusions à jour
+# 
+# 
+# #  Analyse Globale – Modélisation SARIMAX vs Prophet par cluster
+# | Cluster   | MAE (€/m²) | MAPE (%) | Niveau de Prix | Volatilité |
+# |-----------|------------|----------|----------------|------------|
+# | Cluster 0 | 30.11      | 1.03     | Moyen-bas      | Faible     |
+# | Cluster 1 | 72.20      | 3.10     | Moyen          | Moyenne    |
+# | Cluster 2 | 64.50      | 3.00     | Moyen-haut     | Faible     |
+# | Cluster 3 | 130.63     | 1.64     | Élevé          | Élevée     |
+# 
+# 
+# ##  Surapprentissage & Généralisation (Mise à jour IQR)
+# 
+# | Cluster | Zone                           | Seuil IQR haut (€/m²) | MSE Train | MSE Test | MAE Test (€) | Surapprentissage | Dynamique test bien suivie ?             |
+# |--------:|--------------------------------|-----------------------:|----------:|---------:|--------------:|------------------:|-------------------------------------------|
+# | **0**   |Banlieue parisienne, zone mixte  | 4 574.5                | 2 163.9   | 1 835.3  | **30.1**      | :x: Non             | :white_check_mark: Oui (légère sous-estimation)            |
+# | **1**   | Centre urbain établi            | 2 796.7                | 6 406.7   | 7 167.4  | **72.2**      | :warning: Modéré          | :x: Sous-estimation persistante             |
+# | **2**   | Zone rurale villes stagnantes   | 2 420.0                | 1 090.3   | 5 191.9  | **64.5**      | :warning: Modéré          | :x: Prophet : meilleure forme, test mieux   |
+# | **3**   | Ville spéculative / luxe        | 9 289.2                | 12 328.9  | 22 610.4 | **130.6**     | :warning: Modéré          | :warning: Partiel (bruit test non anticipé)       |
+# 
+# ---
+# 
+# ##  Analyse détaillée par cluster
+# 
+# ###  Cluster 0 – Banlieue parisienne, zone mixte(not. zones frontalières)
+# 
+# - SARIMAX(1,2,1) très stable.
+# - Erreurs faibles, pas de bruit, résidus propres.
+# - Pas besoin de Prophet ici.
+# 
+# **Conclusion** :
+# Modèle parfait pour un marché stable et prévisible.
+# 
+# ---
+# 
+# ### Cluster 1 – Centre urbain établi, zone résidentielle
+# 
+# - MSE test > train, sous-estimation persistante.
+# - SARIMAX ne capture pas les dynamiques locales.
+# 
+# **Suggestions** :
+# - Ajouter exogènes socio-économiques locales.
+# - Repenser le clustering (mobilité, revenus, etc.): le cluster est assez dispersé géographiquement
+# - Travailler avec les équipes métiers pour mieux cerner la spécificité du cluster et le resegmenter (si besoin) en fonction
+# ---
+# 
+# ### Cluster 2 –   Zone rurale 
+# 
+# - **SARIMAX échoue à prédire l’évolution récente.**
+# - **Prophet capte mieux les ruptures mais reste trop "lisse".**
+# - Bonne base de tendance, mais pas assez de variabilité.
+# 
+# **Suggestions** :
+# - **Intégration des changepoints manuels (ex. août 2022).**
+# - Ajouter saisonnalité
+# 
+# ---
+# 
+# ###  Cluster 3 – Ville spéculative, luxe
+# 
+# - SARIMAX modélise bien les exogènes mais lisse trop les pics.
+# - **Prophet suit beaucoup mieux la forme réelle (hausse → baisse).**
+# - Volatilité captée partiellement avec Prophet + changepoints.
+# 
+# **Suggestions** :
+# - Utiliser Prophet avec `changepoints` pour ajuster les retournements.
+# - Éventuellement combiner Prophet (tendance) + modèle ML (résidus).
+# 
+# ---
+# 
+# ## :scales: Synthèse comparative SARIMAX / Prophet
+# 
+# | Cluster                    | SARIMAX – Forces            | SARIMAX – Limites                | Prophet – Apport principal                          |
+# |---------------------------:|-----------------------------|----------------------------------|-----------------------------------------------------|
+# | **Banlieu et zone mixte**  | Très bon suivi, erreurs faibles | Aucun besoin d’amélioration      | :x: Prophet inutile – marché parfaitement modélisé    |
+# | **Centre urbain établi**   | Base solide, stabilité       | Tendance mal captée              | :soon: À tester                                          |
+# | **Zone rurale**            | Bon suivi historique         | Mauvaise prévision test          | :white_check_mark: Capte mieux la forme, changepoints efficaces     |
+# | **Zone tendue**            | Bonne modélisation structurelle | Trop lissé                      | :white_check_mark: Suivi plus précis des retournements et des pics  |
+# 
+# ---

@@ -1,9 +1,30 @@
-# Generated from notebook: Part-2_R40_CLUSTER_corrige.ipynb
-import mlflow
-mlflow.set_experiment('companion_immo')
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Encodages et Séparation Train/Test pour la Prédiction des Prix Immobiliers
+# 
+# ## Introduction
+# 
+# Ce notebook présente les étapes de préparation des données et d'encodage des variables pour un modèle de prédiction des prix immobiliers. Nous utilisons les données prétraitées par le notebook Part-1 bis qui centralise le clustering et la préparation des données.
+# 
+# Les principales étapes abordées dans ce notebook sont :
+# - Le chargement des données préparées
+# - La préparation et la transformation des variables
+# - L'encodage des différents types de variables (catégorielles, ordinales, temporelles, etc.)
+# - La construction d'un pipeline de prétraitement complet
+# - L'optimisation des hyperparamètres du modèle
+# - L'évaluation des performances du modèle
+# - L'interprétation des résultats
+# 
+# Ce travail s'inscrit dans un projet d'analyse du marché immobilier visant à prédire les prix au mètre carré des biens.
+
+# ## 1. Importation des bibliothèques
+# 
+# Nous commençons par importer toutes les bibliothèques nécessaires pour notre analyse. Ces bibliothèques sont regroupées par catégorie pour une meilleure lisibilité.
+
+# In[1]:
 
 
-# ---- CODE CELL ----
 # Standard library
 import os
 import time
@@ -67,12 +88,14 @@ pd.set_option('display.colheader_justify', 'center')  # Centre les noms des colo
 # Ignorer les warnings
 warnings.filterwarnings('ignore')
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 2. Configuration des chemins d'accès
+# 
+# Nous définissons les chemins d'accès aux données préparées par le notebook Part-1 bis.
+
+# In[2]:
 
 
-# ---- CODE CELL ----
 # Définition des chemins d'accès aux données
 # Décommentez le chemin correspondant à votre environnement
 
@@ -89,12 +112,14 @@ folder_path = folder_path_L  # Remplacez par votre variable de chemin
 # Note: Part-1 bis exporte un seul fichier avec une colonne 'split' pour distinguer train/test
 train_cluster_file = os.path.join(folder_path, 'train_cluster_prepared.csv')
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 3. Chargement des données
+# 
+# Nous chargeons les données préparées par le notebook Part-1 bis, qui contient déjà la colonne 'split' pour distinguer les ensembles d'entraînement et de test.
+
+# In[3]:
 
 
-# ---- CODE CELL ----
 def load_prepared_data(file_path, index_col=None, parse_dates=False):
     """Charge les données préparées par Part-1 bis.
     
@@ -148,12 +173,13 @@ print(train_clean['chauffage_energie'].value_counts())
 
 
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# ## 4. Préparation des variables
+# 
+# Nous définissons les différentes catégories de variables et les transformations à appliquer.
+
+# In[4]:
 
 
-# ---- CODE CELL ----
 # ─── 0. Fonction d'encodage cyclique des dates ────────────────────────────────
 def cyclical_encode(df):
     df = df.copy()
@@ -209,12 +235,14 @@ if missing_cols:
 else:
     print("✅ Toutes les colonnes nécessaires sont présentes dans le dataset.")
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 5. Fonctions d'encodage
+# 
+# Nous définissons des fonctions pour l'encodage cyclique des dates et la transformation des coordonnées géographiques.
+
+# In[5]:
 
 
-# ---- CODE CELL ----
 def cyclical_encode(df):
     # Si df est une DataFrame à une seule colonne (ex: ["date"]), on la gère
     if isinstance(df, pd.DataFrame):
@@ -257,12 +285,14 @@ def geo_to_cartesian(df, lat_col, lon_col):
     
     return df
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 6. Pipeline de prétraitement
+# 
+# Nous construisons un pipeline complet pour le prétraitement des données.
+
+# In[6]:
 
 
-# ---- CODE CELL ----
 def replace_minus1(x):
     return np.where(x == -1, 5, x)
 
@@ -416,12 +446,10 @@ for col in selected_features:
 X_train_df = X_train_df[selected_features]
 X_test_df = X_test_df[selected_features]
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[7]:
 
 
-# ---- CODE CELL ----
 import unidecode
 def clean_feature_name(name):
     # Enlève les accents et remplace les caractères spéciaux
@@ -462,12 +490,14 @@ print(X_train_df['balcon'].head())
 if isinstance(X_train_df['balcon'], pd.DataFrame):
     print(X_train_df['balcon'].columns)
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 7. Entraînement d'un modèle de base
+# 
+# Nous entraînons un modèle LightGBM de base pour évaluer les performances initiales.
+
+# In[8]:
 
 
-# ---- CODE CELL ----
 # --- Vérification des colonnes constantes, nulles ou absentes ---
 print("Vérification des colonnes sélectionnées :")
 for col in selected_features:
@@ -495,12 +525,10 @@ X_train_df = X_train_df[selected_features]
 X_train_df.to_csv('X_train_encoded_for_api.csv', sep=';', index=True)
 print("DataFrame encodé sauvegardé pour l'API.")
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[9]:
 
 
-# ---- CODE CELL ----
 # --- Définition et entraînement du modèle sur les features sélectionnées ---
 base_model = LGBMRegressor(
     n_estimators=100,
@@ -547,12 +575,14 @@ plt.title('Prédictions vs Valeurs réelles')
 plt.tight_layout()
 plt.show()
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 8. Optimisation des hyperparamètres avec Optuna
+# 
+# Nous utilisons Optuna pour optimiser les hyperparamètres du modèle LightGBM.
+
+# In[10]:
 
 
-# ---- CODE CELL ----
 import warnings
 warnings.filterwarnings("ignore")
 warnings.filterwarnings(
@@ -610,12 +640,14 @@ print(f"Meilleur score RMSE : {-study.best_value:.4f}")
 fig = vis.plot_param_importances(study)
 fig.show()
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 9. Entraînement du modèle final
+# 
+# Nous entraînons le modèle final avec les meilleurs hyperparamètres trouvés.
+
+# In[11]:
 
 
-# ---- CODE CELL ----
 # Création du modèle final avec les meilleurs hyperparamètres
 final_model = LGBMRegressor(**study.best_params)
 
@@ -654,12 +686,14 @@ plt.title('Prédictions vs Valeurs réelles (modèle final)')
 plt.tight_layout()
 plt.show()
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 10. Analyse de l'importance des variables
+# 
+# Nous analysons l'importance des variables dans le modèle final.
+
+# In[12]:
 
 
-# ---- CODE CELL ----
 # Affichage de l'importance des variables sur les features sélectionnées
 feature_importance = pd.DataFrame({
     'Feature': X_train_df.columns,  # ou selected_features
@@ -685,12 +719,14 @@ train_sample = train_export.sample(frac=0.1, random_state=42)  # 10% aléatoire
 train_sample.to_csv('train_preprocessed_snapshot.csv', sep=';', index=False)
 print(f'✅ Export de 10% du train prétraité : train_preprocessed_snapshot.csv ({len(train_sample)} lignes)')
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 11. Interprétation du modèle avec SHAP
+# 
+# Nous utilisons SHAP pour interpréter les prédictions du modèle.
+
+# In[13]:
 
 
-# ---- CODE CELL ----
 # Échantillonnage pour l'analyse SHAP (pour réduire le temps de calcul)
 n_samples = min(20000, X_test_df.shape[0])
 X_sample = X_test_df.iloc[:n_samples]
@@ -712,12 +748,14 @@ for i in range(min(5, len(X_test_df.columns))):
     plt.tight_layout()
     plt.show()
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 12. Sauvegarde du modèle et des métadonnées
+# 
+# Nous sauvegardons le modèle final et les métadonnées associées pour une utilisation ultérieure.
+
+# In[14]:
 
 
-# ---- CODE CELL ----
 # Création du dossier de sauvegarde si nécessaire
 model_dir = os.path.join(folder_path, 'models')
 os.makedirs(model_dir, exist_ok=True)
@@ -750,19 +788,30 @@ metadata_path = os.path.join(model_dir, 'model_metadata.joblib')
 joblib.dump(metadata, metadata_path)
 print(f"Métadonnées sauvegardées : {metadata_path}")
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[15]:
 
 
-# ---- CODE CELL ----
 notebook_name = "Part-2_R40_CLUSTER_corrige.ipynb"
 output_html = "Part-2_R40_CLUSTER_corrige_outputs.html"
 
 os.system(f'jupyter nbconvert --to html "{notebook_name}" --output "{output_html}"')
 print(f"✅ Notebook exporté en HTML : {output_html}")
 
-with mlflow.start_run(run_name='Part-2_R40_CLUSTER_corrige'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
 
+# ## 13. Conclusion
+# 
+# Dans ce notebook, nous avons développé un modèle de prédiction des prix immobiliers au mètre carré en utilisant les données prétraitées par le notebook Part-1 bis. Nous avons :
+# 
+# 1. Chargé et préparé les données en utilisant la colonne 'split' pour distinguer les ensembles d'entraînement et de test
+# 2. Défini différentes transformations pour chaque type de variable (ordinale, one-hot, numérique, géographique, temporelle)
+# 3. Construit un pipeline de prétraitement complet
+# 4. Entraîné un modèle de base pour établir une référence
+# 5. Optimisé les hyperparamètres du modèle avec Optuna
+# 6. Entraîné et évalué le modèle final
+# 7. Analysé l'importance des variables et interprété le modèle avec SHAP
+# 8. Sauvegardé le modèle et les métadonnées pour une utilisation ultérieure
+# 
+# Le modèle final a atteint de bonnes performances avec un R² de [valeur], ce qui indique une bonne capacité à prédire les prix immobiliers. Les variables les plus importantes pour la prédiction sont [liste des variables importantes].
+# 
+# Ces résultats peuvent être utilisés pour mieux comprendre les facteurs qui influencent les prix immobiliers et pour développer des outils d'aide à la décision pour les acteurs du marché immobilier.

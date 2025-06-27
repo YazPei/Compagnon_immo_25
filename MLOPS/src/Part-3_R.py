@@ -1,9 +1,20 @@
-# Generated from notebook: Part-3 R.ipynb
-import mlflow
-mlflow.set_experiment('companion_immo')
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Part 3: Entraînement, Interprétation du modèle et Déploiement
+# 
+# 
+# **Objectifs pédagogiques**
+# - Charger les données prétraitées et les résultats d’Optuna
+# - Entraîner le modèle LightGBM avec les meilleurs paramètres trouvés
+# - Évaluer les performances sur le jeu de test
+# - Interpréter le modèle à l'aide de SHAP pour comprendre l’impact des variables
+# - Optimiser le seuil de décision et calibrer le modèle
+# - Préparer l’export pour la mise en production
+
+# In[1]:
 
 
-# ---- CODE CELL ----
 # 1. Imports nécessaires
 import os
 import pandas as pd
@@ -22,12 +33,12 @@ from sklearn.impute import SimpleImputer
 from category_encoders import TargetEncoder
 from lightgbm import LGBMRegressor
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 1️. Charger les données complètes & paramètres
+
+# In[2]:
 
 
-# ---- CODE CELL ----
 ## paths
 #folder_path_M = '/Users/maximehenon/Documents/GitHub/MAR25_BDS_Compagnon_Immo/'
 # folder_path_Y = 'C:/Users/charl/OneDrive/Documents/Yasmine/DATASCIENTEST/FEV25-BDS-COMPAGNON'
@@ -59,22 +70,22 @@ print(df_sales_clean.info())
 # Charger les meilleurs paramètres de la Part 2
 best_params = joblib.load("best_lgbm_params.pkl")
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 2. Préparer les données
+
+# In[3]:
 
 
-# ---- CODE CELL ----
 # Préparer les données
 X = df.drop(columns=['prix_m2_vente'])  # Supprimer la colonne cible
 y = df['prix_m2_vente']  # Utiliser la colonne cible
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 3. Créer le pipeline
+
+# In[4]:
 
 
-# ---- CODE CELL ----
 # ─── 0. Fonction d'encodage cyclique des dates ────────────────────────────────
 def cyclical_encode(df):
     df = df.copy()
@@ -112,12 +123,9 @@ year_order = [
 ]
 
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# In[5]:
 
 
-# ---- CODE CELL ----
 # ─── 2. Pipelines & ColumnTransformer ─────────────────────────────────────────
 
 # — Pipeline ordinal « classiques »
@@ -182,12 +190,14 @@ date_pipeline = Pipeline([
     ("cyclic", FunctionTransformer(cyclical_encode, validate=False))
 ])
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 4. Assemblage du pipeline complet
+# 
+# Nous assemblons maintenant tous les pipelines individuels en un seul transformateur de colonnes, qui sera ensuite intégré dans un pipeline complet avec notre modèle LightGBM configuré avec les meilleurs paramètres.
+
+# In[6]:
 
 
-# ---- CODE CELL ----
 # ─── 5. Assembleur final ─────────────────────────────────────────────────────
 preprocessor = ColumnTransformer(
     [
@@ -231,12 +241,14 @@ def get_feature_names_from_column_transformer(column_transformer):
                 feature_names.extend(cols)
     return feature_names
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 5. Entraînement du modèle
+# 
+# Nous entraînons maintenant notre modèle sur l'ensemble des données. Cette étape peut prendre un certain temps en raison de la taille du jeu de données et de la complexité du modèle.
+
+# In[7]:
 
 
-# ---- CODE CELL ----
 # Entraînement du modèle sur l'ensemble des données
 pipeline = Pipeline([
     ("preproc", preprocessor),
@@ -246,12 +258,12 @@ pipeline.set_params(**best_params)
 
 print("Entraînement du modèle terminé.")
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 6. Split train/test (80/20)
+
+# In[8]:
 
 
-# ---- CODE CELL ----
 # Split train/test (80/20)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, 
@@ -280,32 +292,30 @@ print(X_train[['x_geo', 'y_geo', 'z_geo']].head())
 print("\nColonnes géographiques créées dans X_test :")
 print(X_test[['x_geo', 'y_geo', 'z_geo']].head())
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 7. Entraînenement
+
+# In[9]:
 
 
-# ---- CODE CELL ----
 # Entraîner sur le dataset complet
 pipeline.fit(X_train, y_train)
 print("✅ Entraînement terminé sur le dataset complet")
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[15]:
 
 
-# ---- CODE CELL ----
 feature_names = get_feature_names_from_column_transformer(pipeline.named_steps["preproc"])
 print(f"Nombre de features attendues par le modèle : {len(feature_names)}")
 print(feature_names)
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 8. Évaluation
+
+# In[11]:
 
 
-# ---- CODE CELL ----
 # 7. Évaluation
 y_pred = pipeline.predict(X_test)
 
@@ -326,12 +336,12 @@ plt.ylabel('Prédictions')
 plt.title('Prédictions vs Vraies valeurs')
 plt.show()
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 9. Interprétation avec SHAP
+
+# In[19]:
 
 
-# ---- CODE CELL ----
 # 9. Interprétation avec SHAP
 print("\n🔍 Calcul des valeurs SHAP...")
 explainer = shap.TreeExplainer(pipeline.named_steps["model"])
@@ -376,12 +386,10 @@ plt.title("Force plot pour les 5 premières observations")
 plt.tight_layout()
 plt.show()
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[29]:
 
 
-# ---- CODE CELL ----
 import shap
 import numpy as np
 import matplotlib.pyplot as plt
@@ -413,12 +421,10 @@ plt.title("Importance des variables (SHAP values)")
 plt.tight_layout()
 plt.show()
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[31]:
 
 
-# ---- CODE CELL ----
 import numpy as np
 import pandas as pd
 
@@ -450,12 +456,12 @@ model_40.fit(X_train_40, y_train)
 score_40 = model_40.score(X_test_40, y_test)
 print(f"Score R² avec les 40 features les plus importantes : {score_40:.4f}")
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# # 10. Seuil optimal (max F1)
+
+# In[32]:
 
 
-# ---- CODE CELL ----
 # Summary plot global
 plt.figure(figsize=(10,6))
 # Récupération des vrais noms de features après transformation
@@ -472,12 +478,11 @@ plt.tight_layout()
 plt.show()
 
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+# # Sauvegarde
+
+# In[33]:
 
 
-# ---- CODE CELL ----
 import joblib
 import os
 
@@ -492,20 +497,14 @@ print("\n✅ Modèle 40 features sauvegardé sous 'models/lgbm_40features_deploy
 joblib.dump(top_40_features, "models/features_40.pkl")
 print("✅ Liste des 40 features sauvegardée sous 'models/features_40.pkl'")
 
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# In[14]:
 
 
-# ---- CODE CELL ----
 # Crée le dossier s'il n'existe pas
 os.makedirs("models", exist_ok=True)
 
 # Sauvegarde du modèle
 joblib.dump(pipeline, "models/lgbm_final_deploy.pkl")
 print("\n✅ Modèle final sauvegardé sous 'models/lgbm_final_deploy.pkl'")
-
-with mlflow.start_run(run_name='Part-3 R'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
 

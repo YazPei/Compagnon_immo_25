@@ -1,9 +1,14 @@
-# Generated from notebook: Part-4 Modelisation_optuna.ipynb
-import mlflow
-mlflow.set_experiment('companion_immo')
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Pipeline de Feature Selection et d'Analyse Avancée
+# Ce notebook intègre la sélection de caractéristiques, l'optimisation d'hyperparamètres, l'entraînement final, la visualisation des résultats de CV et l'analyse des résidus.
+
+# ## 1. Importation et Configuration
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 import re, os, pickle
 import pandas as pd, numpy as np
 from tqdm.auto import tqdm
@@ -32,12 +37,13 @@ RESIDUS_FILE = '/mnt/data/Analyse_des_residus.py'
 CV_RESULTS_FILE = '/mnt/data/cv_results.pkl'
 N_SAMPLE = 150_000
 
-with mlflow.start_run(run_name='Part-4 Modelisation_optuna'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 2. Optimisation des hyperparamètres avec Optuna
+# Chargement du code d'optimisation et exécution de l'étude Optuna pour XGBoost.
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 import os
 import pandas as pd
 import numpy as np
@@ -97,12 +103,13 @@ if __name__ == "__main__":
 
 ```
 
-with mlflow.start_run(run_name='Part-4 Modelisation_optuna'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 3. Entraînement du modèle XGBoost final
+# Utilisation des meilleurs hyperparamètres pour entraîner le modèle sur l'ensemble des données.
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 ```python
 import os
 import numpy as np
@@ -165,12 +172,13 @@ print("\nModèle sauvegardé sous `xgb_final.model`")
 
 ```
 
-with mlflow.start_run(run_name='Part-4 Modelisation_optuna'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 4. Résultats de la validation croisée
+# Chargement et affichage détaillé des performances de chaque pli.
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 import pickle
 cv_results = pickle.load(open(CV_RESULTS_FILE, 'rb'))
 df_cv = pd.DataFrame(cv_results)
@@ -182,12 +190,13 @@ plt.xlabel('RMSE')
 plt.ylabel('Fréquence')
 plt.show()
 
-with mlflow.start_run(run_name='Part-4 Modelisation_optuna'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
+
+# ## 5. Analyse avancée des résidus
+# Histogramme, Q–Q plot et tests de normalité pour évaluer la distribution des résidus.
+
+# In[ ]:
 
 
-# ---- CODE CELL ----
 ```python
 import os
 import pickle
@@ -240,8 +249,4 @@ plt.title("Q–Q plot des résidus — test")
 plt.show()
 
 ```
-
-with mlflow.start_run(run_name='Part-4 Modelisation_optuna'):
-    # Log your metrics or parameters
-    mlflow.log_metric('metric_name', value)
 

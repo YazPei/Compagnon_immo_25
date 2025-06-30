@@ -58,17 +58,21 @@ def somme_racines(n):
 # Import DATASET Data_sales
 ####################### DATA MACRO ECO - DVF  / DEMAND #############################
 ## paths
-folder_path_Y = '/home/yazpei/projets/compagnon_immo/MLE/Compagnon_immo/data'
-# folder_path_K= ''
+@click.command()
+@click.argument('folder_path1', type=click.Path(exists=False), required=0)
+@click.argument('folder_path2', type=click.Path(exists=False), required=0)
+@click.argument('output_filepath', type=click.Path(exists=False), required=0)
 
+
+folder_path1 = click.prompt('Enter the file path for the input data', type=click.Path(exists=True))
 
 # Load the dataset df_sales_clean / OFFER
-#output_file1 = os.path.join(folder_path_K, 'merged_sales_data.csv')
-output_file1 = os.path.join(folder_path_Y, 'merged_sales_data.csv')
+
+input_file1 = os.path.join(folder_path1, 'merged_sales_data.csv')
 
 
 chunksize = 100000  # Number of rows per chunk
-chunks = pd.read_csv(output_file1, sep=';', chunksize=chunksize, index_col=None, on_bad_lines='skip', low_memory=False)
+chunks = pd.read_csv(input_file1, sep=';', chunksize=chunksize, index_col=None, on_bad_lines='skip', low_memory=False)
 # Process chunks
 df_sales_clean = pd.concat(chunk for chunk in chunks)
 
@@ -96,14 +100,13 @@ for col in object_cols:
 
 ##########################################################################################
 # IMPORT DATASET DVF MACRO ECO
+folder_path2 = click.prompt('Enter the file path for the input data', type=click.Path(exists=True))
 
-
-#output_file2 = os.path.join(folder_path_K, 'DVF_donnees_macroeco.csv')
-output_file2 = os.path.join(folder_path_Y, 'DVF_donnees_macroeco.csv')
+input_file2 = os.path.join(folder_path2, 'DVF_donnees_macroeco.csv')
 
 
 chunksize = 100000  # Number of rows per chunk
-chunks = pd.read_csv(output_file2, sep=',', chunksize=chunksize, index_col=None, on_bad_lines='skip', low_memory=False)
+chunks = pd.read_csv(input_file2, sep=',', chunksize=chunksize, index_col=None, on_bad_lines='skip', low_memory=False)
 # Process chunks
 df_dvf = pd.concat(chunk for chunk in chunks)
 
@@ -246,23 +249,21 @@ df_sales_clean.drop(columns=['IPS_primaire_imputed'], inplace=True)
 ##########################################################################################
 display(df_sales_clean.head())
 
-#folder_path_Y = '/home/yazpei/projets/compagnon_immo/MLE/Compagnon_immo/data'
-#folder_path_K = ''
+output_filepath = click.prompt('Enter the file path for the output prepared data', type=click.Path())
+
 
 ## Export des données
 # Conversion en DataFrame Polars
 df_pl = pl.from_pandas(df_sales_clean)
 
 # Export en Parquet
-parquet_path = Path(folder_path_LW) / "df_sales_clean_polars.parquet"
-df_pl.write_parquet(parquet_path)
+parquet_path = Path(output_filepath)/ "df_sales_clean_polars.parquet"
 print(f"Export Parquet Polars : {parquet_path}")
 
 # Export en CSV
-csv_path = Path(folder_path_LW) / "df_sales_clean_polars.csv"
+csv_path = Path(output_filepath) / "df_sales_clean_polars.csv")
 df_pl.write_csv(csv_path, separator=";")
 print(f"Export CSV Polars : {csv_path}")
 
 print("Exports Parquet et CSV Polars terminés.")
 ##########################################################################################
-

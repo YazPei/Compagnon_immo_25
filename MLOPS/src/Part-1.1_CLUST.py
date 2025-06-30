@@ -49,15 +49,13 @@ warnings.filterwarnings('ignore')
 
 #############################################################################################
 # 2. Configuration des chemins d'accès
+@click.command()
+@click.argument('folder_path', type=click.Path(exists=False), required=0)
+@click.argument('output_filepath', type=click.Path(exists=False), required=0)
 
 # Définition des chemins d'accès aux données
-# Décommentez le chemin correspondant à votre environnement
 
-# folder_path_K = ''
-# folder_path_Y = "/home/yazpei/projets/compagnon_immo/MLE/Compagnon_immo/"
-
-# Utilisez cette variable pour définir votre chemin
-folder_path = folder_path_Y  # Remplacez par votre variable de chemin
+folder_path = click.prompt('Enter the file path for the input data', type=click.Path(exists=True))
 
 # Chemins des fichiers
 train_file = os.path.join(folder_path, 'train_clean.csv')
@@ -106,7 +104,9 @@ def load_data(file_path, chunksize=100000):
 # Chargement des données d'entraînement
 print("Chargement des données d'entraînement...")
 train_cluster = load_data(train_file)
-
+train_cluster["Year"] = train_cluster.index.year
+train_cluster_ST = train_cluster[train_cluster["Year"]<'2024']
+test_cluster_ST = train_cluster[train_cluster["Year"] >= 2024]
 # Chargement des données de test
 print("\nChargement des données de test...")
 test_cluster = load_data(test_file)
@@ -122,29 +122,26 @@ import pandas as pd
 from shapely.geometry import Point
 
 # === 2. CHARGEMENT DES POLYGONES DE CODES POSTAUX ===
-## Paths
-# folder_path_K = ''
-folder_path_Y = "/home/yazpei/projets/compagnon_immo/MLE/Compagnon_immo/data"
+
+geo_cp_file = load_data(geo_file)
 
 
 
-geo_file_name = 'contours-codes-postaux.geojson'
-input_file = os.path.join(folder_path_Y, geo_file_name)
-
-pcodes = gpd.read_file(input_file)[['codePostal', 'geometry']]
+pcodes = gpd.read_file(geo_cp_file)[['codePostal', 'geometry']]
 pcodes= pcodes.set_geometry('geometry')
 pcodes = pcodes.to_crs(epsg=4326) 
 print("Polygones chargés :", pcodes.shape)
 
 # Creation de l'index spatial pour accélérer la recherche
 _ = pcodes.sindex
-train_cluster = train_cluster.reset_index()
+train_cluster_ST = train_cluster_ST.reset_index()
 
-train_cluster['split'] = 'train'
-test_cluster['split'] = 'test'
+train_cluster_ST['split'] = 'train' #(train for reg and ST)
+test_cluster_ST['split'] = 'train_test' #(train reg test ST)
+test_cluster['split'] = 'test' #(test for reg)
 
 # Combinaison des données pour le traitement
-df_cluster = pd.concat([train_cluster, test_cluster])
+df_cluster = pd.concat([train_cluster_ST, test_cluster_ST, test_cluster])
 
 # === 4. PRÉTRAITEMENT GEO ===
 df_base = df_cluster.copy()
@@ -282,7 +279,7 @@ display(df_base.head())
 
 
 train_cluster = df_base[df_base['split']=='train']
-test_cluster = df_base[df_base['split']== 'test']
+test_cluster = df_base[(df_base['split']== 'test') | (df_base['split']== 'train_test') ]
 
 # On garde les codes postaux fréquents
 cp_counts = train_cluster["codePostal"].value_counts()
@@ -315,7 +312,6 @@ test_cluster["zone_mixte"] = test_cluster.apply(
 
 # ##### construction d'un jeu d'entrainement avec la variable 'Zone Mixte' et un lag -1
 
-# In[17]:
 
 
 train_cluster.sort_values(["zone_mixte", "date"], inplace=True)
@@ -341,13 +337,9 @@ train_mensuel = (
 # ### Création de variable propre à la segmentation géographique
 # Ces variables vont évaluer la volatilité du prix, le taux de croissance, la moyenne des prix et la variabilité
 
-# #### Calcul du taux de croissance annuel lissé
-# L'objectif est de prendre en compte la tendance globale de l'évolution des prix par code postal,
-# sur toute la période observée, en lissant les variations mois par mois.
-# 
+# #### Calcul du taux de croissance annuel lissé #######
 
-# In[18]:
-
+# L'objectif est de prendre en compte la tendance globale de l'évolution des prix par code postal, sur toute la période observée, en lissant les variations mois par mois.
 
 import numpy as np
 import pandas as pd
@@ -574,7 +566,6 @@ df_cluster_input.loc[train_idx, "cluster"] = labels.astype(int)
 
 # ### Création du jeu de test avec les variables de train
 
-# In[22]:
 
 
 
@@ -609,8 +600,6 @@ test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
 
 # ### fixation des clusters
 
-# In[23]:
-
 
 # ── 5. Mapping vers un label lisible ──
 cluster_order = (
@@ -638,8 +627,6 @@ print(f"{mask_valid.sum()} lignes sur {len(test_cluster)} assignées à un clust
 
 
 # ### Visualisation
-
-# In[24]:
 
 
 cluster_palette = {
@@ -673,7 +660,7 @@ plt.show()
 
 # ### Visualisation sur une map
 
-# In[25]:
+
 
 
 import geopandas as gpd
@@ -772,8 +759,6 @@ for feat in features_box:
     plt.show()
 
 
-# In[26]:
-
 
 # Nous sommes bien sur les clusters suivants:
 # 
@@ -804,7 +789,7 @@ for feat in features_box:
 
 # ## Varifications et export des données
 
-# In[27]:
+
 
 
 # Etape 4: export des données
@@ -817,24 +802,28 @@ test_clean = test_cluster.copy()
 train_clean = train_cluster.copy()
 
 
+
+
 # ## Export des datasets
 
-# In[35]:
 
 # Combinaison des données pour le traitement
-df_cluster_ST = pd.concat([train_cluster, test_cluster])
-
+df_cluster_ST = pd.concat([train_cluster, test_cluster]).drop(columns='split')
+df_cluster = pd.concat([train_cluster, test_cluster])
 
 # # Enregistrer le DataFrame final
-# pour serie temporelle
-df_cluster_ST.to_csv(os.path.join(folder_path_Y, "/data/df_sales_clean_ST.csv"), sep=";", index=True)
-#df_cluster_ST.to_csv(os.path.join(folder_path_K, "/data/df_sales_clean_ST.csv"), sep=";", index=True)
+# Serie temporelle pour Part-2_ST
+
+output_filepath = click.prompt('Enter the file path for the output data with the clusters', type=click.Path())
+df_cluster_ST.to_csv(os.path.join(output_filepath, "/data/df_sales_clean_ST.csv"), sep=";", index=True)
 
 
-
+# regression pour Part-2_R
 # Enregistrer les dataset Train_clean et test_clean
-df_cluster_ST.to_csv(os.path.join(folder_path_Y, "train_cluster_prepared.csv"), sep=";", index=True)
-#df_cluster_ST.to_csv(os.path.join(folder_path_K, "train_cluster_prepared.csv"), sep=";", index=True)
+df_cluster['split'] = df_cluster['split'].replace('train_test','train') #(train for reg)
+
+df_cluster.to_csv(os.path.join(output_filepath, "df_cluster.csv"), sep=";", index=True)
+
 
 
 

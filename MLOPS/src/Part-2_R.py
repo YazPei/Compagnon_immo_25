@@ -106,11 +106,11 @@ folder_path_L = '/Users/loick.d/Documents/Datascientest/Github immo/MAR25_BDS_Co
 # folder_path_LW = 'C:/Users/User/Downloads/drive-download-20250508T155351Z-1-001'
 
 # Utilisez cette variable pour définir votre chemin
-folder_path = folder_path_L  # Remplacez par votre variable de chemin
+
 
 # Chemin du fichier préparé par Part-1 bis
 # Note: Part-1 bis exporte un seul fichier avec une colonne 'split' pour distinguer train/test
-train_cluster_file = os.path.join(folder_path, 'train_cluster_prepared.csv')
+df_cluster = os.path.join(folder_path, 'df_cluster.csv')
 
 
 # ## 3. Chargement des données
@@ -148,7 +148,7 @@ def load_prepared_data(file_path, index_col=None, parse_dates=False):
         raise
 
 # Chargement des données préparées (un seul fichier avec colonne 'split')
-data_cluster = load_prepared_data(train_cluster_file)
+data_cluster = load_prepared_data(df_cluster)
 
 # Séparation des ensembles d'entraînement et de test à partir de la colonne 'split'
 train_clean = data_cluster[data_cluster['split'] == 'train'].copy()

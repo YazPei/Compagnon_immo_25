@@ -76,18 +76,14 @@ print(somme_racines(100_000_000))
 
 
 ## paths
-# folder_path_M = '/Users/maximehenon/Documents/GitHub/MAR25_BDS_Compagnon_Immo/'
+# folder_path_K = ''
 folder_path_Y = "C:/Users/charl/OneDrive/Documents/Yasmine/DATASCIENTEST/FEV25-BDS-COMPAGNON"
-# folder_path_C = '../data/processed/Sales'
-# folder_path_L= '/Users/loick.d/Documents/Datascientest/Github immo/MAR25_BDS_Compagnon_Immo/'
-
 
 # Load the dataset
-# output_file = os.path.join(folder_path_M, 'df_sales_clean_ST.csv')
+# output_file = os.path.join(folder_path_K, 'df_sales_clean_ST.csv')
 output_file = os.path.join(folder_path_Y, "df_sales_clean_ST.csv")
-# output_file = os.path.join(folder_path_C, 'df_sales_clean_ST.csv')
-# output_file = os.path.join(folder_path_L, 'df_sales_clean_ST.csv')
 
+### cpu###
 from tqdm import tqdm
 import time
 

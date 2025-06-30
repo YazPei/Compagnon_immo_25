@@ -41,68 +41,64 @@ Le projet est organisé selon la structure suivante :
 │   │   └── visualize.py
 |   ├── streamlit       <- L' application Streamlit de la soutenance.
 ```
+# API d'Estimation Immobilière
 
-## 🔬 Méthodologie Résumée
+## Présentation
+Cette API FastAPI permet d'estimer le prix d'un bien immobilier et de fournir une tendance de marché, en s'appuyant sur des modèles Machine Learning réels :
+- **LightGBM** pour la prédiction du prix
+- **SARIMAX** (un modèle par cluster) pour la tendance de marché
 
-### 1️⃣ Exploration - Preprocessing - Split
+## Organisation des modèles
 
-* Nettoyage, sélection de variables, gestion des valeurs manquantes, aberrantes et extrêmes.
-* Enrichissements via API DPE et INSEE.
+- Les modèles entraînés doivent être placés dans le dossier : `api_test/models/`
+    - Modèle principal LightGBM : `best_lgbm_model.pkl`
+    - Modèles SARIMAX par cluster : `best_sarimax_cluster0_parallel.joblib`, `best_sarimax_cluster1_parallel.joblib`, etc.
 
-### 2️⃣ Encodage et Feature Engineering
+## Fonctionnement de la sélection SARIMAX
 
-* Ordinal, One-hot, Target Encoding.
-* Pas de feature selection automatique au final : sélection manuelle par logique métier.
+- Lors d'une estimation, le cluster SARIMAX est déterminé dynamiquement à partir de l'adresse (par défaut : cluster 0 pour les codes postaux commençant par 75, sinon cluster 1).
+- Le modèle SARIMAX correspondant est utilisé pour la tendance de prix.
 
-### 3️⃣ Modélisation
+## Lancement de l'API
 
-* **Séries temporelles (SARIMAX)** : pour prédire l'évolution du prix au m².
-* **Régression classique (LightGBM)** : pour estimer le prix au m² à partir de variables.
-
-### 4️⃣ Interprétabilité
-
-* Importance des variables via SHAP.
-* Analyse des clusters géographiques pour affiner les performances.
-
-## 🎯 Résultats Clés
-
-* R² de 0.96 et RMSE de 425 €/m² avec LightGBM.
-* SARIMAX efficace sur zones stables (rurales/luxe), perfectible sur zones hétérogènes.
-
-## 🚧 Limites et Perspectives
-
-* Incertitude sur la signification des variables : Certaines variables, notamment le rendement, sont fortement corrélées à la cible et ont un comportement cohérent avec leur interprétation économique supposée. Toutefois, l'absence de documentation précise sur leur définition exacte a constitué une limite dans l’analyse causale.
-* Extension future possible via NLP et vision par ordinateur sur annonces et images.
-
-## 📈 Utilisation du Projet
-
-* Le projet s’adresse aux potentiels acheteurs immobiliers pour faciliter une prise de décision informée et basée sur des données fiables et compréhensibles.
-* Ce projet peut également être un outil d’investissement sur mesure pour accompagner les clients dans une logique de projection à moyen/long terme, en les aidant à prendre position au bon moment sur le marché.
-
----
-## 💾 Installation des dépendances
-### Créer un environnement virtuel (optionnel mais recommandé)
-python -m venv venv
-source venv/bin/activate  # ou .\\venv\\Scripts\\activate sur Windows
-
-### Installer les dépendances pour reproduire l’environnement du projet :
+1. **Vérifier la présence des modèles dans `api_test/models/`**
+2. **Lancement en local l'API** :
+   ```bash
+   uvicorn api_test.app.main:app --reload
+   ```
+3. **Lancement avec Docker**
 
 ```bash
-pip install -r requirements.txt
+docker build -t estimation-api .
+docker run -p 8000:8000 --env-file .env estimation-api
 ```
 
-📝 **Auteur(s)** :
+4. **Modèles Machine Learning**
+Placez vos modèles dans le dossier `models/` :
+- `models/estimation_lgbm.pkl` (LightGBM)
+- `models/evolution_sarimax.joblib` (SARIMAX)
 
-* Yasmine Peiffer
-* Loick Dernoncourt
-* Christophe Egea
-* Maxime Hénon
+5. **Variables d'environnement**
+Créez un fichier `.env` à la racine avec :
+```
+API_KEY=test-key-123
+DATABASE_URL=postgresql://user:password@localhost:5432/estimation
+REDIS_URL=redis://localhost:6379/0
+```
 
-📅 **Date** : Mars 2025
+6. **Documentation interactive**
+Accédez à la doc interactive sur :
+- http://localhost:8000/docs
 
-🔗 **Références** :
+7. **Lancement des tests**
 
-* Rapport final complet disponible dans le dossier du projet.
+- Les tests unitaires sont à adapter pour fonctionner avec les vrais modèles.
+- Pour lancer les tests (après adaptation) :
+   ```bash
+   PYTHONPATH=$(pwd) pytest api_test/app/tests/
+   ```
 
-✅ **Licence**
-Tous droits réservés. Utilisation autorisée uniquement avec l’accord préalable des auteurs.
+## Personnalisation
+
+- Pour améliorer la logique de sélection du cluster SARIMAX, modifier la fonction `determine_cluster` dans `services/estimation_service.py`.
+- Pour ajouter de nouveaux modèles, placer les fichiers dans `api_test/models/` et adapter le code si besoin.

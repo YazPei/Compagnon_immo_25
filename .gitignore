@@ -8,6 +8,7 @@
 
 # Ignorer les notebooks Jupyter
 .ipynb_checkpoints/
+*.ipynb
 
 # *.ipynb
 *.venv/
@@ -16,7 +17,10 @@ venv/
 *.cfg
 
 # Ignorer les fichiers de configuration de l'environnement virtuel
-.env/
+.env
+.env.*
+.env/*
+*.env
 env/
 *.cfg
 
@@ -32,6 +36,6 @@ __pycache__/
 *.pycdvc_storage/
 *.pyc
 *.so
-
+*.pyo
 dvc_storage/
 *.pub/

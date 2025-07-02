@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # --------- Partie Régression ----------
+  encode:
+    build:
+      context: .
+      dockerfile: Dockerfile.encoding
+    volumes:
+      - ./mlops:/app/mlops
+
+  train_lgbm:
+    build:
+      context: .
+      dockerfile: Dockerfile.lgbm
+    volumes:
+      - ./mlops:/app/mlops
+
+  train_xgb:
+    build:
+      context: .
+      dockerfile: Dockerfile.xgb
+    volumes:
+      - ./mlops:/app/mlops
+
+  analyse:
+    build:
+      context: .
+      dockerfile: Dockerfile.analyse
+    volumes:
+      - ./mlops:/app/mlops
+
+  # --------- Partie Séries Temporelles ----------
+  split:
+    build:
+      context: .
+      dockerfile: Dockerfile.split
+    volumes:
+      - ./data:/app/data
+      - ./exports:/app/exports
+    command: >
+      --input-path /app/data/df_sales_clean_ST.csv --output-folder /app/exports/st
+
+  decompose:
+    build:
+      context: .
+      dockerfile: Dockerfile.decompose
+    volumes:
+      - ./exports:/app/exports
+    command: >
+      --input-folder /app/exports/st --output-folder /app/exports/st
+
+  train_sarimax:
+    build:
+      context: .
+      dockerfile: Dockerfile.sarimax
+    volumes:
+      - ./exports:/app/exports
+    command: >
+      --input-folder /app/exports/st --output-folder /app/exports/st
+
+  evaluate:
+    build:
+      context: .
+      dockerfile: Dockerfile.evaluate
+    volumes:
+      - ./exports:/app/exports
+    command: >
+      --model-folder /app/exports/st
+
+  # --------- Tracking Expériences ----------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0
+

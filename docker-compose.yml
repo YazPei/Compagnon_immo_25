@@ -1,20 +1,40 @@
 version: '3.8'
 
 services:
-  # --------- Partie Régression ----------
+# --------- Partie partiee prepa des données ----------
+  fusion_geo:
+    build:
+      context: .
+      dockerfile: Dockerfile.fusion
+    volumes:
+      - ./data:/app/data
+    command: >
+      --folder-path1 /app/data
+      --folder-path2 /app/data
+      --output-folder /app/data/clean
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+
   encode:
     build:
       context: .
       dockerfile: Dockerfile.encoding.REG
     volumes:
       - ./mlops:/app/mlops
-
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      
+      
+      
+  # --------- Partie Régression ----------
   train_lgbm:
     build:
       context: .
       dockerfile: Dockerfile.lgbm.REG
     volumes:
       - ./mlops:/app/mlops
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   train_xgb:
     build:
@@ -22,6 +42,8 @@ services:
       dockerfile: Dockerfile.xgb.REG
     volumes:
       - ./mlops:/app/mlops
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   analyse:
     build:
@@ -29,6 +51,8 @@ services:
       dockerfile: Dockerfile.analyse.REG
     volumes:
       - ./mlops:/app/mlops
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   # --------- Partie Séries Temporelles ----------
   split:
@@ -40,6 +64,8 @@ services:
       - ./exports:/app/exports
     command: >
       --input-path /app/data/df_sales_clean_ST.csv --output-folder /app/exports/st
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   decompose:
     build:
@@ -49,6 +75,8 @@ services:
       - ./exports:/app/exports
     command: >
       --input-folder /app/exports/st --output-folder /app/exports/st
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   train_sarimax:
     build:
@@ -58,6 +86,8 @@ services:
       - ./exports:/app/exports
     command: >
       --input-folder /app/exports/st --output-folder /app/exports/st
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   evaluate:
     build:
@@ -67,6 +97,8 @@ services:
       - ./exports:/app/exports
     command: >
       --model-folder /app/exports/st
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   # --------- Tracking Expériences ----------
   mlflow:

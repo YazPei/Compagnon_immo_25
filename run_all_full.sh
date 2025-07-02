@@ -2,6 +2,9 @@
 
 set -e  # Arrêt immédiat en cas d'erreur
 
+echo "🚀 Lancement de la préparation des données"
+dvc repro fusion_geo
+
 echo "🚀 Lancement du pipeline complet : Régression + Séries temporelles"
 
 # Partie Régression

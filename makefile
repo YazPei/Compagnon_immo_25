@@ -5,6 +5,10 @@
 # ===============================
 # 🧪 Exécution locale (hors Docker)
 # ===============================
+fusion_dvc:
+	@echo "🌐 Fusion des données via DVC (local)"
+	chmod +x mlops/fusion/run_fusion.sh
+	bash mlops/fusion/run_fusion.sh
 
 regression:
 	@echo "🔁 Lancement pipeline Régression (local)"
@@ -26,8 +30,9 @@ mlflow-ui:
 # 🐳 Exécution dans Docker
 # ===============================
 
-docker_auto: docker_build docker_run_full
+docker_auto: docker_build docker_run_fusion docker_run_full
 
+	
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker compose build run_full
@@ -44,6 +49,10 @@ docker_run_series:
 	@echo "⏳ Exécution pipeline Série Temporelle (Docker)"
 	docker compose run --rm run_full bash mlops/Serie_temporelle/run_all_ST.sh
 
+
+docker_run_fusion:
+	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
+	docker compose run --rm fusion_geo
 # ===============================
 # 🧹 Nettoyage
 # ===============================

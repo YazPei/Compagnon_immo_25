@@ -5,28 +5,28 @@ services:
   encode:
     build:
       context: .
-      dockerfile: Dockerfile.encoding
+      dockerfile: Dockerfile.encoding.REG
     volumes:
       - ./mlops:/app/mlops
 
   train_lgbm:
     build:
       context: .
-      dockerfile: Dockerfile.lgbm
+      dockerfile: Dockerfile.lgbm.REG
     volumes:
       - ./mlops:/app/mlops
 
   train_xgb:
     build:
       context: .
-      dockerfile: Dockerfile.xgb
+      dockerfile: Dockerfile.xgb.REG
     volumes:
       - ./mlops:/app/mlops
 
   analyse:
     build:
       context: .
-      dockerfile: Dockerfile.analyse
+      dockerfile: Dockerfile.analyse.REG
     volumes:
       - ./mlops:/app/mlops
 
@@ -34,7 +34,7 @@ services:
   split:
     build:
       context: .
-      dockerfile: Dockerfile.split
+      dockerfile: Dockerfile.split.ST
     volumes:
       - ./data:/app/data
       - ./exports:/app/exports
@@ -44,7 +44,7 @@ services:
   decompose:
     build:
       context: .
-      dockerfile: Dockerfile.decompose
+      dockerfile: Dockerfile.decompose.ST
     volumes:
       - ./exports:/app/exports
     command: >
@@ -53,7 +53,7 @@ services:
   train_sarimax:
     build:
       context: .
-      dockerfile: Dockerfile.sarimax
+      dockerfile: Dockerfile.sarimax.ST
     volumes:
       - ./exports:/app/exports
     command: >
@@ -62,7 +62,7 @@ services:
   evaluate:
     build:
       context: .
-      dockerfile: Dockerfile.evaluate
+      dockerfile: Dockerfile.evaluate.ST
     volumes:
       - ./exports:/app/exports
     command: >

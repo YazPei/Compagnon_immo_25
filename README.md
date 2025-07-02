@@ -19,7 +19,7 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 ## 📁 Arborescence
 
 
-
+```bash
 .
 ├── api_test
 ├── mlops/
@@ -56,7 +56,7 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 ├── requirements.txt
 ├── README.md  ⬅️ (ce fichier)
 ├── Makefile
-
+```
 
 
 ---

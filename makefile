@@ -8,11 +8,11 @@
 
 regression:
 	@echo "🔁 Lancement pipeline Régression (local)"
-	bash Regression/run_all.sh
+	bash mlops/Regression/run_all.sh
 
 series:
 	@echo "⏳ Lancement pipeline Série Temporelle (local)"
-	bash Serie_temporelle/run_all_ST.sh
+	bash mlops/Serie_temporelle/run_all_ST.sh
 
 full:
 	@echo "🧠 Lancement pipeline Complet (local)"
@@ -38,11 +38,11 @@ docker_run_full:
 
 docker_run_regression:
 	@echo "🔁 Exécution pipeline Régression (Docker)"
-	docker compose run --rm run_full bash Regression/run_all.sh
+	docker compose run --rm run_full bash mlops/Regression/run_all.sh
 
 docker_run_series:
 	@echo "⏳ Exécution pipeline Série Temporelle (Docker)"
-	docker compose run --rm run_full bash Serie_temporelle/run_all_ST.sh
+	docker compose run --rm run_full bash mlops/Serie_temporelle/run_all_ST.sh
 
 # ===============================
 # 🧹 Nettoyage

@@ -1,38 +1,61 @@
 version: '3.8'
 
 services:
-# --------- Partie partiee prepa des données ----------
+# --------- Préparation des données ----------
   fusion_geo:
     build:
       context: .
       dockerfile: Dockerfile.fusion
     volumes:
       - ./data:/app/data
+      - ./mlops/fusion:/app/mlops/fusion
     command: >
+      python /app/mlops/fusion/fusion_geo_dvf.py
       --folder-path1 /app/data
       --folder-path2 /app/data
       --output-folder /app/data/clean
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
+  clustering:
+    build:
+      context: .
+      dockerfile: Dockerfile.clustering
+    volumes:
+      - .:/app
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    command: >
+      python mlops/clustering/Clustering.py
+      --input-path data/processed/train_clean.csv
+      --output-path data/interim/df_sales_clustered.csv
+
+
   encode:
     build:
       context: .
       dockerfile: Dockerfile.encoding.REG
     volumes:
-      - ./mlops:/app/mlops
+      - ./mlops/Regression:/app/mlops
+      - ./data:/app/data
+      - ./exports:/app/exports
+    command: >
+      python /app/mlops/encoding.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-      
-      
-      
-  # --------- Partie Régression ----------
+
+# --------- Régression ----------
   train_lgbm:
     build:
       context: .
       dockerfile: Dockerfile.lgbm.REG
     volumes:
-      - ./mlops:/app/mlops
+      - ./mlops/Regression:/app/mlops
+      - ./exports:/app/exports
+    command: >
+      python /app/mlops/train_lgbm.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -42,6 +65,9 @@ services:
       dockerfile: Dockerfile.xgb.REG
     volumes:
       - ./mlops:/app/mlops
+      - ./exports:/app/exports
+    command: >
+      python /app/mlops/Regression/train_xgb.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -51,19 +77,24 @@ services:
       dockerfile: Dockerfile.analyse.REG
     volumes:
       - ./mlops:/app/mlops
+      - ./exports:/app/exports
+    command: >
+      python /app/mlops/Regression/analyse.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
-  # --------- Partie Séries Temporelles ----------
+# --------- Séries Temporelles ----------
   split:
     build:
       context: .
       dockerfile: Dockerfile.split.ST
     volumes:
-      - ./data:/app/data
       - ./exports:/app/exports
+      - ./data:/app/data
     command: >
-      --input-path /app/data/df_sales_clean_ST.csv --output-folder /app/exports/st
+      python /app/mlops/Serie_temporelle/load_split.py
+      --input-path /app/data/df_sales_clean_ST.csv
+      --output-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -74,7 +105,9 @@ services:
     volumes:
       - ./exports:/app/exports
     command: >
-      --input-folder /app/exports/st --output-folder /app/exports/st
+      python /app/mlops/Serie_temporelle/seasonal_decomp.py
+      --input-folder /app/exports/st
+      --output-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -85,7 +118,9 @@ services:
     volumes:
       - ./exports:/app/exports
     command: >
-      --input-folder /app/exports/st --output-folder /app/exports/st
+      python /app/mlops/Serie_temporelle/sarimax_train.py
+      --input-folder /app/exports/st
+      --output-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -96,11 +131,12 @@ services:
     volumes:
       - ./exports:/app/exports
     command: >
+      python /app/mlops/Serie_temporelle/metrics.py
       --model-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
-  # --------- Tracking Expériences ----------
+# --------- Tracking MLflow ----------
   mlflow:
     image: ghcr.io/mlflow/mlflow
     ports:
@@ -109,7 +145,7 @@ services:
       - ./mlruns:/mlflow/mlruns
     command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0
 
-  # --------- Services Factices pour scripts ----------
+# --------- Scripts Factices ----------
   regression_script:
     image: busybox
     command: echo "Présence logique de regression/run_all.sh"
@@ -118,7 +154,7 @@ services:
     image: busybox
     command: echo "Présence logique de Serie_temporelle/run_all_st.sh"
 
-  # --------- Exécution du pipeline complet ----------
+# --------- Exécution du pipeline complet ----------
   run_full:
     build:
       context: .

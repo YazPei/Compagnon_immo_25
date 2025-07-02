@@ -5,10 +5,28 @@
 # ===============================
 # 🧪 Exécution locale (hors Docker)
 # ===============================
+chmod_all:
+	chmod +x mlops/fusion/run_fusion.sh
+	chmod +x mlops/preprocessing/run_preprocessing.sh
+	chmod +x mlops/clustering/run_clustering.sh
+	chmod +x mlops/Regression/run_all.sh
+	chmod +x mlops/Serie_temporelle/run_all_st.sh
+	chmod +x run_all_full.sh
+
 fusion_dvc:
 	@echo "🌐 Fusion des données via DVC (local)"
 	chmod +x mlops/fusion/run_fusion.sh
 	bash mlops/fusion/run_fusion.sh
+	
+preprocessing:
+	@echo "🧼 Prétraitement des données (local via DVC)"
+	chmod +x mlops/preprocessing/run_preprocessing.sh
+	bash mlops/preprocessing/run_preprocessing.sh
+
+clustering:
+	@echo "📊 Lancement du clustering KMeans (local via DVC)"
+	chmod +x mlops/clustering/run_clustering.sh
+	bash mlops/clustering/run_clustering.sh
 
 regression:
 	@echo "🔁 Lancement pipeline Régression (local)"
@@ -30,7 +48,7 @@ mlflow-ui:
 # 🐳 Exécution dans Docker
 # ===============================
 
-docker_auto: docker_build docker_run_fusion docker_run_full
+docker_auto: docker_build docker_run_fusion docker_run_full docker_run_clustering docker_run_preprocessing
 
 	
 docker_build:
@@ -40,6 +58,15 @@ docker_build:
 docker_run_full:
 	@echo "🚀 Exécution pipeline complet (Docker)"
 	docker compose run --rm run_full
+
+docker_run_preprocessing:
+	@echo "🧼 Exécution preprocessing (Docker)"
+	docker compose run --rm preprocessing
+
+
+docker_run_clustering:
+	@echo "📊 Exécution du clustering (Docker)"
+	docker compose run --rm clustering
 
 docker_run_regression:
 	@echo "🔁 Exécution pipeline Régression (Docker)"
@@ -90,4 +117,25 @@ install:
 	fi
 
 
+# ===============================
+# 📈 Tracking MLflow
+# ===============================
+
+mlflow-ui:
+	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
+	mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
+
+mlflow-run:
+	@echo "🚀 Lancement manuel d’un run MLflow (ex: clustering)"
+	python -m src.clustering \
+		--input-path data/processed/train_clean.csv \
+		--output-path data/interim
+
+mlflow-clean:
+	@echo "🧹 Suppression du répertoire mlruns/"
+	rm -rf mlruns/s
+
+mlflow-log-status:
+	@echo "📜 Derniers runs MLflow"
+	@find mlruns/ -name "meta.yaml" | xargs grep -H "status"
 

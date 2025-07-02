@@ -102,7 +102,7 @@ def main(folder_path1, folder_path2, output_folder):
 
         # === Export final ===
         Path(output_folder).mkdir(parents=True, exist_ok=True)
-        output_path = Path(output_folder) / "df_sales_clean_polars.csv"
+        output_path = Path(output_folder) / "df_sales_clean_ST.csv"
         pl.from_pandas(df_sales_clean).write_csv(output_path, separator=";")
 
         # === Log artefact ===

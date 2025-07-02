@@ -1,4 +1,45 @@
 stages:
+  # --------- Fusion Géographique avec IPS (NOUVEAU) ----------
+  fusion_geo:
+    cmd: >
+      python -m mlops.fusion.fusion_geo_dvf
+      --folder-path1 data
+      --folder-path2 data
+      --output-folder data/clean
+    deps:
+      - mlops/fusion/fusion_geo_dvf.py
+      - data/DVF_donnees_macroeco.csv
+      - data/merged_sales_data.csv
+    outs:
+      - data/clean/df_sales_clean_polars.csv
+  
+  preprocessing:
+    cmd: python mlops/preprocessing/preprocessing.py --input-path data/clean/df_sales_clean_polars.csv --output-path data/processed/train_clean.csv
+    deps:
+      - python mlops/preprocessing/preprocessing.py
+      - data/clean/df_sales_clean_polars.csv
+    outs:
+      - data/processed/train_clean.csv
+
+  clustering:
+    cmd: python mlops/clustering/Clustering.py --input-path data/processed/train_clean.csv --output-path data/interim/df_sales_clustered.csv
+    deps:
+      - mlops/clustering/Clustering.py
+      - data/processed/train_clean.csv
+    outs:
+      - data/interim/df_sales_clustered.csv
+    params:
+      - params.yaml:
+          - clustering.n_clusters
+    metrics:
+      - mlflow_outputs/cluster_input.csv:
+          cache: false
+    plots:
+      - mlflow_outputs/elbow_plot.png
+
+
+
+
   # --------- Pipeline de Régression ----------
   encode:
     cmd: python src/encoding.py

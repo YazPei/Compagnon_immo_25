@@ -23,7 +23,10 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 .
 ├── api_test
 ├── mlops/
-│   ├── regression/
+│   ├── clustering/
+│   ├── fusion/
+│   ├── preprocessing/
+│   ├── Regression/
 │   │   ├── regression_pipeline.py
 │   │   ├── encoding.py
 │   │   ├── train_lgbm.py
@@ -31,7 +34,7 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 │   │   ├── analyse.py
 │   │   ├── utils.py
 │   │   ├── run_all.sh
-│   └── time_series/
+│   └── Serie_temporelle/
 │       ├── load_split.py
 │       ├── seasonal_decomp.py
 │       ├── sarimax_train.py
@@ -58,6 +61,15 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 ├── Makefile
 ```
 
+---
+## 📌 Étapes de la pipeline
+
+1. **Fusion** : Jointure des données DVF et indices socio-économiques
+2. **Préprocessing** : Nettoyage et enrichissement
+3. **Clustering** : Segmentation KMeans avec log MLflow
+4. **Régression** : Modélisation LightGBM / XGBoost
+5. **Séries temporelles** : SARIMAX par cluster
+6. **Tracking MLflow** : Logging complet des modèles et artefacts
 
 ---
 
@@ -68,6 +80,7 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 make install
 
 # Lancer tous les pipelines
+make chmod_all
 make full
 
 # Lancer l'interface MLflow
@@ -77,7 +90,9 @@ mlflow ui --port 5001
 
 ## 🐳 Lancement avec Docker
 ```bash
+make chmod_all
 # Construire l’image Docker et Exécuter tous les pipelines dans Docker
+
 make docker_auto
 ```
 
@@ -87,12 +102,18 @@ make docker_build # Construire l’image Docker
 make docker_run_regression # Exécuter uniquement la régression
 make docker_run_series # Exécuter uniquement les séries temporelles
 ```
-## 🔁 MLflow Tracking
+## 📊 Suivi d'expériences avec MLflow
 
-    Accès : http://localhost:5001
-    Tracking automatique de tous les modèles (régression & ST)
-    Métriques : RMSE, MAE, R², etc.
-    Artéfacts : modèles .joblib, graphes, snapshots encodés
+- 📍 **Accès UI** : [http://localhost:5001](http://localhost:5001)
+- 🎯 **Tracking automatique** :
+  - Modèles : Régression (LightGBM/XGB), Séries temporelles (SARIMAX), Clustering (KMeans)
+  - Métriques : `MAE`, `RMSE`, `R²`, `Silhouette score`, etc.
+  - Paramètres : hyperparamètres, transformations, n_clusters...
+- 📦 **Artéfacts loggués** :
+  - Modèles `.joblib`, `.pkl`
+  - Graphes de décomposition, coudes, prévisions
+  - Fichiers de données traitées
+
 
 ## 🧪 Tests, Export et noettoyage
 

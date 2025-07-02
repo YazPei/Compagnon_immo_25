@@ -1,11 +1,13 @@
+# Dockerfile.encoding.REG
 FROM python:3.10-slim
+
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ./mlops/Regression /app/mlops
+COPY ./data /app/data
+COPY ./exports /app/exports
 
-COPY src/ ./src/
-COPY mlops/ ./mlops/
+RUN pip install -r /app/mlops/requirements.txt
 
-ENTRYPOINT ["python", "src/encoding.py"]
+CMD ["python", "/app/mlops/encoding.py"]
 

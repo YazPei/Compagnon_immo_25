@@ -65,8 +65,12 @@ clean_all: clean_exports clean_dvc
 
 install:
 	@echo "📦 Création d'un environnement virtuel et installation des dépendances"
-	python -m venv .venv && \
-	source .venv/bin/activate && \
+	@if [ ! -f ".venv/bin/activate" ]; 
+	    then echo "⚙️  Création de l'environnement virtuel (.venv)"; \
+	    python -m venv .venv; \
+	fi 
+	@ echo "📦 Activation et installation des dépendances..."
+	. .venv/bin/activate && \
 	pip install --upgrade pip && \
 	pip install -r requirements.txt && \
 	echo "✅ Environnement prêt !"

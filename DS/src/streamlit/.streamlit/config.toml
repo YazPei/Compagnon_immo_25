@@ -1,0 +1,33 @@
+[theme]
+# Couleurs primaires pour les éléments interactifs
+primaryColor="#4E79A7"
+
+# Couleur d'arrière-plan pour la zone principale de l'application
+backgroundColor="#FFFFFF"
+
+# Couleur d'arrière-plan pour les barres latérales et les en-têtes
+secondaryBackgroundColor="#F5F5F5"
+
+# Couleur du texte
+textColor="#333333"
+
+# Couleur du texte dans les messages d'erreur et les avertissements
+errorColor="#E15759"
+
+# Couleur du texte dans les messages de succès
+successColor="#59A14F"
+
+# Couleur du texte dans les messages d'information
+infoColor="#76B7B2"
+
+# Couleur du texte dans les messages d'avertissement
+warningColor="#EDC948"
+
+# Couleur de la bordure pour les champs de saisie et les boutons
+borderColor="#CCCCCC"
+
+# Couleur de fond pour les champs de saisie
+inputBackgroundColor="#FFFFFF"
+
+# Couleur du texte pour les champs de saisie
+inputTextColor="#333333"

@@ -1,0 +1,13 @@
+matplotlib
+seaborn
+plotly
+statsmodels
+geopandas
+shapely
+streamlit
+scikit-learn
+pandas
+numpy
+joblib
+regex
+requests

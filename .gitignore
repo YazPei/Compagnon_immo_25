@@ -1,18 +1,40 @@
-# Ignorer les fichier inutiles
+# Fichiers d'environnement (ignorer les fichiers inutiles)
+.env
+.env.*
+.env/*
+*.env
+env/
+
+# Environnements virtuels
+.venv/
+.venv312/
+venv/
+env/
+
+# Fichiers de configuration de l'éditeur
+.vscode/
+.idea/
+
+# Fichiers Python compilés
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers inutiles et lourds
 *.log
 *.tmp
 *.pkl
 *.joblib
 *.db
+*.cfg
 
-#repertoires lourds
-__pycache__/
+# Données et sorties
 data/
 outputs/
 mlruns/
 dvc_remote/
 
-# Ignorer tous les fichiers CSV et Excel
+# Fichiers de données
 *.csv
 *.xlsx
 *.parquet
@@ -20,37 +42,6 @@ dvc_remote/
 *.tar.gz
 *.pt
 
-# Ignorer les notebooks Jupyter
+# Notebooks Jupyter
 .ipynb_checkpoints/
 *.ipynb
-
-# *.ipynb
-*.venv/
-.venv312/
-venv/
-*.cfg
-
-# Ignorer les fichiers de configuration de l'environnement virtuel
-.env
-.env.*
-.env/*
-*.env
-env/
-*.cfg
-
-# Ignorer les fichiers de configuration de l'IDE
-.idea/
-.vscode/
-
-# Ignorer les fichiers de log
-*.log
-
-# Ignorer les fichiers de cache
-__pycache__/
-*.pycdvc_storage/
-*.pyc
-*.so
-*.pyo
-dvc_storage/
-*.pub/
-/data

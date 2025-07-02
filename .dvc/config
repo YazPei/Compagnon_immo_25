@@ -6,3 +6,5 @@
     url = gdrive://13e-gpfXt14YR8_J2t2RFn3I-OemyGLCK?dmr=1
     gdrive_client_id = 105181061025-4jg2ubb7uki8jrpf2j72utq2mkot0tsv.apps.googleusercontent.com
     gdrive_client_secret = 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
+['remote "origin_dags"']
+    url = https://dagshub.com/YazPei/Compagnon_immo.dvc

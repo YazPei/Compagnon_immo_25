@@ -8,7 +8,7 @@ stages:
       --output-folder data/clean
     deps:
       - mlops/fusion/fusion_geo_dvf.py
-      - data/DVF_donnees_macroecono.csv
+      - data/DVF_donnees_macroeco.csv
       - data/merged_sales_data.csv
     outs:
       - data/clean/df_sales_clean_polars.csv

@@ -5,11 +5,18 @@ import pandas as pd
 import os
 
 from part_0_preparation import *
+from MLOPS.config_mlflow import setup_mlflow
+import mlflow
 
+# Initialise la config
+setup_mlflow()
+
+
+mlflow.set_tracking_uri("http://localhost:5000")
 mlflow.set_experiment("compagnon_immo")
 
 with mlflow.start_run(run_name="Part-0_Preparation_donnees"):
-
+    mlflow.log_param("source", "part0")
     # Log important config manuellement (exemple)
     mlflow.log_param("chunksize", 100000)
     mlflow.log_param("threads", min(4, os.cpu_count() or 1))

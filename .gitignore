@@ -1,3 +1,17 @@
+# Ignorer les fichier inutiles
+*.log
+*.tmp
+*.pkl
+*.joblib
+*.db
+
+#repertoires lourds
+__pycache__/
+data/
+outputs/
+mlruns/
+dvc_remote/
+
 # Ignorer tous les fichiers CSV et Excel
 *.csv
 *.xlsx

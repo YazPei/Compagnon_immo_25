@@ -22,10 +22,11 @@ lightgbm>=4.6.0                 # Modèle boosting utilisé
 # Interprétabilité et optimisation de modèles
 shap>=0.44.0                    # SHAP Values
 optuna>=3.5.0                   # Optimisation d’hyperparamètres (LightGBM)
-statsmodels==0.14.4             # Modélisation statistique (ex: SARIMAX)
+
 
 # Outils enregistrement et sauvegarde de modèles
 joblib>=1.3.0                   # Sauvegarde de modèles
+polars-lts-cpu>=0.20.0 
 
 # API + Frontend
 fastapi==0.111.0                # API REST
@@ -38,8 +39,8 @@ httptools==0.5.0
 
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML
-dvc==3.44.0             # Versionning stable de base de DVC
-dvc-gdrive==2.20.0      # Extension Google Drive compatible
+dvc[gdrive]==3.44.0             # Versionning stable de base de DVC
+dvc[all]==3.44.0
 # Monitoring et observabilité
 prometheus-client==0.20.0       # Monitoring de métriques (Prometheus)
 
@@ -69,8 +70,6 @@ numba>=0.59.0                   # Compilation JIT (accélération)
 psutil==7.0.0                   # Infos système (RAM, CPU)
 
 # API Framework
-fastapi==0.115.12
-uvicorn==0.34.2
 python-dotenv==1.1.0
 
 # Database
@@ -101,6 +100,4 @@ opentelemetry-instrumentation-fastapi==0.44b0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# Utils
-pydantic==2.11.5
-python-multipart==0.0.20 
+

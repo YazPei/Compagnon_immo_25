@@ -1,4 +1,20 @@
 stages:
+  # --------- Fusion Géographique avec IPS (NOUVEAU) ----------
+  fusion_geo:
+    cmd: >
+      python -m mlops.fusion.fusion_geo_dvf
+      --folder-path1 data
+      --folder-path2 data
+      --output-folder data/clean
+    deps:
+      - mlops/fusion/fusion_geo_dvf.py
+      - data/DVF_donnees_macroecono.csv
+      - data/merged_sales_data.csv
+    outs:
+      - data/clean/df_sales_clean_polars.csv
+
+
+
   # --------- Pipeline de Régression ----------
   encode:
     cmd: python src/encoding.py

@@ -1,0 +1,68 @@
+stages:
+  # --------- Pipeline de Régression ----------
+  encode:
+    cmd: python src/encoding.py
+    deps:
+      - src/encoding.py
+      - mlops/data/df_cluster.csv
+    outs:
+      - mlops/encoded/X_train.csv
+      - mlops/encoded/X_test.csv
+      - mlops/encoded/y_train.csv
+      - mlops/encoded/y_test.csv
+
+  train_lgbm:
+    cmd: python src/train_lgbm.py
+    deps:
+      - src/train_lgbm.py
+      - mlops/encoded/X_train.csv
+      - mlops/encoded/y_train.csv
+    outs:
+      - mlops/encoded/lgbm_model.joblib
+
+  analyse:
+    cmd: python src/analyse.py --model lightgbm
+    deps:
+      - src/analyse.py
+      - mlops/encoded/X_test.csv
+      - mlops/encoded/y_test.csv
+      - mlops/encoded/lgbm_model.joblib
+
+  # --------- Pipeline de Série Temporelle ----------
+  split:
+    cmd: python -m mlops.time_series.load_split --input-path data/df_sales_clean_ST.csv --output-folder exports/st
+    deps:
+      - data/df_sales_clean_ST.csv
+      - mlops/time_series/load_split.py
+    outs:
+      - exports/st/cluster_0_series.csv
+      - exports/st/cluster_1_series.csv
+      - exports/st/cluster_2_series.csv
+      - exports/st/cluster_3_series.csv
+
+  decompose:
+    cmd: python -m mlops.time_series.seasonal_decomp --input-folder exports/st --output-folder exports/st
+    deps:
+      - exports/st/cluster_0_series.csv
+      - mlops/time_series/seasonal_decomp.py
+    outs:
+      - exports/st/decomposition_additive_cluster_0.png
+      - exports/st/decomposition_multiplicative_cluster_0.png
+
+  train_sarimax:
+    cmd: python -m mlops.time_series.sarimax_train --input-folder exports/st --output-folder exports/st
+    deps:
+      - exports/st/cluster_0_series.csv
+      - mlops/time_series/sarimax_train.py
+    outs:
+      - exports/st/sarimax_model_cluster_0.pkl
+      - exports/st/forecast_cluster_0.csv
+
+  evaluate:
+    cmd: python -m mlops.time_series.metrics --model-folder exports/st
+    deps:
+      - exports/st/forecast_cluster_0.csv
+      - mlops/time_series/metrics.py
+    outs:
+      - exports/st/global_sarimax_metrics.csv
+

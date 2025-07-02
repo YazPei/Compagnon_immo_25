@@ -7,11 +7,8 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 Le tout est orchestré en pipelines modulaires avec :
 
     Click pour l’interface CLI
-
     MLflow pour le tracking des métriques & modèles
-
     DVC pour le versionnement des données et étapes
-
     Docker pour l’isolation et la reproductibilité
 
 📁 Arborescence

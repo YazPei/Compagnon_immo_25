@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api_test.api import estimation
-from api_test.api import historique
+from app.routes import estimation
+from app.routes import historique
 
 app = FastAPI(
     title="API Compagnon Immobilier",

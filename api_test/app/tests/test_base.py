@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI
-from app.routers import historique  
-from app.routers import estimation  
+from api_test.app.routes.routers import historique  
+from api_test.app.routes.routers import estimation  
 
 app = FastAPI(title="API d'Estimation Immobilière", version="1.0")
 

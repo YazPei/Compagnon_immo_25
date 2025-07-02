@@ -64,15 +64,21 @@ clean_all: clean_exports clean_dvc
 # ===============================
 
 install:
-	@echo "📦 Création d'un environnement virtuel et installation des dépendances"
+	@echo "📦 Vérification de l'environnement virtuel..."
 	@if [ ! -f ".venv/bin/activate" ]; then \
 		echo "⚙️  Création de l'environnement virtuel (.venv)"; \
 		python3 -m venv .venv; \
+	else \
+		echo "✅ Environnement virtuel déjà présent"; \
 	fi
-	@echo "📦 Activation et installation des dépendances..."
-	. .venv/bin/activate && \
-	pip install --upgrade pip && \
-	pip install -r requirements.txt && \
-	echo "✅ Environnement prêt !"
+
+	@echo "📦 Vérification des paquets installés..."
+	@if [ ! -d ".venv/lib" ] || ! . .venv/bin/activate && pip list | grep -Fq -f requirements.txt; then \
+		echo "📦 Installation des dépendances..."; \
+		. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt; \
+	else \
+		echo "✅ Dépendances déjà installées"; \
+	fi
+
 
 

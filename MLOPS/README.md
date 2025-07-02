@@ -1,19 +1,27 @@
+# 🏠 **Pipeline MLOps - Prédiction des prix immobiliers**
+
 Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, divisée en deux approches :
 
-    🔁 Modélisation par régression (LightGBM/XGBoost)
+- 🔁 Modélisation par régression (`LightGBM`, `XGBoost`)
+- ⏳ Modélisation par séries temporelles (`SARIMAX`)
+- 🖥️ App via une API et Streamlit
 
-    ⏳ Modélisation par séries temporelles (SARIMAX)
+## 🧩 Stack technologique
 
-Le tout est orchestré en pipelines modulaires avec :
+- 🐍 `Click` pour l’interface CLI
+- 📈 `MLflow` pour le tracking des métriques & modèles
+- 📦 `DVC` pour le versionnement des données et étapes
+- 🐳 `Docker` pour l’isolation et la reproductibilité
+- 🧪 `Makefile` pour l'orchestration simplifiée
 
-    Click pour l’interface CLI
-    MLflow pour le tracking des métriques & modèles
-    DVC pour le versionnement des données et étapes
-    Docker pour l’isolation et la reproductibilité
+---
 
-📁 Arborescence
+## 📁 Arborescence
+
+
 
 .
+├── api_test
 ├── mlops/
 │   ├── regression/
 │   │   ├── regression_pipeline.py
@@ -22,12 +30,15 @@ Le tout est orchestré en pipelines modulaires avec :
 │   │   ├── train_xgb.py
 │   │   ├── analyse.py
 │   │   ├── utils.py
+│   │   ├── run_all.sh
 │   └── time_series/
 │       ├── load_split.py
 │       ├── seasonal_decomp.py
 │       ├── sarimax_train.py
 │       ├── metrics.py
 │       ├── utils.py
+│       ├── run_all_st.sh
+
 ├── data/
 │   ├── df_cluster.csv
 │   └── df_sales_clean_ST.csv
@@ -41,54 +52,59 @@ Le tout est orchestré en pipelines modulaires avec :
 ├── Dockerfile.*
 ├── docker-compose.yml
 ├── dvc.yaml
-├── run_all.sh
+├── run_all_full.sh
 ├── requirements.txt
-├── README_series_temporality.md
 ├── README.md  ⬅️ (ce fichier)
+├── Makefile
 
-⚙️ Environnement
 
-# Installer les dépendances
-pip install -r requirements.txt
 
-# Lancer MLflow localement
+---
+
+## ⚙️ Installation & Lancement (mode local)
+
+```bash
+# Installer l’environnement
+make install
+
+# Lancer tous les pipelines
+make full
+
+# Lancer l'interface MLflow
 mlflow ui --port 5001
 
-🏗️ Lancement pipeline Régression
-Étapes
+```
 
-# Encodage
-python mlops/regression/regression_pipeline.py encode --data-path ./data/df_cluster.csv --output ./exports/reg
+## 🐳 Lancement avec Docker
+```bash
+# Construire l’image Docker et Exécuter tous les pipelines dans Docker
+make docker_auto
+```
 
-# Entraînement LGBM
-python mlops/regression/regression_pipeline.py train-lgbm --encoded-folder ./exports/reg
-
-# Entraînement XGBoost
-python mlops/regression/regression_pipeline.py train-xgb --encoded-folder ./exports/reg --use-gpu
-
-# Analyse
-python mlops/regression/regression_pipeline.py analyse --encoded-folder ./exports/reg --model lightgbm
-
-⏳ Lancement pipeline Série Temporelle
-En un seul script
-
-bash run_all.sh
-
-Étape par étape
-
-docker compose run split
-docker compose run decompose
-docker compose run train_sarimax
-docker compose run evaluate
-
-🔁 MLflow Tracking
+Nous pouvons également, si on le souhaite ne lancer que le modèle de régression ou le modèle Serie Temporelle:
+```bash
+make docker_build # Construire l’image Docker
+make docker_run_regression # Exécuter uniquement la régression
+make docker_run_series # Exécuter uniquement les séries temporelles
+```
+## 🔁 MLflow Tracking
 
     Accès : http://localhost:5001
     Tracking automatique de tous les modèles (régression & ST)
     Métriques : RMSE, MAE, R², etc.
     Artéfacts : modèles .joblib, graphes, snapshots encodés
 
-🧪 Tests & Export
+## 🧪 Tests, Export et noettoyage
 
     Modèles exportés dans exports/
     Snapshots encodés dans X_train.csv, X_test.csv, etc.
+    Nettoyage:
+```bash
+make clean_all
+```
+Nous pouvons également faire un nettoyage sélectif:
+```bash
+make clean_exports #  nettoyer les fichiers générés
+make clean_dvc # ou nettoyer les DVC cahe
+```
+

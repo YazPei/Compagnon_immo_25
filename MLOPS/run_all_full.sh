@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e  # Arrêt immédiat en cas d'erreur
+
+echo "🚀 Lancement du pipeline complet : Régression + Séries temporelles"
+
+# Partie Régression
+echo -e "\n🔹 Étape 1 : Lancement du pipeline Régression"
+bash Regression/run_all.sh
+
+# Partie Série Temporelle
+echo -e "\n🔸 Étape 2 : Lancement du pipeline Time Series"
+bash Serie_temporelle/run_all_ST.sh
+
+echo -e "\n✅ Tous les pipelines ont été exécutés avec succès !"
+

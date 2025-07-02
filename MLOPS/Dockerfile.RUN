@@ -1,0 +1,22 @@
+FROM python:3.10-slim
+
+# Création utilisateur et répertoire de travail
+RUN useradd -ms /bin/bash mlopsuser
+USER mlopsuser
+WORKDIR /home/mlopsuser/app
+
+# Copie du projet et du fichier de dépendances
+COPY . .
+
+
+# Installation des dépendances
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Rendre le script exécutable
+RUN chmod +x run_all_full.sh \
+    && chmod +x Regression/run_all.sh \
+    && chmod +x Serie_temporelle/run_all_ST.sh
+
+
+CMD ["./run_all_full.sh"]
+

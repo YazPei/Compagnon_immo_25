@@ -12,7 +12,7 @@ regression:
 
 series:
 	@echo "⏳ Lancement pipeline Série Temporelle (local)"
-	bash mlops/Serie_temporelle/run_all_ST.sh
+	bash mlops/Serie_temporelle/run_all_st.sh
 
 full:
 	@echo "🧠 Lancement pipeline Complet (local)"

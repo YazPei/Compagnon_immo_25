@@ -1,40 +1,98 @@
 import os
 import click
-import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+import pandas as pd
 import mlflow
 
+
 @click.command()
-@click.option('--data-path', prompt='Chemin vers df_cluster.csv', help='Fichier CSV complet avec colonne split')
-@click.option('--output', prompt='Dossier de sortie', help='Où sauvegarder les fichiers encodés')
-def encode_data(data_path, output):
+@click.option(
+    "--data-path",
+    prompt="Chemin vers df_cluster.csv",
+    help="Fichier CSV complet avec colonne split",
+)
+@click.option(
+    "--output", prompt="Dossier de sortie", help="Où sauvegarder les fichiers encodés"
+)
+@click.option(
+    "--target",
+    default="prix_m2_vente",
+    show_default=True,
+    help="Nom de la colonne cible",
+)
+def encode_data(data_path, output, target):
+    """
+    Prépare les fichiers X_train, y_train, X_test, y_test à partir d'un CSV avec une colonne 'split'.
+    Effectue des vérifications et loggue les artefacts dans MLflow.
+    """
     mlflow.set_experiment("regression_pipeline")
-    with mlflow.start_run(run_name="encoding"):
-        print(f"Chargement depuis {data_path}")
-        df = pd.read_csv(data_path, sep=';', parse_dates=['date'])
+    try:
+        with mlflow.start_run(run_name="encoding"):
+            print(f"Chargement depuis {data_path}")
+            df = pd.read_csv(
+                data_path, sep=";", parse_dates=["date"], dtype={target: np.float32}
+            )
 
-        df = df.dropna(subset=['prix_m2_vente'])
-        df["date"] = pd.to_datetime(df["date"])
+            # Vérifications de base
+            for col in ["split", target, "date"]:
+                if col not in df.columns:
+                    raise ValueError(
+                        f"La colonne '{col}' est manquante dans le fichier."
+                    )
 
-        train = df[df['split'] == 'train']
-        test  = df[df['split'] == 'test']
-        X_train = train.drop(columns=['prix_m2_vente'])
-        y_train = train[['prix_m2_vente']]
-        X_test  = test.drop(columns=['prix_m2_vente'])
-        y_test  = test[['prix_m2_vente']]
+            if not set(["train", "test"]).issubset(df["split"].unique()):
+                raise ValueError(
+                    "Les valeurs 'train' et 'test' doivent exister dans la colonne 'split'."
+                )
 
-        os.makedirs(output, exist_ok=True)
-        X_train.to_csv(os.path.join(output, 'X_train.csv'), sep=';', index=False)
-        y_train.to_csv(os.path.join(output, 'y_train.csv'), sep=';', index=False)
-        X_test.to_csv(os.path.join(output, 'X_test.csv'), sep=';', index=False)
-        y_test.to_csv(os.path.join(output, 'y_test.csv'), sep=';', index=False)
+            df = df.dropna(subset=[target])
+            df["date"] = pd.to_datetime(df["date"])
 
-        mlflow.log_artifact(os.path.join(output, 'X_train.csv'))
-        mlflow.log_artifact(os.path.join(output, 'X_test.csv'))
+            train = df[df["split"] == "train"]
+            test = df[df["split"] == "test"]
 
-        print("Encodage terminé et sauvegardé.")
+            # Encodage des variables catégorielles (exemple simple)
+            cat_cols = train.select_dtypes(include="object").columns.drop(
+                ["split", "date"], errors="ignore"
+            )
+            if len(cat_cols) > 0:
+                train = pd.get_dummies(train, columns=cat_cols, drop_first=True)
+                test = pd.get_dummies(test, columns=cat_cols, drop_first=True)
+                # Aligne les colonnes train/test
+                train, test = train.align(test, join="left",
+                                          axis=1, fill_value=0)
 
-if __name__ == '__main__':
+            X_train = train.drop(columns=[target])
+            y_train = train[[target]].astype(np.float32)
+            X_test = test.drop(columns=[target])
+            y_test = test[[target]].astype(np.float32)
+
+            os.makedirs(output, exist_ok=True)
+            X_train_path = os.path.join(output, "X_train.csv")
+            y_train_path = os.path.join(output, "y_train.csv")
+            X_test_path = os.path.join(output, "X_test.csv")
+            y_test_path = os.path.join(output, "y_test.csv")
+
+            X_train.to_csv(X_train_path, sep=";", index=False, float_format="%.2f")
+            y_train.to_csv(y_train_path, sep=";", index=False, float_format="%.2f")
+            X_test.to_csv(X_test_path, sep=";", index=False, float_format="%.2f")
+            y_test.to_csv(y_test_path, sep=";", index=False, float_format="%.2f")
+
+            # Logging MLflow
+            mlflow.log_artifact(X_train_path)
+            mlflow.log_artifact(y_train_path)
+            mlflow.log_artifact(X_test_path)
+            mlflow.log_artifact(y_test_path)
+            mlflow.log_param("data_path", data_path)
+            mlflow.log_param("target", target)
+            mlflow.log_metric("n_train", len(X_train))
+            mlflow.log_metric("n_test", len(X_test))
+            mlflow.log_metric("n_features", X_train.shape[1])
+
+            print("Encodage terminé et sauvegardé.")
+    except Exception as e:
+        print(f"Erreur : {e}")
+
+
+if __name__ == "__main__":
     encode_data()
-

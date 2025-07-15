@@ -29,7 +29,6 @@ __pycache__/
 *.cfg
 
 # Données et sorties
-data/
 outputs/
 mlruns/
 dvc_remote/
@@ -45,3 +44,8 @@ dvc_remote/
 # Notebooks Jupyter
 .ipynb_checkpoints/
 *.ipynb
+
+# dvc 
+.dvc/config.local
+.dvc/tmp
+.dvc/cache

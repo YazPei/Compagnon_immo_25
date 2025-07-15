@@ -46,7 +46,8 @@ services:
     command: >
       python mlops/clustering/Clustering.py
       --input-path data/train_clean.csv
-      --output-path data/df_sales_clustered.csv
+      --output-path1 data/df_cluster.csv
+      --output-path2 data/df_sales_clean_ST.csv
 
 
   encode:

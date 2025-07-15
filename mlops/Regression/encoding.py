@@ -12,7 +12,8 @@ import mlflow
     help="Fichier CSV complet avec colonne split",
 )
 @click.option(
-    "--output", prompt="Dossier de sortie", help="Où sauvegarder les fichiers encodés"
+    "--output", prompt="Dossier de sortie",
+    help="Où sauvegarder les fichiers encodés"
 )
 @click.option(
     "--target",
@@ -21,19 +22,15 @@ import mlflow
     help="Nom de la colonne cible",
 )
 def encode_data(data_path, output, target):
-    """
-    Prépare les fichiers X_train, y_train, X_test, y_test à partir d'un CSV avec une colonne 'split'.
-    Effectue des vérifications et loggue les artefacts dans MLflow.
-    """
     mlflow.set_experiment("regression_pipeline")
     try:
         with mlflow.start_run(run_name="encoding"):
             print(f"Chargement depuis {data_path}")
             df = pd.read_csv(
-                data_path, sep=";", parse_dates=["date"], dtype={target: np.float32}
+                data_path, sep=";", parse_dates=["date"],
+                dtype={target: np.float32}
             )
 
-            # Vérifications de base
             for col in ["split", target, "date"]:
                 if col not in df.columns:
                     raise ValueError(
@@ -42,7 +39,7 @@ def encode_data(data_path, output, target):
 
             if not set(["train", "test"]).issubset(df["split"].unique()):
                 raise ValueError(
-                    "Les valeurs 'train' et 'test' doivent exister dans la colonne 'split'."
+                    "train et test doivent exister dans split."
                 )
 
             df = df.dropna(subset=[target])
@@ -51,14 +48,12 @@ def encode_data(data_path, output, target):
             train = df[df["split"] == "train"]
             test = df[df["split"] == "test"]
 
-            # Encodage des variables catégorielles (exemple simple)
             cat_cols = train.select_dtypes(include="object").columns.drop(
                 ["split", "date"], errors="ignore"
             )
             if len(cat_cols) > 0:
                 train = pd.get_dummies(train, columns=cat_cols, drop_first=True)
                 test = pd.get_dummies(test, columns=cat_cols, drop_first=True)
-                # Aligne les colonnes train/test
                 train, test = train.align(test, join="left",
                                           axis=1, fill_value=0)
 
@@ -78,7 +73,6 @@ def encode_data(data_path, output, target):
             X_test.to_csv(X_test_path, sep=";", index=False, float_format="%.2f")
             y_test.to_csv(y_test_path, sep=";", index=False, float_format="%.2f")
 
-            # Logging MLflow
             mlflow.log_artifact(X_train_path)
             mlflow.log_artifact(y_train_path)
             mlflow.log_artifact(X_test_path)

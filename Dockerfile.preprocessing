@@ -1,0 +1,12 @@
+FROM python:3.10-slim
+
+# creation dossier
+WORKDIR /app
+
+#COPY requirements.txt .
+COPY mlops/preprocessing ./mlops/preprocessing
+
+COPY data /app/data
+
+ENTRYPOINT ["python", "mlops/preprocessing/preprocessing.py"]
+

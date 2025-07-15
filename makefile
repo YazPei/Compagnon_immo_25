@@ -36,9 +36,6 @@ series:
 	@echo "⏳ Lancement pipeline Série Temporelle (local)"
 	bash mlops/Serie_temporelle/run_all_st.sh
 
-full:
-	@echo "🧠 Lancement pipeline Complet (local)"
-	bash run_all_full.sh
 
 mlflow-ui:
 	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
@@ -49,7 +46,7 @@ mlflow-ui:
 # ===============================
 
 docker_auto: docker_build docker_run_fusion docker_run_full docker_run_clustering docker_run_preprocessing
-
+#dvc pull 
 	
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
@@ -59,6 +56,10 @@ docker_run_full:
 	@echo "🚀 Exécution pipeline complet (Docker)"
 	docker compose run --rm run_full
 
+docker_run_fusion:
+	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
+	docker compose run --rm fusion_geo
+	
 docker_run_preprocessing:
 	@echo "🧼 Exécution preprocessing (Docker)"
 	docker compose run --rm preprocessing
@@ -77,9 +78,7 @@ docker_run_series:
 	docker compose run --rm run_full bash mlops/Serie_temporelle/run_all_ST.sh
 
 
-docker_run_fusion:
-	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
-	docker compose run --rm fusion_geo
+
 # ===============================
 # 🧹 Nettoyage
 # ===============================

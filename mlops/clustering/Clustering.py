@@ -349,8 +349,7 @@ def main(input_path, output_path):
 
 # L'objectif est de prendre en compte la tendance globale de l'évolution des prix par code postal, sur toute la période observée, en lissant les variations mois par mois.
 
-    import numpy as np
-    import pandas as pd
+
     from sklearn.linear_model import LinearRegression
 
 # --- Chargement / check initial ---
@@ -474,7 +473,7 @@ def main(input_path, output_path):
     df_cluster_input.to_csv("mlflow_outputs/cluster_input.csv", index=False, sep=";")
     
     ###############################################
-    test_cluster.loc[mask_valid, ["codePostal_recons", "cluster", "cluster_label"]].to_csv("mlflow_outputs/test_clusters.csv", index=False, sep=";")
+#    test_cluster.loc[mask_valid, ["codePostal_recons", "cluster", "cluster_label"]].to_csv("mlflow_outputs/test_clusters.csv", index=False, sep=";")
 
     # Log des artefacts
     mlflow.log_artifact("mlflow_outputs/cluster_input.csv")
@@ -873,7 +872,7 @@ test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
 # Enregistrer les dataset Train_clean et test_clean
     df_cluster['split'] = df_cluster['split'].replace('train_test','train') #(train for reg)
 
-    df_cluster.to_csv(os.path.join(output_filepath, "df_cluster.csv"), sep=";", index=True)
+    df_cluster.to_csv(os.path.join(output_filepath, "data/df_cluster.csv"), sep=";", index=True)
     mlflow.log_artifact(output_filepath)
 if __name__ == '__main__':
     main()

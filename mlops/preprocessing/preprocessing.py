@@ -49,7 +49,7 @@ def calculate_bounds(series, iqr_factor=1.5):
     return q1 - iqr_factor * iqr, q3 + iqr_factor * iqr
 
 def compute_medians(df):
-    return df.median(numeric_only=True)
+    return df.median(numeric_only=True) #par commune
 
 def mark_outliers(df, column):
     lower, upper = calculate_bounds(df[column])
@@ -74,12 +74,14 @@ def group_col(df):
 @click.command()
 @click.option('--input-path', type=click.Path(exists=True), prompt='📥 Fichier d’entrée fusionné')
 @click.option('--output-path', type=click.Path(), prompt='📤 Fichier de sortie nettoyé')
+
 def main(input_path, output_path):
     mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"))
     mlflow.set_experiment("Preprocessing Données Immo")
 
     with mlflow.start_run(run_name="preprocessing_pipeline"):
         df = pl.read_csv(input_path, separator=";").to_pandas()
+        
 
         df.drop_duplicates(inplace=True)
         df.dropna(subset=['prix_m2_vente', 'surface_reelle_bati', 'nombre_pieces_principales'], inplace=True)

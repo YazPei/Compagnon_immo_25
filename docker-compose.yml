@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
 # --------- Préparation des données ----------
+
   fusion_geo:
     build:
       context: .
@@ -13,7 +14,22 @@ services:
       python /app/mlops/fusion/fusion_geo_dvf.py
       --folder-path1 /app/data
       --folder-path2 /app/data
-      --output-folder /app/data/clean
+      --output-folder /app/data
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+
+  preprocessing:
+    build:
+      context: .
+      dockerfile: Dockerfile.preprocessing
+    volumes:
+      - ./data:/app/data
+      - ./mlops/preprocessing:/app/mlops/preprocessing
+    command: >
+      python /app/mlops/preprocessing/preprocessing.py
+      --input-path /data
+      --output-folder1 /app/data
+      --output-folder2 /app/data
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
@@ -22,15 +38,16 @@ services:
       context: .
       dockerfile: Dockerfile.clustering
     volumes:
-      - .:/app
+      - ./data:/app/data
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
       - mlflow
     command: >
       python mlops/clustering/Clustering.py
-      --input-path data/processed/train_clean.csv
-      --output-path data/interim/df_sales_clustered.csv
+      --input-path data/train_clean.csv
+      --output-path1 data/df_cluster.csv
+      --output-path2 data/df_sales_clean_ST.csv
 
 
   encode:

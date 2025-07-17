@@ -1,140 +1,209 @@
 # ========== Makefile MLOps ==========
-# Pipelines Régression + Séries temporelles
+# Pipelines Régression + Séries temporelles + API
 # Outils : DVC, MLflow, Docker, bash scripts
 
+.PHONY: help install clean-all
+.DEFAULT_GOAL := help
+
 # ===============================
-# 🧪 Exécution locale (hors Docker)
+# Aide
 # ===============================
-chmod_all:
-	chmod +x mlops/fusion/run_fusion.sh
-	chmod +x mlops/preprocessing/run_preprocessing.sh
-	chmod +x mlops/clustering/run_clustering.sh
-	chmod +x mlops/Regression/run_all.sh
-	chmod +x mlops/Serie_temporelle/run_all_st.sh
-	chmod +x run_all_full.sh
 
-fusion_dvc:
-	@echo "🌐 Fusion des données via DVC (local)"
-	chmod +x mlops/fusion/run_fusion.sh
-	bash mlops/fusion/run_fusion.sh
-	
-preprocessing:
-	@echo "🧼 Prétraitement des données (local via DVC)"
-	chmod +x mlops/preprocessing/run_preprocessing.sh
-	bash mlops/preprocessing/run_preprocessing.sh
+help: ## Affiche l'aide
+	@echo "========== Compagnon Immo - Commandes disponibles =========="
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?##.*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@echo ""
 
-clustering:
-	@echo "📊 Lancement du clustering KMeans (local via DVC)"
-	chmod +x mlops/clustering/run_clustering.sh
-	bash mlops/clustering/run_clustering.sh
+# ==============================================================
+# 📦 Setup et installation (environnement virtuel + dépendances)
+# ==============================================================
 
-regression:
-	@echo "🔁 Lancement pipeline Régression (local)"
-	bash mlops/Regression/run_all.sh
+install: ## Installation de l'environnement
+	@echo "Vérification de l'environnement virtuel..."
+	@if [ ! -f ".venv/bin/activate" ]; then \
+	    echo "Création de l'environnement virtuel (.venv)"; \
+	    python3 -m venv .venv; \
+	else \
+	    echo "Environnement virtuel déjà présent"; \
+	fi
+	@echo "Installation des dépendances..."
+	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+	@echo "Installation terminée"
 
-series:
+check-env: ## Vérifie l'environnement
+	@if [ ! -f ".venv/bin/activate" ]; then \
+	    echo "Environnement virtuel non trouvé. Exécutez 'make install'"; \
+	    exit 1; \
+	fi
+
+# ===========================================================
+# 🧪 Pipelines ML (Local) pour rendre les scripts exécutables
+# ===========================================================
+
+chmod-scripts: ## Rend les scripts exécutables
+	@chmod +x mlops/fusion/run_fusion.sh
+	@chmod +x mlops/preprocessing/run_preprocessing.sh
+	@chmod +x mlops/clustering/run_clustering.sh
+	@chmod +x mlops/Regression/run_all.sh
+	@chmod +x mlops/Serie_temporelle/run_all_st.sh
+	@chmod +x run_all_full.sh
+
+fusion: chmod-scripts ## Fusion des données via DVC
+	@echo "Fusion des données via DVC (local)"
+	@bash mlops/fusion/run_fusion.sh
+
+preprocessing: chmod-scripts ## Prétraitement des données
+	@echo "Prétraitement des données (local via DVC)"
+	@bash mlops/preprocessing/run_preprocessing.sh
+
+clustering: chmod-scripts ## Clustering KMeans
+	@echo "Lancement du clustering KMeans (local via DVC)"
+	@bash mlops/clustering/run_clustering.sh
+
+regression: chmod-scripts ## Pipeline de régression
+	@echo "Lancement pipeline Régression (local)"
+	@bash mlops/Regression/run_all.sh
+
+series: chmod-scripts ## Pipeline de séries temporelles
 	@echo "⏳ Lancement pipeline Série Temporelle (local)"
-	bash mlops/Serie_temporelle/run_all_st.sh
+	@bash mlops/Serie_temporelle/run_all_st.sh
 
-
-mlflow-ui:
-	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
-	mlflow ui --port 5001
+ml-pipeline: fusion preprocessing clustering regression ## Pipeline ML complet
+	@echo "Pipeline ML complet terminé"
 
 # ===============================
-# 🐳 Exécution dans Docker
+# 🌐 API et Interface Web
 # ===============================
 
-docker_auto: docker_build docker_run_fusion docker_run_full docker_run_clustering docker_run_preprocessing
-#dvc pull 
-	
-docker_build:
-	@echo "🔧 Construction de l’image Docker..."
-	docker compose build run_full
+api-dev: check-env ## Démarre l'API en mode développement
+	@echo "🚀 Démarrage de l'API..."
+	@echo "📍 API : http://localhost:8000"
+	@echo "📚 Docs : http://localhost:8000/docs"
+	@cd api_test && ../.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-docker_run_full:
-	@echo "🚀 Exécution pipeline complet (Docker)"
-	docker compose run --rm run_full
+streamlit: check-env ## Démarre l'interface Streamlit
+	@echo "🎨 Démarrage de Streamlit..."
+	@echo "📍 Interface : http://localhost:8501"
+	@cd api_test && ../.venv/bin/streamlit run questionnaire_streamlit.py --server.port 8501
 
-docker_run_fusion:
-	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
-	docker compose run --rm fusion_geo
-	
-docker_run_preprocessing:
-	@echo "🧼 Exécution preprocessing (Docker)"
-	docker compose run --rm preprocessing
+api-test: check-env ## Lance les tests de l'API
+	@echo "🧪 Tests de l'API..."
+	@cd api_test && ../.venv/bin/python -m pytest app/tests/ -v
 
+dev-env: ## Environnement de développement complet
+	@echo "🛠️ Démarrage de l'environnement complet..."
+	@echo "Démarrage en parallèle : MLflow + API + Streamlit"
+	@make -j3 mlflow-ui api-dev streamlit
 
-docker_run_clustering:
-	@echo "📊 Exécution du clustering (Docker)"
-	docker compose run --rm clustering
+# ===============================
+# 📈 MLflow
+# ===============================
 
-docker_run_regression:
-	@echo "🔁 Exécution pipeline Régression (Docker)"
-	docker compose run --rm run_full bash mlops/Regression/run_all.sh
+mlflow-ui: check-env ## Démarre l'interface MLflow
+	@echo "📈 Démarrage de l'interface MLflow"
+	@echo "📍 MLflow UI disponible sur : http://localhost:5001"
+	@../.venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
 
-docker_run_series:
-	@echo "⏳ Exécution pipeline Série Temporelle (Docker)"
-	docker compose run --rm run_full bash mlops/Serie_temporelle/run_all_ST.sh
+mlflow-clean: ## Nettoie les runs MLflow
+	@echo "🧹 Suppression du répertoire mlruns/"
+	@rm -rf mlruns/
 
+mlflow-status: ## Affiche le statut des derniers runs
+	@echo "📜 Derniers runs MLflow"
+	@find mlruns/ -name "meta.yaml" 2>/dev/null | xargs grep -H "status" || echo "Aucun run trouvé"
 
+# ===============================
+# 🐳 Docker
+# ===============================
+
+docker-build: ## Construction des images Docker
+	@echo "🔧 Construction des images..."
+	@docker-compose build
+
+docker-api-build: ## Construction de l'image Docker API
+	@echo "Construction de l'image Docker API"
+	@cd api_test && docker build -t compagnon-immo-api .
+
+docker-api-run: docker-api-build ## Lance l'API dans Docker
+	@echo "Lancement de l'API dans Docker"
+	@echo "API disponible sur : http://localhost:8000"
+	@docker run -p 8000:8000 --name compagnon-api compagnon-immo-api
+
+docker-stack-up: ## Démarre la stack Docker complète
+	@echo "🐳 Démarrage de la stack..."
+	@docker-compose up -d
+	@echo "✅ Stack démarrée"
+
+docker-stack-down: ## Arrête la stack Docker
+	@echo "🛑 Arrêt de la stack..."
+	@docker-compose down
+
+docker-logs: ## Affiche les logs Docker
+	@docker-compose logs -f
 
 # ===============================
 # 🧹 Nettoyage
 # ===============================
 
-clean_exports:
+clean-exports: ## Supprime les fichiers d'export
 	@echo "🧹 Suppression des fichiers exports/"
-	rm -rf exports/reg/*.csv exports/reg/*.joblib
-	rm -rf exports/st/*.csv exports/st/*.pkl exports/st/*.png exports/st/*.json
+	@rm -rf exports/reg/*.csv exports/reg/*.joblib
+	@rm -rf exports/st/*.csv exports/st/*.pkl exports/st/*.png exports/st/*.json
 
-clean_dvc:
-	@echo "🧹 Nettoyage DVC cache non utilisé (local uniquement)"
-	dvc gc -w --force
+clean-dvc: ## Nettoie le cache DVC
+	@echo "🧹 Nettoyage DVC cache non utilisé"
+	@dvc gc -w --force
 
-clean_all: clean_exports clean_dvc
+clean-api: ## Nettoie les caches de l'API
+	@echo "Nettoyage des caches de l'API"
+	@find api_test -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find api_test -name "*.pyc" -delete 2>/dev/null || true
 
-# ===============================
-# 📦 Setup initial
-# ===============================
+clean-docker: ## Nettoie les conteneurs et images Docker
+	@echo "🧹 Nettoyage Docker"
+	@docker system prune -f
+	@docker container prune -f
 
-install:
-	@echo "📦 Vérification de l'environnement virtuel..."
-	@if [ ! -f ".venv/bin/activate" ]; then \
-		echo "⚙️  Création de l'environnement virtuel (.venv)"; \
-		python3 -m venv .venv; \
-	else \
-		echo "✅ Environnement virtuel déjà présent"; \
-	fi
-
-	@echo "📦 Vérification des paquets installés..."
-	@if [ ! -d ".venv/lib" ] || ! . .venv/bin/activate && pip list | grep -Fq -f requirements.txt; then \
-		echo "📦 Installation des dépendances..."; \
-		. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt; \
-	else \
-		echo "✅ Dépendances déjà installées"; \
-	fi
-
+clean-all: clean-exports clean-dvc clean-api clean-docker ## Nettoyage total
+	@echo "✅ Nettoyage complet terminé"
 
 # ===============================
-# 📈 Tracking MLflow
+# 🧪 Tests complets
 # ===============================
 
-mlflow-ui:
-	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
-	mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
+test-ml: check-env ## Tests des pipelines ML
+	@echo "🧪 Tests ML..."
+	@pytest mlops/tests/ -v || echo "Dossier mlops/tests/ non trouvé"
 
-mlflow-run:
-	@echo "🚀 Lancement manuel d’un run MLflow (ex: clustering)"
-	python -m src.clustering \
-		--input-path data/processed/train_clean.csv \
-		--output-path data/interim
+test-all: test-ml api-test ## Tous les tests
+	@echo "✅ Tous les tests terminés"
 
-mlflow-clean:
-	@echo "🧹 Suppression du répertoire mlruns/"
-	rm -rf mlruns/s
+# ===============================
+# 🚀 Pipelines complets
+# ===============================
 
-mlflow-log-status:
-	@echo "📜 Derniers runs MLflow"
-	@find mlruns/ -name "meta.yaml" | xargs grep -H "status"
+full-stack: install ml-pipeline api-dev ## Pipeline ML + API
+	@echo "🎉 Pipeline complet + API démarrés !"
 
+quick-start: install full-stack streamlit ## Installation et démarrage rapide
+	@echo "🚀 Projet prêt à utiliser !"
+
+# ===============================
+# 🔍 Utilitaires
+# ===============================
+
+status: ## Affiche le statut du projet
+	@echo "========== Statut du projet =========="
+	@echo "Dossier : $(PWD)"
+	@echo "Python : $$(python3 --version 2>/dev/null || echo 'Non installé')"
+	@echo "Env virtuel : $$([ -f .venv/bin/activate ] && echo '✅ Présent' || echo '❌ Absent')"
+	@echo "Docker : $$(docker --version 2>/dev/null || echo 'Non installé')"
+	@echo "DVC : $$(dvc --version 2>/dev/null || echo 'Non installé')"
+	@echo "Données : $$([ -d data ] && echo '✅ Présent' || echo '❌ Absent')"
+
+ports-check: ## Vérifie les ports utilisés
+	@echo "Vérification des ports..."
+	@echo "Port 8000 (API) : $$(lsof -ti:8000 && echo 'Occupé' || echo 'Libre')"
+	@echo "Port 8501 (Streamlit) : $$(lsof -ti:8501 && echo 'Occupé' || echo 'Libre')"
+	@echo "Port 5001 (MLflow) : $$(lsof -ti:5001 && echo 'Occupé' || echo 'Libre')"

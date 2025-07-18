@@ -3,6 +3,7 @@
 # Pipelines Régression + Séries temporelles
 # Outils : DVC, MLflow, Docker, bash scripts
 IMAGE_PREFIX=compagnon_immo
+PYTHON_BIN=.venv/bin/python
 
 # ===============================
 # Aide
@@ -36,6 +37,16 @@ install:
 		echo "✅ Dépendances déjà installées"; \
 	fi
 
+# ===========================================================
+# check env
+# ===========================================================
+
+check-env: ##vérifie l'environnement
+	@if [! -f ".venv/bin/activate"]; then \
+		echo "Environnement virtuel non trouvé. Executez 'make Install'"; \
+		exit 1; \
+	fi
+	
 
 # ===========================================================
 # 🧪 Pipelines ML (Local) pour rendre les scripts exécutables
@@ -47,7 +58,6 @@ chmod-scripts: ## Rend les scripts exécutables
 	@chmod +x mlops/clustering/run_clustering.sh
 	@chmod +x mlops/Regression/run_all.sh
 	@chmod +x mlops/Serie_temporelle/run_all_st.sh
-	@chmod +x run_all_full.sh
 
 fusion: chmod-scripts ## Fusion des données via DVC
 	@echo "Fusion des données via DVC (local)"
@@ -213,45 +223,50 @@ run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run
 
 run_full:
 	@echo "🚀 Exécution pipeline lancement"
-	docker run --rm -f $(IMAGE_PREFIX)-run
+	docker run --rm $(IMAGE_PREFIX)-run
 
 run_dvc: ## lancement du dvc
 	@echo "dvc..."
-	docker run --rm -f $(IMAGE_PREFIX)-dvc
+	docker run --rm $(IMAGE_PREFIX)-dvc
 											
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
-	docker run --rm -f $(IMAGE_PREFIX)-fus
+	docker run --rm $(IMAGE_PREFIX)-fus
 
 run_preprocessing: ## Lancement du preprocessing (Docker)
 	@echo "🧼 Exécution preprocessing (Docker)"
-	docker run --rm -f $(IMAGE_PREFIX)-preprocess
+	docker run --rm $(IMAGE_PREFIX)-preprocess
 
 run_clustering: ## Lancement du clustering (Docker)
 	@echo "📊 Exécution du clustering (Docker)"
-	docker run --rm -f $(IMAGE_PREFIX)-clust
+	docker run --rm $(IMAGE_PREFIX)-clust
+
+run_encoding:
+	docker run --rm $(IMAGE_PREFIX)-encod
+
 	
 run_lgbm: ## Lancement de la régression LGBM (Docker)
 	@echo "🔁 Exécution pipeline Régression (Docker)"
-	docker run --rm -f $(IMAGE_PREFIX)-lgbm
+	docker run --rm $(IMAGE_PREFIX)-lgbm
 	
-build-util: ## Build de l'image Docker d'interpretabilité
-	docker run --rm -f $(IMAGE_PREFIX)-util
+run-util: ## Build de l'image Docker d'interpretabilité
+	docker run --rm $(IMAGE_PREFIX)-util
 	
 run_analyse: ## Build de l'image Docker d'interpretabilité
-	docker run --rm -f $(IMAGE_PREFIX)-shap
-	
-run_splitst: ## Build de l'image Docker du Split de la serie temporelle
-	docker run --rm -f $(IMAGE_PREFIX)--split-st
+	docker run --rm $(IMAGE_PREFIX)-shap
+
+run_splitst: ## Split série temporelle
+	docker run --rm $(IMAGE_PREFIX)-split-st
+
 				
 run_decompose: ## Build de l'image Docker de la décomposition des courbes
-	docker run --rm -f $(IMAGE_PREFIX)-decomp
+	docker run --rm $(IMAGE_PREFIX)-decomp
 			
 run_SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX 
-	docker run --rm -f $(IMAGE_PREFIX)-sarimax		
+	docker run --rm $(IMAGE_PREFIX)-sarimax		
 
 run_evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
-	docker run --rm -f $(IMAGE_PREFIX)-evalu	
+	docker run --rm $(IMAGE_PREFIX)-evalu	
 
 		
 # ===============================
@@ -265,7 +280,7 @@ build-dvc-image: ## Build de l'image Docker DVC + DagsHub
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 		
 run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
-	docker compose run --rm dvc-runner dvc repro
+	docker run --rm dvc-runner dvc repro
 	####	
 dvc-push: ## Push vers DagsHub en Docker
 	docker run --rm \
@@ -339,7 +354,7 @@ mlflow-run:
 
 mlflow-clean:
 	@echo "🧹 Suppression du répertoire mlruns/"
-	rm -rf mlruns/s
+	rm -rf mlruns/
 
 mlflow-log-status:
 	@echo "📜 Derniers runs MLflow"

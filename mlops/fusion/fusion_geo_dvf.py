@@ -10,7 +10,7 @@ from sklearn.neighbors import BallTree
 
 
 def load_and_clean_data(folder_path1, folder_path2):
-    input_file1 = os.path.join(folder_path1, 'merged_sales_data.csv')
+    input_file1 = os.path.join(folder_path1, 'df_sample.csv')
     input_file2 = os.path.join(folder_path2, 'DVF_donnees_macroeco.csv')
 
     chunks1 = pd.read_csv(input_file1, sep=';', chunksize=100_000, on_bad_lines='skip', low_memory=False)

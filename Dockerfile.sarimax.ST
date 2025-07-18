@@ -1,8 +1,7 @@
-FROM python:3.10-slim
+FROM compagnon_immo-decomp
 WORKDIR /app
 
-COPY . /app
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY mlops/Serie_temporelle/sarimax_train.py /app/mlops/Serie_temporelle/	
 
-ENTRYPOINT ["python", "-m", "mlops.time_series.sarimax_train"]
 
+ENTRYPOINT ["uvicorn", "sarimax_api:app", "--host", "0.0.0.0", "--port", "8007"]

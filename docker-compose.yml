@@ -1,6 +1,22 @@
-version: '3.8'
-
 services:
+# --------- Pipeline de lancement ----------
+  run_full:
+    build:
+      context: .
+      dockerfile: Dockerfile.run
+    volumes:
+      - .:/app
+
+    tty: true
+    stdin_open: true
+    environment:
+      - RUN_MODE=full
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
+
+
 # --------- Préparation des données ----------
 
   fusion_geo:
@@ -8,41 +24,49 @@ services:
       context: .
       dockerfile: Dockerfile.fusion
     volumes:
-      - ./data:/app/data
-      - ./mlops/fusion:/app/mlops/fusion
-    command: >
-      python /app/mlops/fusion/fusion_geo_dvf.py
-      --folder-path1 /app/data
-      --folder-path2 /app/data
-      --output-folder /app/data
+      - .:/app
+      - ./mlops:/app/mlops
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 
   preprocessing:
     build:
       context: .
       dockerfile: Dockerfile.preprocessing
+    image: compagnon_immo-preprocessing 
     volumes:
+      - .:/app
       - ./data:/app/data
-      - ./mlops/preprocessing:/app/mlops/preprocessing
+      - ./mlops/preprocessing:/app/mlops
     command: >
-      python /app/mlops/preprocessing/preprocessing.py
+      python mlops/preprocessing/preprocessing.py
       --input-path /data
       --output-folder1 /app/data
       --output-folder2 /app/data
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
+      
   clustering:
     build:
       context: .
       dockerfile: Dockerfile.clustering
     volumes:
       - ./data:/app/data
+      - ./mlops:/app/mlops
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
       - mlflow
+    networks:
+      - ml_net
     command: >
       python mlops/clustering/Clustering.py
       --input-path data/train_clean.csv
@@ -62,7 +86,10 @@ services:
       python /app/mlops/encoding.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 # --------- Régression ----------
   train_lgbm:
     build:
@@ -75,18 +102,12 @@ services:
       python /app/mlops/train_lgbm.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 
-  train_xgb:
-    build:
-      context: .
-      dockerfile: Dockerfile.xgb.REG
-    volumes:
-      - ./mlops:/app/mlops
-      - ./exports:/app/exports
-    command: >
-      python /app/mlops/Regression/train_xgb.py
-    environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
 
   analyse:
     build:
@@ -99,6 +120,10 @@ services:
       python /app/mlops/Regression/analyse.py
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 
 # --------- Séries Temporelles ----------
   split:
@@ -108,12 +133,17 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./data:/app/data
-    command: >
-      python /app/mlops/Serie_temporelle/load_split.py
-      --input-path /app/data/df_sales_clean_ST.csv
-      --output-folder /app/exports/st
+      - ./mlops:/app/mlops
+    entrypoint: [ "python", "/app/mlops/Serie_temporelle/load_split.py" ]
+
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX}
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 
   decompose:
     build:
@@ -121,12 +151,19 @@ services:
       dockerfile: Dockerfile.decompose.ST
     volumes:
       - ./exports:/app/exports
+      - ./mlops:/app/mlops
     command: >
       python /app/mlops/Serie_temporelle/seasonal_decomp.py
       --input-folder /app/exports/st
       --output-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX}
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
 
   train_sarimax:
     build:
@@ -134,55 +171,104 @@ services:
       dockerfile: Dockerfile.sarimax.ST
     volumes:
       - ./exports:/app/exports
+      - ./mlops:/app/mlops
     command: >
       python /app/mlops/Serie_temporelle/sarimax_train.py
       --input-folder /app/exports/st
       --output-folder /app/exports/st
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX}
+    depends_on:
+      - mlflow
+    networks:
+      - ml_net
+    
+    
   evaluate:
     build:
       context: .
       dockerfile: Dockerfile.evaluate.ST
     volumes:
       - ./exports:/app/exports
-    command: >
-      python /app/mlops/Serie_temporelle/metrics.py
-      --model-folder /app/exports/st
+      - ./mlops:/app/mlops
+      - ./data:/app/data
+    entrypoint: [ "python", "/app/mlops/Serie_temporelle/evaluate_ST.py" ]
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX}
+    depends_on:
+      - mlflow
+    condition: service_healthy
+    networks:
+      - ml_net
+          
+  series_pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.series_pipeline
+    volumes:
+      - ./mlops:/app/mlops
+      - ./data:/app/data
+      - ./exports:/app/exports
+    command: python /app/mlops/Serie_temporelle/pipeline.py --help
+    networks:
+      - ml_net
+
 
 # --------- Tracking MLflow ----------
   mlflow:
     image: ghcr.io/mlflow/mlflow
     ports:
-      - "5001:5000"
+      - "5000:5000"
     volumes:
       - ./mlruns:/mlflow/mlruns
     command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0
+    networks:
+      - ml_net
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3        
 
+      
+# --------- DVC ----------          
+
+  dvc-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.dvc
+    volumes:
+      - .:/app
+      - ~/.dvc/config.local:/app/.dvc/config.local:ro
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: sh
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    networks:
+      - ml_net
+        
+      
 # --------- Scripts Factices ----------
   regression_script:
     image: busybox
     command: echo "Présence logique de regression/run_all.sh"
 
+
   st_script:
     image: busybox
     command: echo "Présence logique de Serie_temporelle/run_all_st.sh"
+    
+    
 
-# --------- Exécution du pipeline complet ----------
-  run_full:
-    build:
-      context: .
-      dockerfile: Dockerfile.run
-    volumes:
-      - .:/home/mlopsuser/app
-    depends_on:
-      - regression_script
-      - st_script
-    tty: true
-    stdin_open: true
-    environment:
-      - RUN_MODE=full
 
+networks:
+  ml_net:
+    driver: bridge

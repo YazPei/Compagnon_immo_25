@@ -1,6 +1,8 @@
 import os
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 import mlflow
 
 def evaluate_models(model_folder):
@@ -8,7 +10,6 @@ def evaluate_models(model_folder):
     metrics = []
 
     with mlflow.start_run(run_name="evaluation_sarimax"):
-
         for file in os.listdir(model_folder):
             if file.startswith("forecast_cluster_") and file.endswith(".csv"):
                 cluster_id = file.split("_")[2].split(".")[0]
@@ -30,9 +31,36 @@ def evaluate_models(model_folder):
 
         if metrics:
             df_metrics = pd.DataFrame(metrics)
-            df_metrics.to_csv(os.path.join(model_folder, "global_sarimax_metrics.csv"), sep=';', index=False)
-            mlflow.log_artifact(os.path.join(model_folder, "global_sarimax_metrics.csv"))
+
+            # Sauvegarde du CSV
+            csv_path = os.path.join(model_folder, "global_sarimax_metrics.csv")
+            df_metrics.to_csv(csv_path, sep=';', index=False)
+            mlflow.log_artifact(csv_path)
+
+            # Affichage console
             print(df_metrics)
+
+            # Barplot RMSE par cluster
+            plt.figure(figsize=(8, 5))
+            sns.barplot(data=df_metrics, x='cluster', y='rmse', palette='crest')
+            plt.title("RMSE par cluster (SARIMAX)")
+            plt.xlabel("Cluster")
+            plt.ylabel("RMSE")
+            plt.tight_layout()
+
+            plot_path = os.path.join(model_folder, "rmse_by_cluster.png")
+            plt.savefig(plot_path)
+            plt.close()
+
+            # Log dans MLflow
+            mlflow.log_artifact(plot_path)
         else:
             print("Aucun fichier de prévision trouvé.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Évaluer les performances SARIMAX par cluster")
+    parser.add_argument("--model-folder", type=str, required=True, help="Dossier contenant les fichiers forecast")
+    args = parser.parse_args()
+    
+    evaluate_models(args.model_folder)
 

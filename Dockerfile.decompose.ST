@@ -1,8 +1,9 @@
-FROM python:3.10-slim
+FROM compagnon_immo-split-st
 WORKDIR /app
 
-COPY . /app
-#RUN pip install --upgrade pip && pip install -r requirements.txt
 
-ENTRYPOINT ["python", "-m", "mlops.Serie_temporelle.seasonal_decomp"]
+COPY mlops/Serie_temporelle/seasonal_decomp.py /app/mlops/Serie_temporelle/
+
+
+ENTRYPOINT ["uvicorn", "seasonal_decomp_st_api:app", "--host", "0.0.0.0", "--port", "8007"]
 

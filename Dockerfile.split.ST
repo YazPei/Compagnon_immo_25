@@ -1,8 +1,6 @@
-FROM python:3.10-slim
+FROM compagnon_immo-clust
 WORKDIR /app
 
-COPY . /app
-# RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY mlops/Serie_temporelle/load_split.py /app/mlops/Serie_temporelle/
 
-ENTRYPOINT ["python", "-m", "mlops.Serie_temporelle.load_split"]
-
+ENTRYPOINT ["uvicorn", "split_ST_api:app", "--host", "0.0.0.0", "--port", "8006"]

@@ -1,15 +1,9 @@
-FROM python:3.10-slim
+FROM compagnon_immo-dvc
 
-# creation dossier
 WORKDIR /app
+# Copie le reste du projet
+COPY . .
 
-COPY requirements.txt .
-COPY mlops/fusion ./mlops/fusion
-COPY data /app/data
+# Lancement automatique du script
+ENTRYPOINT ["bash", "mlops/fusion/run_fusion.sh"]
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-# import data
-RUN dvc pull
-
-ENTRYPOINT ["python", "mlops/fusion/fusion_geo_dvf.py"]

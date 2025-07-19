@@ -1,9 +1,7 @@
 stages:
-  # --------- Fusion Géographique avec IPS (NOUVEAU) ----------
-
   fusion_geo:
     cmd: >
-      python -m mlops/fusion/fusion_geo_dvf
+      python -m mlops.fusion.fusion_geo_dvf
       --folder-path1 data
       --folder-path2 data
       --output-folder data/clean
@@ -13,17 +11,23 @@ stages:
       - data/merged_sales_data.csv
     outs:
       - data/clean/df_sales_clean_polars.csv
-  
+
   preprocessing:
-    cmd: python mlops/preprocessing/preprocessing.py --input-path data/clean/df_sales_clean_polars.csv --output-path data/processed/train_clean.csv
+    cmd: >
+      python mlops/preprocessing/preprocessing.py
+      --input-path data/clean/df_sales_clean_polars.csv
+      --output-path data/processed/train_clean.csv
     deps:
-      - python mlops/preprocessing/preprocessing.py
+      - mlops/preprocessing/preprocessing.py
       - data/clean/df_sales_clean_polars.csv
     outs:
       - data/processed/train_clean.csv
 
   clustering:
-    cmd: python mlops/clustering/Clustering.py --input-path data/processed/train_clean.csv --output-path data/interim/df_sales_clustered.csv
+    cmd: >
+      python mlops/clustering/Clustering.py
+      --input-path data/processed/train_clean.csv
+      --output-path data/interim/df_sales_clustered.csv
     deps:
       - mlops/clustering/Clustering.py
       - data/processed/train_clean.csv
@@ -38,10 +42,6 @@ stages:
     plots:
       - mlflow_outputs/elbow_plot.png
 
-
-
-
-  # --------- Pipeline de Régression ----------
   encode:
     cmd: python src/encoding.py
     deps:
@@ -63,48 +63,89 @@ stages:
       - mlops/encoded/lgbm_model.joblib
 
   analyse:
-    cmd: python src/analyse.py --model lightgbm
+    cmd: >
+      python src/analyse.py --model lightgbm
     deps:
       - src/analyse.py
       - mlops/encoded/X_test.csv
       - mlops/encoded/y_test.csv
       - mlops/encoded/lgbm_model.joblib
 
-  # --------- Pipeline de Série Temporelle ----------
   split:
-    cmd: python -m mlops.time_series.load_split --input-path data/df_sales_clean_ST.csv --output-folder exports/st
+    cmd: >
+      python -m mlops.time_series.load_split
+      --input-path data/df_sales_clean_ST.csv
+      --output-folder data/split
+      --suffix ${ST_SUFFIX}
     deps:
       - data/df_sales_clean_ST.csv
       - mlops/time_series/load_split.py
     outs:
+      - data/split/train_cluster_0.csv
+      - data/split/test_cluster_0.csv
+
+
+  decompose:
+    cmd: >
+      python -m mlops.time_series.seasonal_decomp
+      --input-folder data/split
+      --output-folder outputs/decomposition
+      --suffix ${ST_SUFFIX}
+    deps:
+      - mlops/time_series/seasonal_decomp.py
+      - data/split/train_cluster_0.csv
+    outs:
+      - outputs/decomposition/decomposition_additive_cluster_0.png
+      - outputs/decomposition/decomposition_multiplicative_cluster_0.png
+
+  train_sarimax:
+    cmd: >
+      python -m mlops.time_series.sarimax_train
+      --input-folder data/split
+      --output-folder outputs/best
+      --suffix ${ST_SUFFIX}
+    deps:
+      - mlops/time_series/sarimax_train.py
+      - data/split/train_cluster_0.csv
+      - data/split/test_cluster_0.csv
+    outs:
+      - outputs/best/cluster_0_sarimax.pkl
+      - outputs/best/forecast_cluster_0.csv
+
+  evaluate:
+    cmd: >
+      python -m mlops.time_series.metrics
+      --input-folder exports/st
+      --output-folder exports/st
+      --model-folder exports/st
+      --suffix ""
+    deps:
+      - mlops/time_series/metrics.py
       - exports/st/cluster_0_series.csv
       - exports/st/cluster_1_series.csv
       - exports/st/cluster_2_series.csv
       - exports/st/cluster_3_series.csv
-
-  decompose:
-    cmd: python -m mlops.time_series.seasonal_decomp --input-folder exports/st --output-folder exports/st
-    deps:
-      - exports/st/cluster_0_series.csv
-      - mlops/time_series/seasonal_decomp.py
+      - exports/st/cluster_4_series.csv
+      - exports/st/train_cluster_0.csv
+      - exports/st/test_cluster_0.csv
+      - exports/st/train_cluster_1.csv
+      - exports/st/test_cluster_1.csv
+      - exports/st/train_cluster_2.csv
+      - exports/st/test_cluster_2.csv
+      - exports/st/train_cluster_3.csv
+      - exports/st/test_cluster_3.csv
+      - exports/st/train_cluster_4.csv
+      - exports/st/test_cluster_4.csv      
+      - exports/st/cluster_0_sarimax.pkl
+      - exports/st/cluster_1_sarimax.pkl
+      - exports/st/cluster_2_sarimax.pkl
+      - exports/st/cluster_3_sarimax.pkl
+      - exports/st/cluster_4_sarimax.pkl
     outs:
-      - exports/st/decomposition_additive_cluster_0.png
-      - exports/st/decomposition_multiplicative_cluster_0.png
-
-  train_sarimax:
-    cmd: python -m mlops.time_series.sarimax_train --input-folder exports/st --output-folder exports/st
-    deps:
-      - exports/st/cluster_0_series.csv
-      - mlops/time_series/sarimax_train.py
-    outs:
-      - exports/st/sarimax_model_cluster_0.pkl
-      - exports/st/forecast_cluster_0.csv
-
-  evaluate:
-    cmd: python -m mlops.time_series.metrics --model-folder exports/st
-    deps:
-      - exports/st/forecast_cluster_0.csv
-      - mlops/time_series/metrics.py
-    outs:
-      - exports/st/global_sarimax_metrics.csv
+      - exports/st/forecast_cluster_0.png
+      - exports/st/forecast_cluster_1.png
+      - exports/st/forecast_cluster_2.png
+      - exports/st/forecast_cluster_3.png
+      - exports/st/forecast_cluster_4.png
+      - exports/st/sarimax_global_eval.csv
 

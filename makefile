@@ -1,9 +1,9 @@
-# ========== Makefile MLOps ==========
-# Pipelines Régression + Séries temporelles + API
-# Outils : DVC, MLflow, Docker, bash scripts
 
-.PHONY: help install clean-all
-.DEFAULT_GOAL := help
+# ========== Makefile MLOps ==========
+# Pipelines Régression + Séries temporelles
+# Outils : DVC, MLflow, Docker, bash scripts
+IMAGE_PREFIX=compagnon_immo
+PYTHON_BIN=.venv/bin/python
 
 # ===============================
 # Aide
@@ -15,27 +15,38 @@ help: ## Affiche l'aide
 	@grep -E '^[a-zA-Z_-]+:.*?##.*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
-# ==============================================================
-# 📦 Setup et installation (environnement virtuel + dépendances)
-# ==============================================================
 
-install: ## Installation de l'environnement
-	@echo "Vérification de l'environnement virtuel..."
+# ===============================
+# 📦 Setup initial
+# ===============================
+
+install:
+	@echo "📦 Vérification de l'environnement virtuel..."
 	@if [ ! -f ".venv/bin/activate" ]; then \
-	    echo "Création de l'environnement virtuel (.venv)"; \
-	    python3 -m venv .venv; \
+		echo "⚙️  Création de l'environnement virtuel (.venv)"; \
+		python3 -m venv .venv; \
 	else \
-	    echo "Environnement virtuel déjà présent"; \
+		echo "✅ Environnement virtuel déjà présent"; \
 	fi
-	@echo "Installation des dépendances..."
-	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
-	@echo "Installation terminée"
 
-check-env: ## Vérifie l'environnement
-	@if [ ! -f ".venv/bin/activate" ]; then \
-	    echo "Environnement virtuel non trouvé. Exécutez 'make install'"; \
-	    exit 1; \
+	@echo "📦 Vérification des paquets installés..."
+	@if [ ! -d ".venv/lib" ] || ! . .venv/bin/activate && pip list | grep -Fq -f requirements.txt; then \
+		echo "📦 Installation des dépendances..."; \
+		. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt; \
+	else \
+		echo "✅ Dépendances déjà installées"; \
 	fi
+
+# ===========================================================
+# check env
+# ===========================================================
+
+check-env: ##vérifie l'environnement
+	@if [! -f ".venv/bin/activate"]; then \
+		echo "Environnement virtuel non trouvé. Executez 'make Install'"; \
+		exit 1; \
+	fi
+	
 
 # ===========================================================
 # 🧪 Pipelines ML (Local) pour rendre les scripts exécutables
@@ -47,7 +58,6 @@ chmod-scripts: ## Rend les scripts exécutables
 	@chmod +x mlops/clustering/run_clustering.sh
 	@chmod +x mlops/Regression/run_all.sh
 	@chmod +x mlops/Serie_temporelle/run_all_st.sh
-	@chmod +x run_all_full.sh
 
 fusion: chmod-scripts ## Fusion des données via DVC
 	@echo "Fusion des données via DVC (local)"
@@ -82,6 +92,7 @@ api-dev: check-env ## Démarre l'API en mode développement
 	@echo "📚 Docs : http://localhost:8000/docs"
 	@cd api_test && ../.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+
 streamlit: check-env ## Démarre l'interface Streamlit
 	@echo "🎨 Démarrage de Streamlit..."
 	@echo "📍 Interface : http://localhost:8501"
@@ -95,6 +106,7 @@ dev-env: ## Environnement de développement complet
 	@echo "🛠️ Démarrage de l'environnement complet..."
 	@echo "Démarrage en parallèle : MLflow + API + Streamlit"
 	@make -j3 mlflow-ui api-dev streamlit
+
 
 # ===============================
 # 📈 MLflow
@@ -113,8 +125,9 @@ mlflow-status: ## Affiche le statut des derniers runs
 	@echo "📜 Derniers runs MLflow"
 	@find mlruns/ -name "meta.yaml" 2>/dev/null | xargs grep -H "status" || echo "Aucun run trouvé"
 
+
 # ===============================
-# 🐳 Docker
+# 🐳 Docker - API
 # ===============================
 
 docker-build: ## Construction des images Docker
@@ -143,30 +156,210 @@ docker-logs: ## Affiche les logs Docker
 	@docker-compose logs -f
 
 # ===============================
+# ☁️ Setup remote DagsHub
+# ===============================
+
+setup_dags:  ## Configure le remote DVC vers DagsHub (secure, local only)
+	@echo "☁️ Configuration du remote DVC (DagsHub sécurisé)"
+	@chmod +x setup_remote.sh
+	@./setup_remote.sh
+
+# 
+# ===============================
+# 🐳 Exécution dans Docker
+# ===============================
+
+
+docker_auto: build-all run-all-docker
+
+## builds ##
+build-all: build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
+	@echo "📦 Toutes les images Docker ont été construites avec succès !"
+
+docker_build:
+	@echo "🔧 Construction de l’image Docker..."
+	docker build -f Dockerfile.run -t $(IMAGE_PREFIX)-run .
+	
+build-base: ## Build de l'image Docker de base (requirements installés)
+	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+
+
+		
+build-fusion: ## Build de l'image Docker d'enrichissement du dataset
+	docker build -f Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
+	
+build-preprocessing: ## Build de l'image Docker de preprocessing
+	docker build -f Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
+	
+build-clustering: ## Build de l'image Docker de segmentation geographique
+	docker build -f Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
+	
+build-encoding: ## Build de l'image Docker d'encoding
+	docker build -f Dockerfile.encoding.REG -t $(IMAGE_PREFIX)-encod .
+	
+build-lgbm: ## Build de l'image Docker de la modelisation Regression
+	docker build -f Dockerfile.lgbm.REG -t $(IMAGE_PREFIX)-lgbm .
+	
+build-util: ## Build de l'image Docker d'interpretabilité
+	docker build -f Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-util .
+		
+build-analyse: ## Build de l'image Docker d'interpretabilité
+	docker build -f Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-shap .
+	
+build-splitst: ## Build de l'image Docker du Split de la serie temporelle
+	docker build -f Dockerfile.split.ST -t $(IMAGE_PREFIX)-split-st .
+				
+build-decompose: ## Build de l'image Docker de la décomposition des courbes
+	docker build -f Dockerfile.decompose.ST -t $(IMAGE_PREFIX)-decomp .
+			
+build-SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX 
+	docker build -f Dockerfile.sarimax.ST -t $(IMAGE_PREFIX)-sarimax .		
+
+build-evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
+	docker build -f Dockerfile.evaluate.ST -t $(IMAGE_PREFIX)-evalu .		
+
+run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_analyse run_splitst run_decompose run_SARIMAX run_evaluate ## lancement de tous les containers 
+	@echo "🚀 Pipeline complet exécuté dans Docker !"
+
+run_full:
+	@echo "🚀 Exécution pipeline lancement"
+	docker run --rm $(IMAGE_PREFIX)-run
+
+run_dvc: ## lancement du dvc
+	@echo "dvc..."
+	docker run --rm $(IMAGE_PREFIX)-dvc
+											
+run_fusion: ## Lancement de la fusion des données (Docker)
+	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
+	docker run --rm $(IMAGE_PREFIX)-fus
+
+run_preprocessing: ## Lancement du preprocessing (Docker)
+	@echo "🧼 Exécution preprocessing (Docker)"
+	docker run --rm $(IMAGE_PREFIX)-preprocess
+
+run_clustering: ## Lancement du clustering (Docker)
+	@echo "📊 Exécution du clustering (Docker)"
+	docker run --rm $(IMAGE_PREFIX)-clust
+
+run_encoding:
+	docker run --rm $(IMAGE_PREFIX)-encod
+
+	
+run_lgbm: ## Lancement de la régression LGBM (Docker)
+	@echo "🔁 Exécution pipeline Régression (Docker)"
+	docker run --rm $(IMAGE_PREFIX)-lgbm
+	
+run-util: ## Build de l'image Docker d'interpretabilité
+	docker run --rm $(IMAGE_PREFIX)-util
+	
+run_analyse: ## Build de l'image Docker d'interpretabilité
+	docker run --rm $(IMAGE_PREFIX)-shap
+
+run_splitst: ## Split série temporelle
+	docker run --rm $(IMAGE_PREFIX)-split-st
+
+				
+run_decompose: ## Build de l'image Docker de la décomposition des courbes
+	docker run --rm $(IMAGE_PREFIX)-decomp
+			
+run_SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX 
+	docker run --rm $(IMAGE_PREFIX)-sarimax		
+
+run_evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
+	docker run --rm $(IMAGE_PREFIX)-evalu	
+
+		
+# ===============================
+# 📁 Commandes DVC (via Docker)
+# ===============================
+dvc-all: build-dvc-image run-dvc-repro dvc-metrics dvc-push dvc-save ## Reproduit, affiche les métriques et push
+	@echo "✅ Pipeline DVC complet exécuté et synchronisé"
+
+	
+build-dvc-image: ## Build de l'image Docker DVC + DagsHub
+	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+		
+run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
+	docker run --rm dvc-runner dvc repro
+	####	
+dvc-push: ## Push vers DagsHub en Docker
+	docker run --rm \
+		-v $(PWD):/app \
+		-v ~/.dvc/config.local:/app/.dvc/config.local:ro \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		push
+
+
+dvc-pull: ## Pull depuis DagsHub en Docker
+	docker run --rm \
+		-v $(PWD):/app \
+		-v ~/.dvc/config.local:/app/.dvc/config.local:ro \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		pull
+
+dvc-metrics: ## Affiche les métriques DVC via Docker
+	docker run --rm \
+		-v $(PWD):/app \
+		-v ~/.dvc/config.local:/app/.dvc/config.local:ro \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		metrics show
+		
+dvc-plots: ## Génère les graphiques DVC (plots.html) via Docker
+	docker run --rm \
+		-v $(PWD):/app \
+		-v ~/.dvc/config.local:/app/.dvc/config.local:ro \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		plots show --html > plots.html && echo "Fichier 'plots.html' généré"
+		
+dvc-save: ## Ajoute, commit et tag un fichier .dvc modifié
+	dvc add data/processed/train_clean.csv
+	git add data/processed/train_clean.csv.dvc
+	git commit -m "DVC update train_clean"
+					
+# ===============================
 # 🧹 Nettoyage
 # ===============================
 
-clean-exports: ## Supprime les fichiers d'export
+clean_exports:
 	@echo "🧹 Suppression des fichiers exports/"
-	@rm -rf exports/reg/*.csv exports/reg/*.joblib
-	@rm -rf exports/st/*.csv exports/st/*.pkl exports/st/*.png exports/st/*.json
+	rm -rf exports/reg/*.csv exports/reg/*.joblib
+	rm -rf exports/st/*.csv exports/st/*.pkl exports/st/*.png exports/st/*.json
 
-clean-dvc: ## Nettoie le cache DVC
-	@echo "🧹 Nettoyage DVC cache non utilisé"
-	@dvc gc -w --force
+clean_dvc:
+	@echo "🧹 Nettoyage DVC cache non utilisé (local uniquement)"
+	dvc gc -w --force
 
-clean-api: ## Nettoie les caches de l'API
-	@echo "Nettoyage des caches de l'API"
-	@find api_test -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	@find api_test -name "*.pyc" -delete 2>/dev/null || true
+clean_all: clean_exports clean_dvc
 
-clean-docker: ## Nettoie les conteneurs et images Docker
-	@echo "🧹 Nettoyage Docker"
-	@docker system prune -f
-	@docker container prune -f
 
-clean-all: clean-exports clean-dvc clean-api clean-docker ## Nettoyage total
-	@echo "✅ Nettoyage complet terminé"
+
+
+# ===============================
+# 📈 Tracking MLflow
+# ===============================
+
+mlflow-ui:
+	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
+	mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
+
+mlflow-run:
+	@echo "🚀 Lancement manuel d’un run MLflow (ex: clustering)"
+	python -m src.clustering \
+		--input-path data/processed/train_clean.csv \
+		--output-path data/interim
+
+mlflow-clean:
+	@echo "🧹 Suppression du répertoire mlruns/"
+	rm -rf mlruns/
+
+mlflow-log-status:
+	@echo "📜 Derniers runs MLflow"
+	@find mlruns/ -name "meta.yaml" | xargs grep -H "status"
+
 
 # ===============================
 # 🧪 Tests complets

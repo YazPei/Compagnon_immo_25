@@ -1,8 +1,12 @@
-FROM python:3.10-slim
+FROM compagnon_immo-sarimax
+
 WORKDIR /app
 
-COPY . /app
-RUN pip install --upgrade pip && pip install -r requirements.txt
 
-ENTRYPOINT ["python", "-m", "mlops.time_series.metrics"]
+COPY mlops/Serie_temporelle /app/mlops/Serie_temporelle
+COPY api_rest /app
+
+
+ENTRYPOINT ["uvicorn", "evaluate_ST_api:app", "--host", "0.0.0.0", "--port", "8008"]
+
 

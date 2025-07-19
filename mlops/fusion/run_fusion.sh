@@ -1,16 +1,13 @@
 #!/bin/bash
-
 set -e
+export ST_SUFFIX=_$(date +%Y%m%d)
+docker compose run --rm run_full
 
-echo "🌐 Lancement de la fusion des données IPS & géo"
-cd ..
-dvc pull 
 
-python -m mlops/fusion/fusion_geo_dvf \
-  --folder-path1 data \
-  --folder-path2 data \
-  --output-folder data/clean
-  
-  
-
+# Lancement du script Python
+echo "🔄 Lancement fusion_geo_dvf.py"
+python /app/mlops/fusion/fusion_geo_dvf.py \
+  --folder-path1 /app/data \
+  --folder-path2 /app/data \
+  --output-folder /app/data
 

@@ -1,22 +1,28 @@
 FROM python:3.10-slim
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y git && apt-get clean
 
-# Création utilisateur et répertoire de travail
-RUN useradd -ms /bin/bash mlopsuser
-USER mlopsuser
-WORKDIR /home/mlopsuser/app
 
-# Copie du projet et du fichier de dépendances
+# 2. Dossier de travail
+WORKDIR /app
+
+# 3. Copie requirements
+COPY requirements.txt .
+
+# 4. Environnement virtuel
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+RUN python -m venv $VIRTUAL_ENV && \
+    . $VIRTUAL_ENV/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# 5. Copie du code
 COPY . .
 
-
-# Installation des dépendances
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Rendre le script exécutable
-RUN chmod +x run_all_full.sh \
-    && chmod +x Regression/run_all.sh \
-    && chmod +x Serie_temporelle/run_all_ST.sh
-
-
-CMD ["./run_all_full.sh"]
-
+# 6. Attribution des droits d'exécution à run_dvc.sh (APRES la copie)
+RUN chmod +x run_dvc.sh
+RUN python mlops/import_donnees/import_data.py --folder-path data --output-folder output
+# 7. Commande à exécuter par défaut (facultatif mais utile)
+CMD ["./run_dvc.sh"]

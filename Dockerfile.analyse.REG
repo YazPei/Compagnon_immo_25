@@ -1,11 +1,7 @@
-FROM python:3.10-slim
+FROM compagnon_immo-util
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY mlops/Regression /app/mlops 
+COPY exports /app/exports
 
-COPY src/ ./src/
-COPY mlops/ ./mlops/
-
-ENTRYPOINT ["python", "src/analyse.py"]
-
+ENTRYPOINT ["uvicorn", "analyse_api:app", "--host", "0.0.0.0", "--port", "8005"]

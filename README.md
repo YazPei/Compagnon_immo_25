@@ -59,11 +59,12 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 ├── requirements.txt
 ├── README.md  ⬅️ (ce fichier)
 ├── Makefile
+.dvc
 ```
 
 ---
 ## 📌 Étapes de la pipeline
-
+0. **setup**: installation de DVC
 1. **Fusion** : Jointure des données DVF et indices socio-économiques
 2. **Préprocessing** : Nettoyage et enrichissement
 3. **Clustering** : Segmentation KMeans avec log MLflow
@@ -73,24 +74,14 @@ Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, 
 
 ---
 
-## ⚙️ Installation & Lancement (mode local)
 
-```bash
-# Installer l’environnement
-make install
-
-# Lancer tous les pipelines
-make chmod_all
-make full
-
-# Lancer l'interface MLflow
-mlflow ui --port 5001
-
-```
 
 ## 🐳 Lancement avec Docker
 ```bash
 make chmod_all
+make dvc_all
+make build-dvc-image     # construit l'image Docker DVC
+make run-dvc-repro       # exécute dvc repro en conteneur sécurisé
 # Construire l’image Docker et Exécuter tous les pipelines dans Docker
 
 make docker_auto

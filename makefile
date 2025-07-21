@@ -59,41 +59,7 @@ check-env: ##vérifie l'environnement
 		echo "Environnement virtuel non trouvé. Executez 'make Install'"; \
 		exit 1; \
 	fi
-	
 
-# ===========================================================
-# 🧪 Pipelines ML (Local) pour rendre les scripts exécutables
-# ===========================================================
-
-chmod-scripts: ## Rend les scripts exécutables
-	@chmod +x mlops/fusion/run_fusion.sh
-	@chmod +x mlops/preprocessing/run_preprocessing.sh
-	@chmod +x mlops/clustering/run_clustering.sh
-	@chmod +x mlops/Regression/run_all.sh
-	@chmod +x mlops/Serie_temporelle/run_all_st.sh
-
-fusion: chmod-scripts ## Fusion des données via DVC
-	@echo "Fusion des données via DVC (local)"
-	@bash mlops/fusion/run_fusion.sh
-
-preprocessing: chmod-scripts ## Prétraitement des données
-	@echo "Prétraitement des données (local via DVC)"
-	@bash mlops/preprocessing/run_preprocessing.sh
-
-clustering: chmod-scripts ## Clustering KMeans
-	@echo "Lancement du clustering KMeans (local via DVC)"
-	@bash mlops/clustering/run_clustering.sh
-
-regression: chmod-scripts ## Pipeline de régression
-	@echo "Lancement pipeline Régression (local)"
-	@bash mlops/Regression/run_all.sh
-
-series: chmod-scripts ## Pipeline de séries temporelles
-	@echo "⏳ Lancement pipeline Série Temporelle (local)"
-	@bash mlops/Serie_temporelle/run_all_st.sh
-
-ml-pipeline: fusion preprocessing clustering regression ## Pipeline ML complet
-	@echo "Pipeline ML complet terminé"
 
 # ===============================
 # 🌐 API et Interface Web
@@ -158,7 +124,8 @@ docker-api-build: ## Construction de l'image Docker API
 docker-api-run: docker-api-build ## Lance l'API dans Docker
 	@echo "Lancement de l'API dans Docker"
 	@echo "API disponible sur : http://localhost:8000"
-	@docker run -p 8000:8000 --name compagnon-api compagnon-immo-api
+	@docker run -d -p 8000:8000 --name compagnon-api compagnon-immo-api
+
 
 docker-stack-up: ## Démarre la stack Docker complète
 	@echo "🐳 Démarrage de la stack..."

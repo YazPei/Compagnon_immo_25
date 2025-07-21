@@ -1,9 +1,9 @@
 # from api_test.app.services.estimation_service import model_loader
-from api_test.app.services.ml_service import ml_service
-from API.API_test3.api_test.models.schemas import EstimationRequest, EstimationResponse, EstimationResultModel, MarcheModel, MetadataModel
+from app.services.ml_service import ml_service
+from app.models.schemas import EstimationRequest, EstimationResponse, EstimationResultModel, MarcheModel, MetadataModel
 from datetime import datetime
 import uuid
-from api_test.app.utils.geocoding import geocode_address
+from app.utils.geocoding import geocode_address
 
 # Mock: transformation simple, à adapter selon le modèle réel
 

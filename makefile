@@ -69,7 +69,8 @@ api-dev: check-env ## Démarre l'API en mode développement
 	@echo "🚀 Démarrage de l'API..."
 	@echo "📍 API : http://localhost:8000"
 	@echo "📚 Docs : http://localhost:8000/docs"
-	@cd api_test && ../.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	PYTHONPATH=api_test uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000
+
 
 
 streamlit: check-env ## Démarre l'interface Streamlit
@@ -125,6 +126,9 @@ docker-api-run: docker-api-build ## Lance l'API dans Docker
 	@echo "Lancement de l'API dans Docker"
 	@echo "API disponible sur : http://localhost:8000"
 	@docker run -d -p 8000:8000 --name compagnon-api compagnon-immo-api
+
+docker-api-stop: ## Stoppe et supprime le conteneur API s'il existe
+	@docker rm -f compagnon-api 2>/dev/null || echo "Aucun conteneur compagnon-api à supprimer"
 
 
 docker-stack-up: ## Démarre la stack Docker complète

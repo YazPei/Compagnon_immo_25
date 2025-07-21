@@ -1,6 +1,6 @@
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
-from api_test.app.cache.redis_cache import get_redis_client
+from app.cache.redis_cache import get_redis_client
 import time
 
 RATE_LIMIT_HOURLY = 100

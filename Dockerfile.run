@@ -1,7 +1,7 @@
 FROM python:3.10-slim
+
 # 1. Dépendances système
 RUN apt-get update && apt-get install -y git && apt-get clean
-
 
 # 2. Dossier de travail
 WORKDIR /app
@@ -9,20 +9,18 @@ WORKDIR /app
 # 3. Copie requirements
 COPY requirements.txt .
 
-# 4. Environnement virtuel
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# 4. Installation directe dans l’image (pas de venv)
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-RUN python -m venv $VIRTUAL_ENV && \
-    . $VIRTUAL_ENV/bin/activate && \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# 5. Copie du code
+# 5. Copie du code complet
 COPY . .
 
-# 6. Attribution des droits d'exécution à run_dvc.sh (APRES la copie)
+# 6. Droits d’exécution
 RUN chmod +x run_dvc.sh
+
+# 7. Exécution initiale (facultatif)
 RUN python mlops/import_donnees/import_data.py --folder-path data --output-folder output
-# 7. Commande à exécuter par défaut (facultatif mais utile)
+
+# 8. Point d’entrée par défaut
 CMD ["./run_dvc.sh"]
+

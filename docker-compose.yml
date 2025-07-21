@@ -201,7 +201,6 @@ services:
       - ST_SUFFIX=${ST_SUFFIX}
     depends_on:
       - mlflow
-    condition: service_healthy
     networks:
       - ml_net
           
@@ -250,8 +249,7 @@ services:
     stdin_open: true
     command: sh
     depends_on:
-      mlflow:
-        condition: service_healthy
+      - mlflow
     networks:
       - ml_net
         

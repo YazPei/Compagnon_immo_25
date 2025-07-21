@@ -4,7 +4,16 @@
 # Outils : DVC, MLflow, Docker, bash scripts
 IMAGE_PREFIX=compagnon_immo
 PYTHON_BIN=.venv/bin/python
-
+DVC_TOKEN ?= default_token_sécurisé_ou_vide
+.PHONY: prepare-dirs install docker_build help fusion preprocessing clustering regression series \
+	ml-pipeline api-dev streamlit api-test dev-env mlflow-ui mlflow-clean mlflow-status \
+	docker-build docker-api-build docker-api-run docker-stack-up docker-stack-down docker-logs \
+	setup_dags docker_auto build-all run-all-docker run_full run_dvc run_fusion run_preprocessing \
+	run_clustering run_lgbm run_analyse run_splitst run_decompose run_SARIMAX run_evaluate \
+	build-dvc-image run-dvc-repro dvc-push dvc-pull dvc-metrics dvc-plots dvc-save \
+	clean_exports clean_dvc clean_all mlflow-run mlflow-log-status test-ml test-all \
+	full-stack quick-start status ports-check
+	
 # ===============================
 # Aide
 # ===============================
@@ -20,7 +29,7 @@ help: ## Affiche l'aide
 # 📦 Setup initial
 # ===============================
 
-install:
+install: prepare-dirs
 	@echo "📦 Vérification de l'environnement virtuel..."
 	@if [ ! -f ".venv/bin/activate" ]; then \
 		echo "⚙️  Création de l'environnement virtuel (.venv)"; \
@@ -42,7 +51,7 @@ install:
 # ===========================================================
 
 check-env: ##vérifie l'environnement
-	@if [! -f ".venv/bin/activate"]; then \
+	@if [ ! -f ".venv/bin/activate" ]; then \
 		echo "Environnement virtuel non trouvé. Executez 'make Install'"; \
 		exit 1; \
 	fi
@@ -129,8 +138,12 @@ mlflow-status: ## Affiche le statut des derniers runs
 # ===============================
 # 🐳 Docker - API
 # ===============================
+prepare-dirs: ## Crée les dossiers nécessaires au projet
+	@echo "📁 Préparation des dossiers requis..."
+	@mkdir -p data exports mlruns
+	@touch data/.gitkeep
 
-docker-build: ## Construction des images Docker
+docker-build: prepare-dirs ## Construction des images Docker
 	@echo "🔧 Construction des images..."
 	@docker-compose build
 
@@ -227,7 +240,8 @@ run_full:
 
 run_dvc: ## lancement du dvc
 	@echo "dvc..."
-	docker run --rm $(IMAGE_PREFIX)-dvc
+	docker run --rm -e DVC_TOKEN=$(DVC_TOKEN) $(IMAGE_PREFIX)-dvc
+
 											
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"

@@ -4,6 +4,7 @@ import datetime
 
 class EstimationDB(Base):
     __tablename__ = "estimations"
+    __table_args__ = {"extend_existing": True}
 
     id_estimation = Column(String, primary_key=True, index=True)
     date_estimation = Column(DateTime, default=datetime.datetime.utcnow)

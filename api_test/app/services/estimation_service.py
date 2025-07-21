@@ -7,14 +7,14 @@ from typing import Dict, Any
 import pandas as pd
 import os
 
-from API.API_test3.api_test.models.schemas import (
+from app.models.schemas import (
     EstimationRequest,
     EstimationResponse,
     EstimationResultModel,
     MarcheModel,
     MetadataModel
 )
-from api_test.app.services.ml_service import ml_service
+from app.services.ml_service import ml_service
 
 # Chargement du CSV de marché local (une seule fois)
 DF_SALES_PATH = os.path.join(os.path.dirname(__file__), '../../df_sales_clean_with_cluster.csv')

@@ -1,18 +1,16 @@
-# Dockerfile.dvc
+FROM python:3.10-slim
 
-FROM compagnon_immo-run
 
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y git dvc && apt-get clean
+
+# 2. Dossier de travail
 WORKDIR /app
 
-# Dépendances système minimales
-RUN apt-get update && apt-get install -y \
-    git \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copie complète du projet
+# 3. Copie du script et des sources
 COPY . .
+# 4. Droits d’exécution du script
+RUN chmod +x /app/run_dvc.sh
+# 5. Commande par défaut
+CMD ["./run_dvc.sh"]
 
-# Activation DVC si besoin
-CMD ["bash"]
-s

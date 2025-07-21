@@ -201,7 +201,6 @@ services:
       - ST_SUFFIX=${ST_SUFFIX}
     depends_on:
       - mlflow
-    condition: service_healthy
     networks:
       - ml_net
           
@@ -250,10 +249,12 @@ services:
     stdin_open: true
     command: sh
     depends_on:
-      mlflow:
-        condition: service_healthy
+      - mlflow
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000   
     networks:
       - ml_net
+
         
       
 # --------- Scripts Factices ----------

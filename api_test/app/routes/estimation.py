@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
-from api_test.app.models.schemas import EstimationRequest, EstimationResponse, ErrorResponse, TooManyRequestsResponse, QuestionnaireRequest, BienModel, LocalisationModel, TransactionModel
-from api_test.app.security.auth import verify_api_key, get_api_key
-from api_test.app.services.estimation_logic import compute_estimation
-from api_test.app.services.estimation_service import estimate_property
-from api_test.app.db.database import SessionLocal
-from api_test.app.db.crud import save_estimation, get_estimation_by_id
-from api_test.app.utils.feature_enrichment import enrich_features_from_code_postal
+from app.models.schemas import EstimationRequest, EstimationResponse, ErrorResponse, TooManyRequestsResponse, QuestionnaireRequest, BienModel, LocalisationModel, TransactionModel
+from app.security.auth import verify_api_key, get_api_key
+from app.services.estimation_logic import compute_estimation
+from app.services.estimation_service import estimate_property
+from app.db.database import SessionLocal
+from app.db.crud import save_estimation, get_estimation_by_id
+from app.utils.feature_enrichment import enrich_features_from_code_postal
 from datetime import datetime
 import pandas as pd
 import numpy as np

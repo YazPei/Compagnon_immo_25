@@ -129,47 +129,47 @@ build-all: chmod-dvc-sh docker_build build-base build-fusion build-preprocessing
 	@echo "📦 Toutes les images Docker ont été construites avec succès !"
 
 chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
-	@chmod +x run_dvc.sh
-	
+	@chmod +x mlops/2.dvc/run_dvc.sh
+
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker build -f mlops/1.import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
 
 build-base: ## Build de l'image Docker de base (requirements installés)
-	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
-		
+	docker build -f mlops/2.dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+
 build-fusion: ## Build de l'image Docker d'enrichissement du dataset
-	docker build -f Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
-	
+	docker build -f mlops/3.fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
+
 build-preprocessing: ## Build de l'image Docker de preprocessing
-	docker build -f Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
-	
+	docker build -f mlops/4.preprocessing/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
+
 build-clustering: ## Build de l'image Docker de segmentation geographique
-	docker build -f Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
-	
+	docker build -f mlops/5.clustering/Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
+
 build-encoding: ## Build de l'image Docker d'encoding
-	docker build -f Dockerfile.encoding.REG -t $(IMAGE_PREFIX)-encod .
-	
+	docker build -f mlops/6.Regression/1.Encoding/Dockerfile.encoding.REG -t $(IMAGE_PREFIX)-encod .
+
 build-lgbm: ## Build de l'image Docker de la modelisation Regression
-	docker build -f Dockerfile.lgbm.REG -t $(IMAGE_PREFIX)-lgbm .
-	
+	docker build -f mlops/6.Regression/2.LGBM/Dockerfile.lgbm.REG -t $(IMAGE_PREFIX)-lgbm .
+
 build-util: ## Build de l'image Docker d'interpretabilité
-	docker build -f Dockerfile.util.REG -t $(IMAGE_PREFIX)-util .
+	docker build -f mlops/6.Regression/3.UTILS/Dockerfile.util.REG -t $(IMAGE_PREFIX)-util .
 		
 build-analyse: ## Build de l'image Docker d'interpretabilité
-	docker build -f Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-shap .
+	docker build -f mlops/6.Regression/4.Analyse/Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-split-st .
 	
 build-splitst: ## Build de l'image Docker du Split de la serie temporelle
-	docker build -f Dockerfile.split.ST -t $(IMAGE_PREFIX)-split-st .
-				
-build-decompose: ## Build de l'image Docker de la décomposition des courbes
-	docker build -f Dockerfile.decompose.ST -t $(IMAGE_PREFIX)-decomp .
-			
-build-SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX 
-	docker build -f Dockerfile.sarimax.ST -t $(IMAGE_PREFIX)-sarimax .		
+	docker build -f mlops/7.Serie_temporelle/1.SPLIT/Dockerfile.split.ST -t $(IMAGE_PREFIX)-decomp .
 
+build-decompose: ## Build de l'image Docker de la décomposition des courbes
+	docker build -f mlops/7.Serie_temporelle/2.Decompose/Dockerfile.decompose.ST -t $(IMAGE_PREFIX)-sarimax .		
+
+build-SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX 
+	docker build -f mlops/7.Serie_temporelle/3.SARIMAX/Dockerfile.sarimax.ST -t $(IMAGE_PREFIX)-sarimax .		
+	
 build-evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
-	docker build -f Dockerfile.evaluate.ST -t $(IMAGE_PREFIX)-evalu .		
+	docker build -f mlops/7.Serie_temporelle/4.EVALUATE/Dockerfile.evaluate.ST -t $(IMAGE_PREFIX)-evalu .		
 
 run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_util run_analyse run_splitst run_decompose run_SARIMAX run_evaluate ## lancement de tous les containers 
 	@echo "🚀 Pipeline complet exécuté dans Docker !"

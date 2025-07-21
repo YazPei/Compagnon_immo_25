@@ -26,7 +26,7 @@ help: ## Affiche l'aide
 
 
 # ===============================
-# 📦 Setup initial
+# 📦 ligne de commande - test
 # ===============================
 
 quick-start-pipeline: build-all run-all-docker
@@ -40,15 +40,6 @@ api-dev: check-env ## Démarre l'API en mode développement
 	@echo "📍 API : http://localhost:8000"
 	@echo "📚 Docs : http://localhost:8000/docs"
 	nohup PYTHONPATH=api_test uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
-
-
-
-
-streamlit: check-env ## Démarre l'interface Streamlit en mode detached
-	@echo "🎨 Démarrage de Streamlit..."
-	@echo "📍 Interface : http://localhost:8501"
-	@cd api_test && nohup ../.venv/bin/streamlit run questionnaire_streamlit.py --server.port 8501 > ../streamlit.log 2>&1 &
-	@echo "✅ Streamlit lancé en arrière-plan (logs dans streamlit.log)"
 
 
 api-test: check-env ## Lance les tests de l'API
@@ -142,7 +133,7 @@ chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
 	
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
-	docker build -f Dockerfile.run -t $(IMAGE_PREFIX)-run .
+	docker build -f mlops/1.import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
 
 build-base: ## Build de l'image Docker de base (requirements installés)
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .

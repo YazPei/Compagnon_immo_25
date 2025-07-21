@@ -1,11 +1,11 @@
-FROM compagnon_immo-base
+FROM compagnon_immo-fus
 
 WORKDIR /app
 
 # Étape 3 : copie code
 COPY mlops/preprocessing /app/mlops/preprocessing
 COPY data /app/data
-COPY api_rest /app
+COPY services /app
 
 ENTRYPOINT ["uvicorn", "preprocessing_api:app", "--host", "0.0.0.0", "--port", "8001"]
 

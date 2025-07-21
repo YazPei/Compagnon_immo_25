@@ -1,4 +1,4 @@
-FROM python:3.10-lgbm
+FROM compagnon_immo-lgbm
 WORKDIR /app
 
 COPY requirements.txt .

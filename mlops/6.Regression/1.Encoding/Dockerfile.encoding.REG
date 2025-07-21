@@ -3,6 +3,7 @@ FROM compagnon_immo-clust
 WORKDIR /app
 
 COPY ./mlops/Regression /app/mlops
+COPY services /app
 COPY ./data /app/data
 COPY ./exports /app/exports
 

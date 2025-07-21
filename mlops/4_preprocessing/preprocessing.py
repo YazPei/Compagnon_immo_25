@@ -1,16 +1,4 @@
-import os
-import math
-from pathlib import Path
-
-import click
-import polars as pl
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import mlflow
-
-from mlops.preprocessing.utils import (
+from mlops.4_preprocessing.utils import (
     annee_const,
     clean_classe,
     clean_exposition,
@@ -24,11 +12,6 @@ from mlops.preprocessing.utils import (
 )
 
 
-@click.command()
-@click.option("--input-path", type=click.Path(exists=True), required=True)
-@click.option("--output-path", type=click.Path(), required=True)
-def main(input_path: str, output_path: str):
-    run_preprocessing_pipeline(input_path, output_path)
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === BEGIN PIPELINE ===
@@ -635,9 +618,6 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     print(f" Données sauvegardées dans : {output_path}")
 
-
-if __name__ == "__main__":
-    main()
 
 
     # === END PIPELINE ===

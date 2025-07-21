@@ -11,6 +11,7 @@ from mlops.4_preprocessing.utils import (
     log_figure,
 )
 
+#from app. import *
 
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
@@ -20,16 +21,10 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     df = pl.read_csv(input_path, separator=";").to_pandas()
     print("Nombres de lignes en double", df.duplicated().sum())
-    df.drop_duplicates(inplace=True)
+    df.drop_duplicates()
     print("Nombres de lignes en double après suppression", df.duplicated().sum())
     print("Shape du Dataset après élimination des doublons : ", df.shape)
     
-    df = pl.read_csv(input_path, separator=";").to_pandas()
-        print("Nombres de lignes en double", df.duplicated().sum())
-
-        df.drop_duplicates(inplace=True)
-        print("Nombres de lignes en double après suppression", df.duplicated().sum())
-        print("Shape du Dataset après élimination des doublons : ", df.shape)
     ### Proportions des NANs
     missing_data_percentage_sales = df.isna().sum() * 100 / len(df)
 
@@ -218,7 +213,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
         plt.tight_layout()
 
-	# 1. Sauvegarde dans un dossier temporaire (compatible Docker)
+        # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
 	output_dir = Path("/app/reports/figures")
 	output_dir.mkdir(parents=True, exist_ok=True)
 	filename = f"boxplots_outliers_{run_suffix}.png"
@@ -226,14 +221,14 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 	fig_o.savefig(fig_path)
 	
 
-	# 2. Log dans MLflow
+        # 2. Log dans MLflow
         log_figure(
         fig_o,
         filename=filename,
         artifact_path="figures/boxplots"
         )
 
-	# 3. Fermeture propre
+        # 3. Fermeture propre
         plt.close(fig_o)
 
 
@@ -445,6 +440,9 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     # Calcul du nombre d'outliers identifiés par colonne avant leur remplacement
     outlier_counts = {col: train_marked[f"{col}_outlier_flag"].sum() for col in bounds}
+    
+    mlflow.log_dict(outlier_counts, "metrics/outlier_counts.json")
+
 
     ## Nettoyage (remplacement des -999) avec les médianes du TRAIN
     train_clean = clean_outliers(

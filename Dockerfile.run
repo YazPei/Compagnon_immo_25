@@ -5,25 +5,27 @@ RUN apt-get update && apt-get install -y git && apt-get clean
 
 # 2. Dossier de travail
 WORKDIR /app
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+
     
 # 3. Copie uniquement requirements.txt (pour le cache Docker)
 COPY requirements.txt .
 
 # 4. Installer les dépendances une seule fois (sauf si requirements.txt change)
-RUN pip install --upgrade pip && \
+RUN python -m venv $VIRTUAL_ENV && \
+    . $VIRTUAL_ENV/bin/activate && \
+    pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # 5. Copie du reste du code (si un fichier change ici, l’étape 4 n’est pas relancée)
 COPY . .
 
-EXPOSE 8000
 # 6. Création des dossiers requis
 RUN mkdir -p data output && touch data/.gitkeep
 
-# 7. Droits d’exécution
-RUN chmod +x run_dvc.sh
-
-ENTRYPOINT ["./run_dvc.sh"]
 
 
 

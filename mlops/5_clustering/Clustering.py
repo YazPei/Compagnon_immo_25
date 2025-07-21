@@ -32,23 +32,9 @@ from sklearn.metrics import silhouette_score
 import geopandas as gpd
 from shapely.geometry import Point
 
-# Configuration de l'affichage pandas
-pd.set_option('print.max_columns', None)  # Affiche toutes les colonnes
-pd.set_option('print.width', 1000)       # Ajuste la largeur pour éviter les coupures
-pd.set_option('print.colheader_justify', 'center')  # Centre les noms des colonnes
 
-# Ignorer les warnings
-warnings.filterwarnings('ignore')
+def run_clustering_pipeline(input_path: str, output_path: str):
 
-#############################################################################################
-
-#############################################################################################
-# 2. Configuration des chemins d'accès
-@click.command()
-@click.option('--input-path', type=click.Path(exists=True), prompt='📥 Fichier d’entrée nettoyé')
-@click.option('--output-path', type=click.Path(), prompt='📤 Fichier clusterisé de sortie')
-def main(input_path, output_path):
-    print("📥 Lecture du fichier:", input_path)
     df = pl.read_csv(input_path, separator=";").to_pandas()
     
     # Définition des chemins d'accès aux données
@@ -77,29 +63,22 @@ def main(input_path, output_path):
         Returns:
             DataFrame: Données chargées
         """
-        encodings = ['utf-8', 'ISO-8859-1', 'latin1']
+        encodings = ['utf-8']
     
-        for encoding in encodings:
-            try:
-                print(f"⏳ Tentative d'ouverture avec encodage : {encoding}")
-                chunks = pd.read_csv(
-                    file_path,
-                    sep=";",
-                    chunksize=chunksize,
-                    index_col="date",
-                    parse_dates=["date"],
-                    on_bad_lines="skip",
-                    low_memory=False,
-                    encoding=encoding
-                )
+        chunks = pd.read_csv(
+            file_path,
+            sep=";",
+            chunksize=chunksize,
+            index_col="date",
+            parse_dates=["date"],
+            on_bad_lines="skip",
+            low_memory=False,
+            encoding=encoding
+            )
             # Process chunks
-                data = pd.concat(chunk for chunk in chunks).sort_values(by="date")
-                print(f"✅ Fichier lu avec succès avec encodage : {encoding}")
-                return data
-            except Exception as e:
-                print(f"❌ Erreur avec encodage {encoding}: {e}")
-    
-        raise ValueError("Impossible de lire le fichier avec les encodages disponibles")
+        data = pd.concat(chunk for chunk in chunks).sort_values(by="date")
+        print(f"✅ Fichier lu avec succès avec encodage : {encoding}")
+
 
 # Chargement des données d'entraînement
     print("Chargement des données d'entraînement...")
@@ -611,46 +590,46 @@ with mlflow.start_run(run_name="clustering_macro_kpi"):
     mlflow.log_artifact("mlflow_outputs/cluster_input.csv")
 
 # ── 5. Prédiction sur les lignes complètes du test ──
-mask_valid = ~test_cluster[features].isna().any(axis=1)
-X_test_valid = test_cluster.loc[mask_valid, features]
-X_test_scaled = scaler.transform(X_test_valid)
-test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
+    mask_valid = ~test_cluster[features].isna().any(axis=1)
+    X_test_valid = test_cluster.loc[mask_valid, features]
+    X_test_scaled = scaler.transform(X_test_valid)
+    test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
 
 # ── 6. Mapping des clusters vers des labels lisibles ──
-cluster_order = (
-    df_cluster_input
-    .groupby("cluster")["prix_m2_mean"]
-    .mean()
-    .sort_values()
-    .index
-    .tolist()
-)
+    cluster_order = (
+        df_cluster_input
+        .groupby("cluster")["prix_m2_mean"]
+        .mean()
+        .sort_values()
+        .index
+        .tolist()
+    )
 
-cluster_names = [
-    "Zones rurales, petites villes stagnantes",
-    "Centres urbains établis, zones résidentielles",
-    "Banlieues, zones mixtes",
-    "Zones tendues - secteurs spéculatifs",
-]
+    cluster_names = [
+        "Zones rurales, petites villes stagnantes",
+        "Centres urbains établis, zones résidentielles",
+        "Banlieues, zones mixtes",
+        "Zones tendues - secteurs spéculatifs",
+    ]
 
-mapping = dict(zip(cluster_order, cluster_names))
+    mapping = dict(zip(cluster_order, cluster_names))
 
-df_cluster_input["cluster_label"] = df_cluster_input["cluster"].map(mapping)
-test_cluster.loc[mask_valid, "cluster_label"] = test_cluster.loc[mask_valid, "cluster"].map(mapping)
+    df_cluster_input["cluster_label"] = df_cluster_input["cluster"].map(mapping)
+    test_cluster.loc[mask_valid, "cluster_label"] = test_cluster.loc[mask_valid, "cluster"].map(mapping)
 
 # Sauvegarde des prédictions test pour audit
-test_cluster.loc[mask_valid, ["codePostal_recons", "cluster", "cluster_label"]].to_csv(
-    "mlflow_outputs/test_clusters.csv", index=False, sep=";"
-)
-mlflow.log_artifact("mlflow_outputs/test_clusters.csv")
+    test_cluster.loc[mask_valid, ["codePostal_recons", "cluster", "cluster_label"]].to_csv(
+        "mlflow_outputs/test_clusters.csv", index=False, sep=";"
+    )
+    mlflow.log_artifact("mlflow_outputs/test_clusters.csv")
 
 # ── 4. Filtrage des lignes complètes et prédiction ──
 # On ne clusterise que les lignes sans NaN
-mask_valid = ~test_cluster[features].isna().any(axis=1)
-X_test_valid = test_cluster.loc[mask_valid, features]
-X_test_scaled = scaler.transform(X_test_valid)
+    mask_valid = ~test_cluster[features].isna().any(axis=1)
+    X_test_valid = test_cluster.loc[mask_valid, features]
+    X_test_scaled = scaler.transform(X_test_valid)
 
-test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
+    test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
 
 # ### fixation des clusters
 
@@ -874,5 +853,4 @@ test_cluster.loc[mask_valid, "cluster"] = kmeans.predict(X_test_scaled)
 
     df_cluster.to_csv(os.path.join(output_filepath, "data/df_cluster.csv"), sep=";", index=True)
     mlflow.log_artifact(output_filepath)
-if __name__ == '__main__':
-    main()
+    print(f"✅ Données avec clustering exportées vers : {output_file}")

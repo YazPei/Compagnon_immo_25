@@ -1,0 +1,20 @@
+FROM compagnon_immo-run
+
+# 1. Dépendances système minimales (sans dvc !)
+RUN apt-get update && apt-get install -y git && apt-get clean
+
+# 2. Installation de DVC dans l’environnement virtuel existant
+RUN . /app/.venv/bin/activate && pip install --no-cache-dir dvc[s3]
+
+# 3. Dossier de travail
+WORKDIR /app
+
+# 4. Copie du script et des sources
+COPY . .
+
+# 5. Droits d’exécution du script
+RUN chmod +x /app/run_dvc.sh
+
+# 6. Commande par défaut
+CMD ["./run_dvc.sh"]
+

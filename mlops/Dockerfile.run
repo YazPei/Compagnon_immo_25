@@ -21,15 +21,26 @@ RUN groupadd -r appuser && \
     useradd -r -g appuser appuser
 
 WORKDIR /app
+<<<<<<< HEAD
+    
+# 3. Copie uniquement requirements.txt (pour le cache Docker)
+=======
 
+>>>>>>> 692d5d3379d4d58ff117fb70167c1fd57ccc9697
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+<<<<<<< HEAD
+# 4. Installer les dépendances une seule fois (sauf si requirements.txt change)
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+=======
 COPY src/ ./src/
 COPY mlops/ ./mlops/
 COPY main.py .
 COPY run_dvc.sh .
+>>>>>>> 692d5d3379d4d58ff117fb70167c1fd57ccc9697
 
 RUN mkdir -p data output logs && \
     touch data/.gitkeep && \
@@ -43,5 +54,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
+<<<<<<< HEAD
+ENTRYPOINT ["./run_dvc.sh"]
+
+=======
 CMD ["./run_dvc.sh"]
+>>>>>>> 692d5d3379d4d58ff117fb70167c1fd57ccc9697
 

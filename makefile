@@ -129,11 +129,11 @@ build-all: chmod-dvc-sh docker_build build-base build-fusion build-preprocessing
 	@echo "📦 Toutes les images Docker ont été construites avec succès !"
 
 chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
-	@chmod +x mlops/2.dvc/run_dvc.sh
+	@chmod +x mlops/2_dvc/run_dvc.sh
 
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
-	docker build -f mlops/1.import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
+	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
 
 build-base: ## Build de l'image Docker de base (requirements installés)
 	docker build -f mlops/2.dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .

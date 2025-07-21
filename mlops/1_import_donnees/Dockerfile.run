@@ -9,11 +9,10 @@ WORKDIR /app
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-
     
 # 3. Copie uniquement requirements.txt (pour le cache Docker)
-COPY requirements.txt .
-
+COPY ../../requirements.txt .
+COPY . .
 # 4. Installer les dépendances une seule fois (sauf si requirements.txt change)
 RUN python -m venv $VIRTUAL_ENV && \
     . $VIRTUAL_ENV/bin/activate && \
@@ -25,6 +24,6 @@ COPY . .
 
 # 6. Création des dossiers requis
 RUN mkdir -p data output && touch data/.gitkeep
-
+RUN python import_data.py
 # 7. Droits d’exécution
 ENTRYPOINT [ chmod +x ../mlops/2.dvc/run_dvc.sh]

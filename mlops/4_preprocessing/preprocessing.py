@@ -1,16 +1,4 @@
-import os
-import math
-from pathlib import Path
-
-import click
-import polars as pl
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import mlflow
-
-from mlops.preprocessing.utils import (
+from mlops.4_preprocessing.utils import (
     annee_const,
     clean_classe,
     clean_exposition,
@@ -24,11 +12,6 @@ from mlops.preprocessing.utils import (
 )
 
 
-@click.command()
-@click.option("--input-path", type=click.Path(exists=True), required=True)
-@click.option("--output-path", type=click.Path(), required=True)
-def main(input_path: str, output_path: str):
-    run_preprocessing_pipeline(input_path, output_path)
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === BEGIN PIPELINE ===
@@ -64,28 +47,45 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         1, len(missing_value_percentage_sales) + 1
     )
 
-    display(missing_value_percentage_sales)
+
     ### visualisation des doublons
-
-    plt.figure(figsize=(10, 14))
-
+    # 📊 Création de la figure
+    fig, ax = plt.subplots(figsize=(10, 14))
     sns.barplot(
         y=missing_value_percentage_sales.column_name,
         x=missing_value_percentage_sales.percent_missing,
         hue=missing_value_percentage_sales.column_name,
         order=missing_value_percentage_sales.column_name,
+        ax=ax
     )
 
-    # Add a vertical line at x=50 (adjust as needed)
-    plt.axvline(x=75, color="red", linestyle="--", label="Threshold (75%)")
+	# Seuil visuel
+    ax.axvline(x=75, color="red", linestyle="--", label="Threshold (75%)")
 
-    plt.title("Répartition des valeurs manquantes dans le dataset", fontsize=10)
-    plt.xticks(fontsize=8)
-    plt.yticks(fontsize=9)
-    plt.ylabel("Features")
-    plt.legend()
+    # Style
+    ax.set_title("Répartition des valeurs manquantes dans le dataset", fontsize=10)
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=8)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=9)
+    ax.set_ylabel("Features")
+    ax.legend()
+    
+    # Sauvegarde
+    output_dir = Path("/app/reports/figures")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"missing_values_{run_suffix}.png"
+    fig_path = os.path.join(output_dir, "Nan_distribution.png")
+    fig.savefig(fig_path)
+    
+    # Log MLflow
+    log_figure(
+        fig,
+        filename=filename,
+        artifact_path="figures/missing"
+    )
+    
+    #  Nettoyage mémoire
+    plt.close(fig)
 
-    plt.show()
     ### Elimination de colonnes (valeurs manquantes supérieures à 75 %)
     # Filtrer les colonnes avec un taux de valeurs manquantes inférieur ou égal à 75%
     columns_to_keep = missing_data_percentage_sales[
@@ -182,8 +182,14 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     plt.xticks(rotation=45, fontsize=8)
     plt.yticks(fontsize=8)
     plt.tight_layout()
-    plt.show()
-
+    output_dir = "/app/reports/figures"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    fig_path = os.path.join(output_dir, "prix_m2_distribution.png")
+    plt.savefig(fig_path)
+    plt.close()
+       
+        
+        
     # visualisation des variables catégorielles
     numeric_cols = get_numeric_cols(df_3, GROUP_COL)
 
@@ -209,15 +215,27 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     for j in range(i + 1, len(axes)):
         fig_o.delaxes(axes[j])
 
-    plt.tight_layout()
-    plt.show()
-    log_figure(
-        fig_o,
-        filename=f"boxplots_outliers_{run_suffix}.png",
-        artifact_path="figures/boxplots",
-    )
 
-    plt.close(fig_o)
+        plt.tight_layout()
+
+	# 1. Sauvegarde dans un dossier temporaire (compatible Docker)
+	output_dir = Path("/app/reports/figures")
+	output_dir.mkdir(parents=True, exist_ok=True)
+	filename = f"boxplots_outliers_{run_suffix}.png"
+	fig_path = os.path.join(output_dir, "Boxplot_variables.png")
+	fig_o.savefig(fig_path)
+	
+
+	# 2. Log dans MLflow
+        log_figure(
+        fig_o,
+        filename=filename,
+        artifact_path="figures/boxplots"
+        )
+
+	# 3. Fermeture propre
+        plt.close(fig_o)
+
 
     ## Anomalies
     ### Détection des anomalies logiques entre colonnes
@@ -265,10 +283,22 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # Résumé : Nombre total de lignes concernées
     nb_anomalies = df_logic_check["anomalie_logique"].sum()
     print(f"{nb_anomalies} lignes présentent au moins une anomalie logique.")
-
-    # Aperçu des premières anomalies détectées
-    display(df_logic_check[df_logic_check["anomalie_logique"]].head(10))
-
+    # Aperçu des premières anomalies détectées (dans les logs ou stdout)
+    anomalies_detected = df_logic_check[df_logic_check["anomalie_logique"]].head(10)
+    print("🔎 Aperçu des anomalies logiques détectées :")
+    print(anomalies_detected.to_string(index=False))  # ou .to_markdown() si tu veux joli
+    
+    # Sauvegarde dans un fichier CSV (optionnel)
+    output_dir = Path("/app/reports/extracts")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = "anomaly_logic_preview.csv"
+    csv_path = os.path.join(output_dir, "anomaly_logic_preview.csv")
+    anomalies_detected.to_csv(csv_path, index=False)
+    
+    # Logging MLflow
+    mlflow.log_artifact(str(csv_path), artifact_path="extracts/anomaly_logic")
+    
+        
     ### Détection 	des anomalies de saisie
     # L'idée ici est de borner les valeurs complètement aberrantes avant d'éliminer les valeurs extrêmes
     # Colonnes à vérifier pour erreurs d’échelle
@@ -377,13 +407,6 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # Suppression des lignes identifiées
     df_3 = df_3[~mask_combined]
 
-    # Résumé : Nombre de lignes supprimées
-    print(
-        f"{nb_lignes_problemes} lignes ont été supprimées en raison d'anomalies logiques ou de valeurs improbables."
-    )
-
-    # Aperçu du DataFrame nettoyé
-    display(df_3.head())
 
     ## Outliers
     ### Outliers Regression
@@ -449,25 +472,39 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     axes = axes.flatten()  # Aplatir pour un accès plus simple
 
     # Boucle pour tracer les boxplots
-    print("Visualisation des boxplots après traitement des outliers :")
+    print(" Visualisation des boxplots après traitement des outliers...")
+    
+    # Création des figures et axes
+    fig, axes = plt.subplots(nrows=math.ceil(len(bounds) / 2), ncols=2, figsize=(14, 6 * math.ceil(len(bounds) / 2)))
+    axes = axes.flatten()
+    
+    # Tracer les boxplots
     for i, col in enumerate(bounds):
         train_clean.boxplot(column=col, ax=axes[i])
-        axes[i].set_title(
-            f"Boxplot de la colonne '{col}' après traitement des outliers"
-        )
+        axes[i].set_title(f"Boxplot de la colonne '{col}' après traitement des outliers")
 
-    # Supprimer les axes inutilisés si le nombre de colonnes est impair
+    # Supprimer les axes inutiles
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
-    plt.show()
+    
+    # Sauvegarde dans dossier Docker-friendly
+    output_dir = Path("/app/reports/figures")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
+    filename = f"boxplots_outliers_clean_{run_suffix}.png"
+    fig_path = output_dir / filename
+    fig.savefig(fig_path)
+
+    # Logging MLflow
     log_figure(
         fig,
-        filename=f"boxplots_outliers_clean_{run_suffix}.png",
-        artifact_path="figures/boxplots",
+        filename=filename,
+        artifact_path="figures/boxplots"
     )
+
+    # Fermeture propre
     plt.close(fig)
 
     ### Outliers Serie temporelle
@@ -581,9 +618,6 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     print(f" Données sauvegardées dans : {output_path}")
 
-
-if __name__ == "__main__":
-    main()
 
 
     # === END PIPELINE ===

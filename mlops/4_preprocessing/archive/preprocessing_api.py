@@ -14,7 +14,8 @@ def run_preprocessing(params: PreprocessingParams):
     try:
         run_preprocessing_pipeline(
             input_path=params.input_path,
-            output_path=params.output_folder1  # si tu utilises juste 1 output
+            output_path1=params.output_folder1,
+            output_path2=params.output_folder2
         )
         return {"status": "ok"}
     except Exception as e:

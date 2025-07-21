@@ -130,7 +130,8 @@ build-all: chmod-dvc-sh docker_build build-base build-fusion build-preprocessing
 
 chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
 	@chmod +x mlops/2_dvc/run_dvc.sh
-
+prepare-env:
+	@bash setup_env.sh
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
@@ -180,11 +181,17 @@ run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
 
 
-run_dvc: chmod-dvc-sh ## lancement du dvc
-	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
-	docker run -it --rm \
-		-v $(pwd):/app \
-		$(IMAGE_PREFIX)-dvc ./run_dvc.sh
+run_dvc: prepare-env chmod-dvc-sh
+	@echo "🧠 Lancement DVC automatisé avec .env.yaz"
+	docker run --rm \
+		--env-file .env.yaz \
+		-v $(PWD):/app \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		bash mlops/2_dvc/run_dvc.sh
+
+
+
 													
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
@@ -238,13 +245,7 @@ build-cache: .venv/.pip_installed ## Build dépendances si requirements.txt modi
 build-dvc-image: ## Build de l'image Docker DVC + DagsHub
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 	
-run_dvc: ## lancement du dvc
-	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
-	docker run --rm \
-		-e DVC_TOKEN=$(DVC_TOKEN) \
-		-v $(PWD):/app \
-		-w /app \
-		$(IMAGE_PREFIX)-dvc
+
 		
 run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
 	docker run --rm \

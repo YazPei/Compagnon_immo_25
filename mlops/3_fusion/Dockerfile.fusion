@@ -3,6 +3,7 @@ FROM compagnon_immo-dvc
 WORKDIR /app
 # Copie le reste du projet
 COPY . .
+COPY mlops/3_fusion mlops/3_fusion
 
 # Lancement automatique du script
 ENTRYPOINT ["bash", "mlops/3_fusion/run_fusion.sh"]

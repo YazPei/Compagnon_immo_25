@@ -69,7 +69,8 @@ api-dev: check-env ## Démarre l'API en mode développement
 	@echo "🚀 Démarrage de l'API..."
 	@echo "📍 API : http://localhost:8000"
 	@echo "📚 Docs : http://localhost:8000/docs"
-	PYTHONPATH=api_test uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000
+	nohup PYTHONPATH=api_test uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+
 
 
 

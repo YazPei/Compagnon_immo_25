@@ -28,38 +28,8 @@ help: ## Affiche l'aide
 # ===============================
 # 📦 Setup initial
 # ===============================
-install-deps: check-env .venv/.pip_installed ## installer les dépendances manuellement 
 
-.venv/.pip_installed: requirements.txt
-	@echo "📦 Mise à jour des dépendances..."
-	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
-	@touch .venv/.pip_installed
-
-
-
-install: prepare-dirs
-	@echo "📦 Vérification de l'environnement virtuel..."
-	@if [ ! -f ".venv/bin/activate" ]; then \
-		echo "⚙️  Création de l'environnement virtuel (.venv)"; \
-		python3 -m venv .venv; \
-	else \
-		echo "✅ Environnement virtuel déjà présent"; \
-	fi
-
-
-quick-start: check-env full-stack streamlit   ## Démarrage rapide sans réinstaller les dépendances
-	@echo "🚀 Projet prêt à utiliser !"
 quick-start-pipeline: build-all run-all-docker
-# ===========================================================
-# check env
-# ===========================================================
-
-check-env: ##vérifie l'environnement
-	@if [ ! -f ".venv/bin/activate" ]; then \
-		echo "Environnement virtuel non trouvé. Executez 'make Install'"; \
-		exit 1; \
-	fi
-
 
 # ===============================
 # 🌐 API et Interface Web
@@ -176,8 +146,6 @@ docker_build:
 
 build-base: ## Build de l'image Docker de base (requirements installés)
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
-
-
 		
 build-fusion: ## Build de l'image Docker d'enrichissement du dataset
 	docker build -f Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .

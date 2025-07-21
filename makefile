@@ -28,6 +28,14 @@ help: ## Affiche l'aide
 # ===============================
 # 📦 Setup initial
 # ===============================
+install-deps: check-env .venv/.pip_installed ## installer les dépendances manuellement 
+
+.venv/.pip_installed: requirements.txt
+	@echo "📦 Mise à jour des dépendances..."
+	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+	@touch .venv/.pip_installed
+
+
 
 install: prepare-dirs
 	@echo "📦 Vérification de l'environnement virtuel..."
@@ -38,9 +46,9 @@ install: prepare-dirs
 		echo "✅ Environnement virtuel déjà présent"; \
 	fi
 
-	@echo "📦 Installation ou mise à jour des dépendances..."
-	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
 
+quick-start: check-env full-stack streamlit ## Démarrage rapide sans réinstaller les dépendances
+	@echo "🚀 Projet prêt à utiliser !"
 
 # ===========================================================
 # check env
@@ -182,13 +190,16 @@ setup_dags:  ## Configure le remote DVC vers DagsHub (secure, local only)
 docker_auto: build-all run-all-docker
 
 ## builds ##
-build-all: build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
+build-all: chmod-dvc-sh docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
 	@echo "📦 Toutes les images Docker ont été construites avec succès !"
 
+chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
+	@chmod +x run_dvc.sh
+	
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker build -f Dockerfile.run -t $(IMAGE_PREFIX)-run .
-	
+
 build-base: ## Build de l'image Docker de base (requirements installés)
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 
@@ -234,11 +245,15 @@ run_full:
 	@echo "🚀 Exécution pipeline lancement"
 	docker run --rm $(IMAGE_PREFIX)-run
 
-run_dvc: ## lancement du dvc
-	@echo "dvc..."
-	docker run --rm -e DVC_TOKEN=$(DVC_TOKEN) $(IMAGE_PREFIX)-dvc
 
-											
+run_dvc: chmod-dvc-sh ## lancement du dvc
+	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
+	docker run --rm \
+		-e DVC_TOKEN=$(DVC_TOKEN) \
+		-v $(PWD):/app \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc
+													
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
 	docker run --rm $(IMAGE_PREFIX)-fus
@@ -285,9 +300,19 @@ run_evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
 dvc-all: build-dvc-image run-dvc-repro dvc-metrics dvc-push dvc-save ## Reproduit, affiche les métriques et push
 	@echo "✅ Pipeline DVC complet exécuté et synchronisé"
 
-	
+build-cache: .venv/.pip_installed ## Build dépendances si requirements.txt modifié
+	@echo "✅ Build cache terminé (si besoin)"
+		
 build-dvc-image: ## Build de l'image Docker DVC + DagsHub
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+	
+run_dvc: ## lancement du dvc
+	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
+	docker run --rm \
+		-e DVC_TOKEN=$(DVC_TOKEN) \
+		-v $(PWD):/app \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc
 		
 run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
 	docker run --rm \

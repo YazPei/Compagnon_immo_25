@@ -1,25 +1,16 @@
-#!/bin/bash
-echo "ST_SUFFIX=${ST_SUFFIX}"
-set -e  # Stop on first error
+FROM python:3.10-slim
 
-echo "⚙️ Configuration du remote DVC (si besoin)..."
-dvc remote add origin https://dagshub.com/yazpei/compagnon_immo.dvc || true
-dvc remote modify origin --local auth basic
-dvc remote modify origin --local user yazpei
-dvc remote modify origin --local password "$DVC_TOKEN"
-dvc remote default origin
 
-echo "🚀 Lancement du pipeline DVC..."
-dvc repro
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y git dvc && apt-get clean
 
-echo "📊 Affichage des métriques..."
-dvc metrics show
+# 2. Dossier de travail
+WORKDIR /app
 
-echo "📈 Génération des graphiques (si plots.yaml)..."
-dvc plots show --html > plots.html
-
-echo "☁️ Push des artefacts dans le remote DVC..."
-dvc push
-
-echo "✅ Pipeline DVC exécuté avec succès !"
+# 3. Copie du script et des sources
+COPY . .
+# 4. Droits d’exécution du script
+RUN chmod +x /app/run_dvc.sh
+# 5. Commande par défaut
+CMD ["./run_dvc.sh"]
 

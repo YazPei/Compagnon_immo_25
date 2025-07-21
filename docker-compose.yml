@@ -250,8 +250,11 @@ services:
     command: sh
     depends_on:
       - mlflow
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000   
     networks:
       - ml_net
+
         
       
 # --------- Scripts Factices ----------

@@ -5,7 +5,7 @@ RUN apt-get clean \
     && rm -rf /var/lib/apt/lists/*
     
 # Étape 3 : copie code
-COPY mlops/preprocessing /app/mlops/preprocessing
+COPY mlops/4_preprocessing /app/mlops/4_preprocessing
 COPY data /app/data
 COPY mlops /app
 

@@ -5,5 +5,5 @@ WORKDIR /app
 COPY . .
 
 # Lancement automatique du script
-ENTRYPOINT ["bash", "mlops/fusion/run_fusion.sh"]
+ENTRYPOINT ["bash", "mlops/3_fusion/run_fusion.sh"]
 

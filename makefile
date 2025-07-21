@@ -134,9 +134,10 @@ chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
+	
 
 build-base: ## Build de l'image Docker de base (requirements installés)
-	docker build -f mlops/2.dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+	docker build -f mlops/2_dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 
 build-fusion: ## Build de l'image Docker d'enrichissement du dataset
 	docker build -f mlops/3.fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
@@ -181,11 +182,9 @@ run_full:
 
 run_dvc: chmod-dvc-sh ## lancement du dvc
 	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
-	docker run --rm \
-		-e DVC_TOKEN=$(DVC_TOKEN) \
-		-v $(PWD):/app \
-		-w /app \
-		$(IMAGE_PREFIX)-dvc
+	docker run -it --rm \
+		-v $(pwd):/app \
+		$(IMAGE_PREFIX)-dvc ./run_dvc.sh
 													
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"

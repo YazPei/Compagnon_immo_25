@@ -19,11 +19,11 @@ RUN python -m venv $VIRTUAL_ENV && \
     pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# 5. Copie du reste du code (si un fichier change ici, l’étape 4 n’est pas relancée)
+# 5. Copie du reste du code
 COPY . .
 
 # 6. Création des dossiers requis
 RUN mkdir -p data output && touch data/.gitkeep
 
 # 7. Droits d’exécution
-ENTRYPOINT [ chmod +x ../mlops/2.dvc/run_dvc.sh]
+ENTRYPOINT [ chmod +x ../mlops/2_dvc/run_dvc.sh]

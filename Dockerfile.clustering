@@ -1,7 +1,0 @@
-FROM compagnon_immo-preprocess
-
-WORKDIR /app
-
-COPY . .
-EXPOSE 8002
-ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]

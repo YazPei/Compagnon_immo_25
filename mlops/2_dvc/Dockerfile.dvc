@@ -4,7 +4,7 @@ FROM compagnon_immo-run
 RUN apt-get update && apt-get install -y git && apt-get clean
 
 # 2. Installation de DVC dans l’environnement virtuel existant
-RUN . /app/.venv/bin/activate && pip install --no-cache-dir dvc[s3]
+RUN pip install --no-cache-dir dvc[s3]
 
 # 3. Dossier de travail
 WORKDIR /app

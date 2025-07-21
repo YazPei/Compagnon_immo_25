@@ -2,24 +2,28 @@
 echo "ST_SUFFIX=${ST_SUFFIX}"
 
 set -euo pipefail
+
 export MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+
 
 
 echo "📥 Import des données dans MLflow..."
 python mlops/import_donnees/import_data.py --folder-path data --output-folder data
 
-
-
+read -p "Nom d'utilisateur Dagshub : " DVC_USER
+read -s -p "Token Dagshub : " DVC_TOKEN
 
 # Configuration DVC (à faire une seule fois si pas déjà dans .dvc/config)
 echo "🔗 Configuration du remote DVC..."
-dvc remote add origin https://dagshub.com/yazpei/compagnon_immo.dvc || true
+
 dvc remote modify origin --local auth basic
-dvc remote modify origin --local user yazpei
+dvc remote modify origin --local user "$DVC_USER"
 dvc remote modify origin --local password "$DVC_TOKEN"
 dvc remote default origin
 
+
 echo "🚀 Lancement du pipeline DVC..."
+dvc pull
 dvc repro
 
 echo "📊 Affichage des métriques..."

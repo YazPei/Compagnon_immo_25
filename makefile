@@ -38,13 +38,9 @@ install: prepare-dirs
 		echo "✅ Environnement virtuel déjà présent"; \
 	fi
 
-	@echo "📦 Vérification des paquets installés..."
-	@if [ ! -d ".venv/lib" ] || ! . .venv/bin/activate && pip list | grep -Fq -f requirements.txt; then \
-		echo "📦 Installation des dépendances..."; \
-		. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt; \
-	else \
-		echo "✅ Dépendances déjà installées"; \
-	fi
+	@echo "📦 Installation ou mise à jour des dépendances..."
+	@. .venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+
 
 # ===========================================================
 # check env
@@ -214,7 +210,7 @@ build-lgbm: ## Build de l'image Docker de la modelisation Regression
 	docker build -f Dockerfile.lgbm.REG -t $(IMAGE_PREFIX)-lgbm .
 	
 build-util: ## Build de l'image Docker d'interpretabilité
-	docker build -f Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-util .
+	docker build -f Dockerfile.util.REG -t $(IMAGE_PREFIX)-util .
 		
 build-analyse: ## Build de l'image Docker d'interpretabilité
 	docker build -f Dockerfile.analyse.REG -t $(IMAGE_PREFIX)-shap .
@@ -294,7 +290,13 @@ build-dvc-image: ## Build de l'image Docker DVC + DagsHub
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 		
 run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
-	docker run --rm dvc-runner dvc repro
+	docker run --rm \
+		-v $(PWD):/app \
+		-v ~/.dvc/config.local:/app/.dvc/config.local:ro \
+		-w /app \
+		$(IMAGE_PREFIX)-dvc \
+		dvc repro
+
 	####	
 dvc-push: ## Push vers DagsHub en Docker
 	docker run --rm \
@@ -355,10 +357,6 @@ clean_all: clean_exports clean_dvc
 # ===============================
 # 📈 Tracking MLflow
 # ===============================
-
-mlflow-ui:
-	@echo "📈 Démarrage de l’interface MLflow sur http://localhost:5001"
-	mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
 
 mlflow-run:
 	@echo "🚀 Lancement manuel d’un run MLflow (ex: clustering)"

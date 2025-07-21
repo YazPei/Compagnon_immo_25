@@ -47,9 +47,9 @@ install: prepare-dirs
 	fi
 
 
-quick-start: check-env full-stack streamlit ## Démarrage rapide sans réinstaller les dépendances
+quick-start: check-env full-stack streamlit   ## Démarrage rapide sans réinstaller les dépendances
 	@echo "🚀 Projet prêt à utiliser !"
-
+quick-start-pipeline: build-all run-all-docker
 # ===========================================================
 # check env
 # ===========================================================
@@ -74,10 +74,12 @@ api-dev: check-env ## Démarre l'API en mode développement
 
 
 
-streamlit: check-env ## Démarre l'interface Streamlit
+streamlit: check-env ## Démarre l'interface Streamlit en mode detached
 	@echo "🎨 Démarrage de Streamlit..."
 	@echo "📍 Interface : http://localhost:8501"
-	@cd api_test && ../.venv/bin/streamlit run questionnaire_streamlit.py --server.port 8501
+	@cd api_test && nohup ../.venv/bin/streamlit run questionnaire_streamlit.py --server.port 8501 > ../streamlit.log 2>&1 &
+	@echo "✅ Streamlit lancé en arrière-plan (logs dans streamlit.log)"
+
 
 api-test: check-env ## Lance les tests de l'API
 	@echo "🧪 Tests de l'API..."
@@ -210,7 +212,7 @@ build-SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX
 build-evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
 	docker build -f Dockerfile.evaluate.ST -t $(IMAGE_PREFIX)-evalu .		
 
-run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_analyse run_splitst run_decompose run_SARIMAX run_evaluate ## lancement de tous les containers 
+run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_util run_analyse run_splitst run_decompose run_SARIMAX run_evaluate ## lancement de tous les containers 
 	@echo "🚀 Pipeline complet exécuté dans Docker !"
 
 run_full:

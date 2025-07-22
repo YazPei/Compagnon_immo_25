@@ -1,2 +1,4 @@
-['remote "origin_dags"']
-    url = https://dagshub.com/YazPei/Compagnon_immo.dvc
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/YazPei/compagnon_immo.dvc.git

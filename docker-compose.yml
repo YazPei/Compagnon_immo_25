@@ -240,7 +240,7 @@ services:
   dvc-runner:
     build:
       context: .
-      dockerfile: Dockerfile.dvc
+      dockerfile: mlops/2_dvc/Dockerfile.dvc
     volumes:
       - .:/app
       - ~/.dvc/config.local:/app/.dvc/config.local:ro

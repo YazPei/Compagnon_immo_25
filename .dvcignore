@@ -3,3 +3,8 @@
 # https://dvc.org/doc/user-guide/dvcignore
 *.pyc
 *.ipynb_checkpoints
+*.Dockerfile
+*.Dockerfile.*
+# .dvcignore
+mlops/2_dvc/Dockerfile.dvc
+

@@ -24,6 +24,10 @@ def analyse_model(encoded_folder, model):
         print_metrics(metrics)
         plot_residuals(y_test, y_pred)
         shap_summary_plot(model_obj, X_test)
+        # Nouveau : sauvegarde le SHAP summary dans un PNG
+        shap_summary_plot(model_obj, X_test, out_path="exports/reg/shap_summary.png")
+        # Log le fichier image dans MLflow
+        mlflow.log_artifact("exports/reg/shap_summary.png")
 
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(model_path)

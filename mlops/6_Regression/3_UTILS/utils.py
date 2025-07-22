@@ -32,8 +32,16 @@ def plot_residuals(y_true, y_pred):
     plt.tight_layout()
     plt.show()
 
-def shap_summary_plot(model, X_df):
+
+def shap_summary_plot(model, X_df, out_path=None):
+    import shap
     explainer = shap.Explainer(model)
     shap_values = explainer(X_df)
-    shap.summary_plot(shap_values, X_df, plot_type="dot")
+    
+    shap.summary_plot(shap_values, X_df, show=False)
+    if out_path:
+        import matplotlib.pyplot as plt
+        plt.tight_layout()
+        plt.savefig(out_path)
+        plt.close()
 

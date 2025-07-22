@@ -5,3 +5,6 @@
 *.ipynb_checkpoints
 *.Dockerfile
 *.Dockerfile.*
+# .dvcignore
+mlops/2_dvc/Dockerfile.dvc
+

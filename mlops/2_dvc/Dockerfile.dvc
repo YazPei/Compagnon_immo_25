@@ -10,15 +10,14 @@ RUN pip install --no-cache-dir dvc[s3]
 WORKDIR /app
 
 # 4. Copie du script shell + sources DVC
-COPY mlops/2_dvc/run_dvc.sh /app/mlops/2_dvc/run_dvc.sh
-COPY dvc.yaml dvc.lock .dvc .dvcignore .gitignore /app/
-COPY mlops/1_import_donnees /app/mlops/1_import_donnees
-COPY data /app/data  # facultatif mais utile si non monté
+COPY mlops/2_dvc/run_dvc.sh mlops/2_dvc/run_dvc.sh
+COPY . /app/
+COPY mlops/1_import_donnees mlops/1_import_donnees
 COPY .env.yaz /app/
 
 # 5. Droits d’exécution
-RUN chmod +x /app/mlops/2_dvc/run_dvc.sh
+RUN chmod +x mlops/2_dvc/run_dvc.sh
 
 # 6. Entrypoint = exécution du pipeline
-CMD ["bash", "/app/mlops/2_dvc/run_dvc.sh"]
+CMD ["bash", "mlops/2_dvc/run_dvc.sh"]
 

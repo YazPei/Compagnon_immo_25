@@ -1,15 +1,4 @@
 stages:
-  import_data:
-    cmd: >
-      python -m mlops.1_import_donnees.import_data.py
-      --folder-path1 data
-      --output-folder data/
-    deps:
-      - mlops/1_import_donnees/import_data.py
-      - data/merged_sales_data.csv
-    outs:
-      - data/df_sample.csv
-  
   fusion_geo:
     cmd: >
       python -m mlops.3_fusion.fusion_geo_dvf
@@ -19,7 +8,7 @@ stages:
     deps:
       - mlops/3_fusion/fusion_geo_dvf.py
       - data/DVF_donnees_macroeco.csv
-      - data/df_sample.csv
+      - data/merged_sales_data.csv
     outs:
       - data/clean/df_sales_clean_polars.csv
 

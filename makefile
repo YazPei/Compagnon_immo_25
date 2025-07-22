@@ -192,34 +192,34 @@ run_fusion:
 	docker run --rm $(IMAGE_PREFIX)-fus
 
 run_preprocessing:
-	docker run --rm $(IMAGE_PREFIX)-preprocess
+	docker run -p 8001:8001 --rm $(IMAGE_PREFIX)-preprocess
 
 run_clustering:
-	docker run --rm $(IMAGE_PREFIX)-clust
+	docker run -p 8002:8002 --rm $(IMAGE_PREFIX)-clust
 
 run_encoding:
-	docker run --rm $(IMAGE_PREFIX)-encod
+	docker run -p 8003:8003 --rm $(IMAGE_PREFIX)-encod
 
 run_lgbm:
-	docker run --rm $(IMAGE_PREFIX)-lgbm
+	docker run -p 8004:8004 --rm $(IMAGE_PREFIX)-lgbm
 
 run_util:
-	docker run --rm $(IMAGE_PREFIX)-util
+	docker run -p 8004:8004 --rm $(IMAGE_PREFIX)-util
 
 run_analyse:
-	docker run --rm $(IMAGE_PREFIX)-analyse
+	docker run -p 8005:8005 --rm $(IMAGE_PREFIX)-analyse
 
 run_splitst:
-	docker run --rm $(IMAGE_PREFIX)-splitst
+	docker run -p 8006:8006 --rm $(IMAGE_PREFIX)-splitst
 
 run_decompose:
-	docker run --rm $(IMAGE_PREFIX)-decomp
+	docker run -p 8007:8007 --rm $(IMAGE_PREFIX)-decomp
 
 run_SARIMAX:
-	docker run --rm $(IMAGE_PREFIX)-sarimax
+	docker run -p 8011:8007 --rm $(IMAGE_PREFIX)-sarimax
 
 run_evaluate:
-	docker run --rm $(IMAGE_PREFIX)-evalu
+	docker run -p 8008:8008 --rm $(IMAGE_PREFIX)-evalu
 
 # ===============================
 # 🏗️ Construction des stages DVC

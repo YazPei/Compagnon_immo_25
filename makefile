@@ -54,7 +54,7 @@ api-test: check-env ## Lance les tests de l'API
 # 📈 MLflow
 # ===============================
 mlflow-ui: check-env ## Démarre l'interface MLflow
-	@../.venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
+	@../.venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5050
 
 mlflow-clean: ## Nettoie les runs MLflow
 	@rm -rf mlruns/
@@ -119,10 +119,10 @@ mlflow-up:
 		--name compagnon_immo-mlflow \
 		--network ml_net \
 		-v $(PWD)/mlruns:/mlflow/mlruns \
-		-p 5050:5000 \
-		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5000 \
+		-p 5050:5050 \
+		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5050 \
 		$(MLFLOW_IMAGE) \
-		mlflow ui --host 0.0.0.0 --port 5000 \
+		mlflow server --host 0.0.0.0 --port 5050 \
 		          --backend-store-uri sqlite:///mlflow.db \
 		          --default-artifact-root /mlflow/mlruns
 #@ketsia testé
@@ -142,13 +142,14 @@ docker_build:
 #@ketsia testé
 build-base:
 	docker build -f mlops/2_dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+	
 #@ketsia testé
 build-fusion:
 	docker build -f mlops/3_fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
 #@ketsia testé
 build-preprocessing:
-	docker build -f mlops/4_preprocessing/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
-
+	docker build -f mlops/preprocessing_4/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
+#@ketsia testé
 build-clustering:
 	docker build -f mlops/5_clustering/Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
 
@@ -178,6 +179,7 @@ run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run
 
 run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
+#@ketsia testé
 
 run_dvc:
 	docker run --rm \
@@ -187,39 +189,47 @@ run_dvc:
 		-w /app \
 		$(IMAGE_PREFIX)-dvc \
 		bash mlops/2_dvc/run_dvc.sh
+#@ketsia testé
 
 run_fusion:
-	docker run --rm $(IMAGE_PREFIX)-fus
+	docker run \
+		--rm \
+		--user $(id -u):$(id -g) \  # pour les permissions à runner avec son propre user
+		-v $(PWD)/data:/app/data \
+		$(IMAGE_PREFIX)-fus \
+		bash run_fusion.sh
+
 
 run_preprocessing:
-	docker run --rm $(IMAGE_PREFIX)-preprocess
+	export PYTHONPATH=$(PWD) && \
+	docker run -p 8001:8001 --rm $(IMAGE_PREFIX)-preprocess
 
 run_clustering:
-	docker run --rm $(IMAGE_PREFIX)-clust
+	docker run -p 8002:8002 --rm $(IMAGE_PREFIX)-clust
 
 run_encoding:
-	docker run --rm $(IMAGE_PREFIX)-encod
+	docker run -p 8003:8003 --rm $(IMAGE_PREFIX)-encod
 
 run_lgbm:
-	docker run --rm $(IMAGE_PREFIX)-lgbm
+	docker run -p 8004:8004 --rm $(IMAGE_PREFIX)-lgbm
 
 run_util:
-	docker run --rm $(IMAGE_PREFIX)-util
+	docker run -p 8009:8009 --rm $(IMAGE_PREFIX)-util
 
 run_analyse:
-	docker run --rm $(IMAGE_PREFIX)-analyse
+	docker run -p 8005:8005 --rm $(IMAGE_PREFIX)-analyse
 
 run_splitst:
-	docker run --rm $(IMAGE_PREFIX)-splitst
+	docker run -p 8006:8006 --rm $(IMAGE_PREFIX)-splitst
 
 run_decompose:
-	docker run --rm $(IMAGE_PREFIX)-decomp
+	docker run -p 8007:8007 --rm $(IMAGE_PREFIX)-decomp
 
 run_SARIMAX:
-	docker run --rm $(IMAGE_PREFIX)-sarimax
+	docker run -p 8011:8007 --rm $(IMAGE_PREFIX)-sarimax
 
 run_evaluate:
-	docker run --rm $(IMAGE_PREFIX)-evalu
+	docker run -p 8008:8008 --rm $(IMAGE_PREFIX)-evalu
 
 # ===============================
 # 🏗️ Construction des stages DVC
@@ -267,7 +277,7 @@ add_stage_preprocessing:
 	-o data/train_clean.csv \
 	-o data/test_clean.csv \
 	-o data/df_sales_clean_ST.csv \	
-	python mlops/4_preprocessing/preprocessing.py
+	python mlops/preprocessing_4/preprocessing.py
 
 add_stage_clustering:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
@@ -346,7 +356,7 @@ add_stage_evaluate:
 	python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
 	
 run_dvc_final:
-	docker run --rm \
+	docker run -p 8010:8010 --rm \
 		--env-file .env.yaz \
 		--network ml_net \
 		-v $(PWD):/app \
@@ -393,5 +403,5 @@ status:
 
 ports-check:
 	@echo "Port 8000 (API) : $$(lsof -ti:8000 && echo 'Occupé' || echo 'Libre')"
-	@echo "Port 5001 (MLflow) : $$(lsof -ti:5001 && echo 'Occupé' || echo 'Libre')"
+	@echo "Port 5050 (MLflow) : $$(lsof -ti:5050 && echo 'Occupé' || echo 'Libre')"
 

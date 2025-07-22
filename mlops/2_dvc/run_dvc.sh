@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export MLFLOW_TRACKING_URI=file://$(pwd)/mlruns
+
 # === 📦 Chargement des variables d’environnement ===
 ENV_FILE=".env.yaz"
 
@@ -32,6 +34,13 @@ dvc remote add origin "https://dagshub.com/${DVC_USER}/compagnon_immo.dvc.git" 2
 dvc remote modify origin --local auth basic
 dvc remote modify origin --local user "$DVC_USER"
 dvc remote modify origin --local password "$DVC_TOKEN"
+
+# dossier de sauvegarde
+echo "Configuration du dossier de sauvegarde"
+if ! dvc config --list | grep -q "^cache\.dir"; then
+    echo "Configuration du cache DVC local"
+    dvc config cache.dir .dvc/cache
+fi
 
 # === 💾 Mise à jour dynamique de params.yaml avec ST_SUFFIX ===
 echo "💾 Écriture de params.yaml avec ST_SUFFIX='$ST_SUFFIX'"

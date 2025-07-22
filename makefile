@@ -10,7 +10,7 @@ DVC_IMAGE=$(IMAGE_PREFIX)-dvc
 
 .PHONY: prepare-dirs install docker_build help fusion preprocessing clustering regression series \
 	ml-pipeline api-dev api-test dev-env mlflow-ui mlflow-clean mlflow-status \
-	docker-build docker-api-build docker-api-run docker-stack-up docker-stack-down docker-logs \
+	create-network docker-build docker-api-build docker-api-run docker-stack-up docker-stack-down docker-logs \
 	setup_dags docker_auto build-all run-all-docker run_full run_dvc run_fusion run_preprocessing \
 	run_clustering run_encoding run_lgbm run_analyse run_splitst run_decompose run_SARIMAX run_evaluate \
 	build-dvc-image run-dvc-repro dvc-push dvc-pull dvc-metrics dvc-plots dvc-save \
@@ -35,7 +35,7 @@ help: ## Affiche l'aide
 # 📦 Ligne de commande - test
 # ===============================
 quick-start-pipeline: build-all run-all-docker
-
+quick-start-test: quick-start-pipeline run_dvc_final
 # ===============================
 # 🌐 API et Interface Web
 # ===============================
@@ -93,6 +93,7 @@ docker-logs:
 # ===============================
 # ☁️ DagsHub Setup
 # ===============================
+## @ketsia: faut-il garder cette partie?
 setup_dags:
 	@chmod +x setup_remote.sh
 	@./setup_remote.sh
@@ -102,17 +103,17 @@ setup_dags:
 # ===============================
 
 
-run_pipeline_reset_all: run_dvc
+run_pipeline_reset_all: run_dvc run_dvc_final add_stage_all run_dvc_final
 
 # ===============================
 # 📈️ MLflow Dockerisé
 # ===============================
 create-network:
 	@docker network create ml_net || echo "✅ Réseau 'ml_net' déjà existant"
-
-build-mlflow:
+#@ketsia testé
+build-mlflow: 
 	docker build -f mlops/mlflow/Dockerfile.mlflow -t $(MLFLOW_IMAGE) .
-
+#@ketsia testé
 mlflow-up:
 	docker run -d --rm \
 		--name compagnon_immo-mlflow \
@@ -124,29 +125,27 @@ mlflow-up:
 		mlflow ui --host 0.0.0.0 --port 5000 \
 		          --backend-store-uri sqlite:///mlflow.db \
 		          --default-artifact-root /mlflow/mlruns
-
+#@ketsia testé
 mlflow-down:
 	docker stop compagnon_immo-mlflow || true
-
+#@ketsia testé
 # ===============================
 # 🐳 Exécution pipeline Docker
 # ===============================
 docker_auto: build-all run-all-docker
 
-build-all: create-network chmod-dvc-sh docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
+build-all:  docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
 
-chmod-dvc-sh:
-	chmod +x mlops/2_dvc/run_dvc.sh
 
 docker_build:
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
-
+#@ketsia testé
 build-base:
 	docker build -f mlops/2_dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
-
+#@ketsia testé
 build-fusion:
 	docker build -f mlops/3_fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
-
+#@ketsia testé
 build-preprocessing:
 	docker build -f mlops/4_preprocessing/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
 
@@ -175,7 +174,7 @@ build-SARIMAX:
 build-evaluate:
 	docker build -f mlops/7_Serie_temporelle/4_EVALUATE/Dockerfile.evaluate.ST -t $(IMAGE_PREFIX)-evalu .
 
-run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_analyse run_splitst run_decompose run_SARIMAX run_evaluate run_dvc_final
+run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run_lgbm run_util run_analyse run_splitst run_decompose run_SARIMAX run_evaluate 
 
 run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
@@ -225,7 +224,7 @@ run_evaluate:
 # ===============================
 # 🏗️ Construction des stages DVC
 # ===============================
-
+run_dvc_final: add_stage_all run_dvc_final
 # Ajoute tous les stages DVC en cascade
 add_stage_all: \
 	add_stage_import \
@@ -245,6 +244,7 @@ add_stage_all: \
 # ===============================
 # DVC Stage
 # ===============================
+
 add_stage_import:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n import_data \

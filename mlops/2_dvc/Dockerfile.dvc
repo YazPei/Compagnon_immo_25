@@ -1,7 +1,7 @@
 FROM compagnon_immo-run
 
 # 1. Dépendances système minimales
-RUN apt-get update && apt-get install -y git && apt-get clean
+#RUN apt-get update && apt-get install -y git && apt-get clean
 
 # 2. Installation de DVC dans l’environnement Python global (ou virtuel déjà activé dans compagnon_immo-run)
 RUN pip install --no-cache-dir dvc[s3]

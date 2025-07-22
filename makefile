@@ -223,12 +223,32 @@ run_evaluate:
 	docker run --rm $(IMAGE_PREFIX)-evalu
 
 # ===============================
+# 🏗️ Construction des stages DVC
+# ===============================
+
+# Ajoute tous les stages DVC en cascade
+add_stage_all: \
+	add_stage_import \
+	add_stage_fusion \
+	add_stage_preprocessing \
+	add_stage_clustering \
+	add_stage_encoding \
+	add_stage_lgbm \
+	add_stage_utils \
+	add_stage_analyse \
+	add_stage_splitst \
+	add_stage_decompose \
+	add_stage_sarimax \
+	add_stage_evaluate
+	@echo "✅ Tous les stages DVC ont été ajoutés avec succès !"
+	
+# ===============================
 # DVC Stage
 # ===============================
 add_stage_import:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n import_data \
-	-d data/merged_sales_data.csv \
+	-d data/raw/merged_sales_data.csv \
 	-o data/df_sample.csv \
 	python mlops/1_import_donnees/import_data.py
 
@@ -236,7 +256,7 @@ add_stage_fusion:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n fusion \
 	-d data/df_sample.csv \
-	-d data/DVF_donnees_macroeco.csv \
+	-d data/raw/DVF_donnees_macroeco.csv \
 	-o data/df_sales_clean_polars.csv \
 	python mlops/3_fusion_geo/fusion.py
 
@@ -276,6 +296,7 @@ add_stage_lgbm:
 	-d data/y_train.csv \
 	-d data/X_test.csv \
 	-d data/y_test.csv \
+	-o exports/reg/model_lgbm.joblib
 	python mlops/6_Regression/2_LGBM/train_lgbm.py
 
 add_stage_utils:
@@ -296,7 +317,7 @@ add_stage_splitst:
 	-d data/processed/X_test.csv \
 	-d data/processed/y_test.csv \
 	-o data/processed/train_periodique_q12.csv \
-	-o data/test_periodique_q12.csv \
+	-o data/processed/test_periodique_q12.csv \
 	train_clean_ST
 	python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
 
@@ -304,20 +325,23 @@ add_stage_decompose:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n decompose \
 	-d data/processed/train_periodique_q12.csv \
+	-o exports/st/fig_decompose.png \
 	python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
 
 	
 add_stage_sarimax:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n sarimax \
-	-d data/train_periodique_q12.csv \
+	-d data/processed/train_periodique_q12.csv \
+	-o exports/st/best_model.pkl \
 	python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py
 
 add_stage_evaluate:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	dvc stage add -n analyse \
-	-d data/train_periodique_q12.csv \
-	-d data/test_periodique_q12.csv \
+	-d data/processed/train_periodique_q12.csv \
+	-d data/processed/test_periodique_q12.csv \
+	-o exports/st/eval_metrics.json \
 	python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
 	
 run_dvc_final:

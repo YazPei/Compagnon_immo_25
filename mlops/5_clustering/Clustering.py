@@ -38,7 +38,7 @@ def run_clustering_pipeline(input_path: str, output_path: str):
     df = pl.read_csv(input_path, separator=";").to_pandas()
     
     # Définition des chemins d'accès aux données
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"))
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5050"))
     mlflow.set_experiment("Clustering Données Immo")
     with mlflow.start_run(run_name="clustering_macro_kpi"):
         # Définir le dossier contenant les fichiers d'entrée (par exemple, le dossier du fichier d'entrée)

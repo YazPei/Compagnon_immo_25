@@ -9,8 +9,6 @@ COPY mlops/4_preprocessing /app/mlops/4_preprocessing
 COPY data /app/data
 COPY mlops /app
 
-docker run --rm -v $(pwd)/data:/app/data python main.py
-
 EXPOSE 8001 
 
-ENTRYPOINT ["uvicorn", "preprocessing_api:app", "--host", "0.0.0.0", "--port", "8001"]
+ENTRYPOINT ["uvicorn", "mlops.4_preprocessing.preprocessing_api:app", "--host", "0.0.0.0", "--port", "8001"]

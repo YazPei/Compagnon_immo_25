@@ -134,7 +134,7 @@ def fallback_prophet(df, cluster_id, output_folder, suffix=""):
     mlflow.set_tag("fallback", "prophet")
 
 
-def train_all_clusters(input_folder, output_folder, suffix=""):
+def train_all_clusters(input_folder, output_folder, suffix="", save_split=False):
     os.makedirs(os.path.join(output_folder, "best"), exist_ok=True)
     mlflow.set_experiment("ST-SARIMAX-AutoSearch")
 
@@ -147,7 +147,18 @@ def train_all_clusters(input_folder, output_folder, suffix=""):
         df = df.set_index("date")
         df, lagged_cols = apply_lag_if_correlated(df)
         y = df["prix_m2_vente"]
+        
+        if save_split:
+            split_idx = int(len(df) * 0.8)
+            df_train = df.iloc[:split_idx]
+            df_test = df.iloc[split_idx:]
 
+            train_path = os.path.join(output_folder, f"train_cluster_{cluster_id}.csv")
+            test_path  = os.path.join(output_folder, f"test_cluster_{cluster_id}.csv")
+
+            df_train.to_csv(train_path, sep=";")
+            df_test.to_csv(test_path, sep=";")
+        
         print(f"\n🌀 [Cluster {cluster_id}] Analyse débutée")
 
         # Calcul des ordres
@@ -191,6 +202,7 @@ def train_all_clusters(input_folder, output_folder, suffix=""):
 
             if best_model:
                 model_path = os.path.join(output_folder, f"best/cluster_{cluster_id}_sarimax{suffix}.pkl")
+                res_path = os.path.join(output_folder, f"best/forecast_cluster_{cluster_id}.csv")
                 joblib.dump(best_model, model_path)
                 mlflow.log_artifact(model_path)
 
@@ -212,8 +224,10 @@ if __name__ == "__main__":
     parser.add_argument("--input-folder", type=str, required=True)
     parser.add_argument("--output-folder", type=str, required=True)
     parser.add_argument("--suffix", type=str, default="", help="Suffixe à ajouter au nom du modèle")
+    parser.add_argument("--save-split", action="store_true", help="Sauvegarder les fichiers train/test")
     args = parser.parse_args()
-    train_all_clusters(args.input_folder, args.output_folder)
+    train_all_clusters(args.input_folder, args.output_folder, suffix=args.suffix, save_split=args.save_split)
+
 
 
 

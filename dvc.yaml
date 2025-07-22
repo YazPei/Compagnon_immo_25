@@ -1,8 +1,8 @@
 stages:
   import_data:
     cmd: >
-      python -m mlops.1_import_donnees.import_data.py
-      --folder-path1 data
+      python mlops/1_import_donnees/import_data.py
+      --folder-path data
       --output-folder data/
     deps:
       - mlops/1_import_donnees/import_data.py
@@ -12,7 +12,7 @@ stages:
   
   fusion_geo:
     cmd: >
-      python -m mlops.3_fusion.fusion_geo_dvf
+      python mlops/3_fusion/fusion_geo_dvf
       --folder-path1 data
       --folder-path2 data
       --output-folder data/clean
@@ -38,12 +38,12 @@ stages:
     cmd: >
       python mlops/5_clustering/Clustering.py
       --input-path data/processed/train_clean.csv
-      --output-path data/interim/df_sales_clustered.csv
+      --output-path exports/df_cluster.csv
     deps:
       - mlops/5_clustering/Clustering.py
       - data/processed/train_clean.csv
     outs:
-      - data/interim/df_sales_clustered.csv
+      - exports/df_cluster.csv
     params:
       - params.yaml:
           - clustering.n_clusters
@@ -56,8 +56,8 @@ stages:
   encode:
     cmd: python mlops/6_Regression/1_Encoding/encoding.py 
     deps:
-      - src/encoding.py
-      - mlops/data/df_cluster.csv
+      - mlops/6_Regression/1_Encoding/encoding.py
+      - mlops/exports/df_cluster.csv
     outs:
       - mlops/encoded/X_train.csv
       - mlops/encoded/X_test.csv
@@ -67,7 +67,7 @@ stages:
   train_lgbm:
     cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
-      - src/train_lgbm.py
+      - mlops/6_Regression/2_LGBM/train_lgbm.py
       - mlops/encoded/X_train.csv
       - mlops/encoded/y_train.csv
     outs:
@@ -75,16 +75,16 @@ stages:
 
   analyse:
     cmd: >
-      python src/analyse.py --model lightgbm
+      python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:
-      - src/analyse.py
+      - mlops/6_Regression/4_Analyse/analyse.py
       - mlops/encoded/X_test.csv
       - mlops/encoded/y_test.csv
       - mlops/encoded/lgbm_model.joblib
 
   split:
     cmd: >
-      python -m mlops.7_Serie_temporelle.1_SPLIT.load_split  
+      python mlops/7_Serie_temporelle/1_SPLIT/load_split  
       --input-path data/df_sales_clean_ST.csv
       --output-folder data/split
       --suffix ${ST_SUFFIX}
@@ -98,7 +98,7 @@ stages:
 
   decompose:
     cmd: >
-      python -m mlops.7_Serie_temporelle.2_Decompose.seasonal_decomp
+      python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp
       --input-folder data/split
       --output-folder outputs/decomposition
       --suffix ${ST_SUFFIX}
@@ -111,7 +111,7 @@ stages:
 
   train_sarimax:
     cmd: >
-      python -m mlops.7_Serie_temporelle.3_SARIMAX.sarimax_train
+      python mlops.7_Serie_temporelle/3_SARIMAX/sarimax_train
       --input-folder data/split
       --output-folder outputs/best
       --suffix ${ST_SUFFIX}
@@ -119,19 +119,32 @@ stages:
       - mlops/time_series/sarimax_train.py
       - data/split/train_cluster_0.csv
       - data/split/test_cluster_0.csv
+      - data/split/train_cluster_1.csv
+      - data/split/test_cluster_1.csv
+      - data/split/train_cluster_3.csv
+      - data/split/test_cluster_3.csv
+      - data/split/train_cluster_2.csv
+      - data/split/test_cluster_2.csv      
     outs:
       - outputs/best/cluster_0_sarimax.pkl
       - outputs/best/forecast_cluster_0.csv
-
+      - outputs/best/cluster_1_sarimax.pkl
+      - outputs/best/forecast_cluster_1.csv
+      - outputs/best/cluster_2_sarimax.pkl
+      - outputs/best/forecast_cluster_2.csv
+      - outputs/best/cluster_3_sarimax.pkl
+      - outputs/best/forecast_cluster_3.csv
+         
   evaluate:
     cmd: >
-      python -m mlops.time_series.metrics
+      python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       --input-folder exports/st
       --output-folder exports/st
       --model-folder exports/st
       --suffix ""
+
     deps:
-      - mlops/time_series/metrics.py
+      - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       - exports/st/cluster_0_series.csv
       - exports/st/cluster_1_series.csv
       - exports/st/cluster_2_series.csv

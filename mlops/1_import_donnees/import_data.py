@@ -18,7 +18,8 @@ def sample(input_file):
 @click.option('--folder-path', type=click.Path(exists=True), prompt='📂 Chemin vers les données ventes')
 @click.option('--output-folder', type=click.Path(), prompt='📁 Dossier de sortie')
 def main(folder_path, output_folder):
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"))
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5050"))
+    os.environ["MLFLOW_ARTIFACT_URI"] = "file://" + os.path.abspath("mlruns")
     mlflow.set_experiment("Import données")
 
     with mlflow.start_run(run_name="Import et sample"):
@@ -31,7 +32,14 @@ def main(folder_path, output_folder):
         # Export
         Path(output_folder).mkdir(parents=True, exist_ok=True)
         output_path = Path(output_folder) / "df_sample.csv"
-        pl.from_pandas(df_sample).write_csv(output_path, separator=";")
+        # 🔧 Patch : forcer certains champs à string pour éviter les erreurs ArrowInvalid
+        cols_to_string = ["code_postal", "INSEE_COM", "departement", "commune"]
+        for col in cols_to_string:
+            if col in df_sample.columns:
+                    df_sample[col] = df_sample[col].astype(str)
+        
+
+        df_sample.to_csv(output_path, sep=";", index=False)
 
         # Log artefact
         mlflow.log_artifact(str(output_path))

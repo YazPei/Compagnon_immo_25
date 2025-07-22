@@ -54,7 +54,7 @@ api-test: check-env ## Lance les tests de l'API
 # 📈 MLflow
 # ===============================
 mlflow-ui: check-env ## Démarre l'interface MLflow
-	@../.venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5001
+	@../.venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5050
 
 mlflow-clean: ## Nettoie les runs MLflow
 	@rm -rf mlruns/
@@ -119,10 +119,10 @@ mlflow-up:
 		--name compagnon_immo-mlflow \
 		--network ml_net \
 		-v $(PWD)/mlruns:/mlflow/mlruns \
-		-p 5050:5000 \
-		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5000 \
+		-p 5050:5050 \
+		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5050 \
 		$(MLFLOW_IMAGE) \
-		mlflow ui --host 0.0.0.0 --port 5000 \
+		mlflow server --host 0.0.0.0 --port 5050 \
 		          --backend-store-uri sqlite:///mlflow.db \
 		          --default-artifact-root /mlflow/mlruns
 #@ketsia testé
@@ -148,7 +148,7 @@ build-fusion:
 #@ketsia testé
 build-preprocessing:
 	docker build -f mlops/4_preprocessing/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
-
+#@ketsia testé
 build-clustering:
 	docker build -f mlops/5_clustering/Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
 
@@ -178,6 +178,7 @@ run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run
 
 run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
+#@ketsia testé
 
 run_dvc:
 	docker run --rm \
@@ -187,7 +188,7 @@ run_dvc:
 		-w /app \
 		$(IMAGE_PREFIX)-dvc \
 		bash mlops/2_dvc/run_dvc.sh
-
+#@ketsia testé
 run_fusion:
 	docker run --rm $(IMAGE_PREFIX)-fus
 
@@ -204,7 +205,7 @@ run_lgbm:
 	docker run -p 8004:8004 --rm $(IMAGE_PREFIX)-lgbm
 
 run_util:
-	docker run -p 8004:8004 --rm $(IMAGE_PREFIX)-util
+	docker run -p 8009:8009 --rm $(IMAGE_PREFIX)-util
 
 run_analyse:
 	docker run -p 8005:8005 --rm $(IMAGE_PREFIX)-analyse
@@ -346,7 +347,7 @@ add_stage_evaluate:
 	python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
 	
 run_dvc_final:
-	docker run --rm \
+	docker run -p 8010:8010 --rm \
 		--env-file .env.yaz \
 		--network ml_net \
 		-v $(PWD):/app \
@@ -393,5 +394,5 @@ status:
 
 ports-check:
 	@echo "Port 8000 (API) : $$(lsof -ti:8000 && echo 'Occupé' || echo 'Libre')"
-	@echo "Port 5001 (MLflow) : $$(lsof -ti:5001 && echo 'Occupé' || echo 'Libre')"
+	@echo "Port 5050 (MLflow) : $$(lsof -ti:5050 && echo 'Occupé' || echo 'Libre')"
 

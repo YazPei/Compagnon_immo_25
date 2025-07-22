@@ -116,7 +116,7 @@ def main(input_folder, output_folder, model_folder, suffix=""):
     mlflow.set_experiment("ST-SARIMAX-Evaluation")
     results = []
 
-    for cluster_id in range(5):
+    for cluster_id in range(4):
         run_name = f"cluster_{cluster_id}"
         with mlflow.start_run(run_name=run_name):
             model_path = os.path.join(model_folder, f"cluster_{cluster_id}_sarimax.pkl")

@@ -116,27 +116,68 @@ setup_dags:  ## Configure le remote DVC vers DagsHub (secure, local only)
 	@chmod +x setup_remote.sh
 	@./setup_remote.sh
 
+
 # 
 # ===============================
-# 🐳 Exécution dans Docker
+# 📈️ MLFlow
+# ===============================
+
+create-network:
+	@docker network create ml_net || echo "✅ Réseau 'ml_net' déjà existant"
+
+build-mlflow:
+	docker build -f mlops/mlflow/Dockerfile.mlflow -t compagnon_immo-mlflow-img .
+	
+mlflow-up:
+	@echo "🚀 Lancement de MLflow dans Docker sur http://localhost:5050"
+	docker run -d --rm \
+		--name compagnon_immo-mlflow \
+		--network ml_net \
+		-v $(PWD)/mlruns:/mlflow/mlruns \
+		-p 5050:5000 \
+		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5000 \
+		compagnon_immo-mlflow-img \
+		mlflow ui --host 0.0.0.0 --port 5000 \
+		          --backend-store-uri sqlite:///mlflow.db \
+		          --default-artifact-root /mlflow/mlruns
+
+
+
+		
+
+
+
+
+
+
+# 
+# ===============================
+# 🐳 Exécution pipeline dans Docker
 # ===============================
 
 
 docker_auto: build-all run-all-docker
 
 ## builds ##
-build-all: chmod-dvc-sh docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
+build-all: create-network chmod-dvc-sh docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-analyse build-splitST build-decompose build-SARIMAX build-evaluate
 	@echo "📦 Toutes les images Docker ont été construites avec succès !"
 
+create-network:
+	@docker network create ml_net || echo "✅ Réseau 'ml_net' déjà existant"
+
+
+	
 chmod-dvc-sh: ## Rend exécutable run_dvc.sh sur l'hôte
 	@chmod +x mlops/2_dvc/run_dvc.sh
-
+prepare-env:
+	@bash setup_env.sh
 docker_build:
 	@echo "🔧 Construction de l’image Docker..."
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
+	
 
 build-base: ## Build de l'image Docker de base (requirements installés)
-	docker build -f mlops/2.dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+	docker build -f mlops/2_dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 
 build-fusion: ## Build de l'image Docker d'enrichissement du dataset
 	docker build -f mlops/3.fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
@@ -179,13 +220,19 @@ run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
 
 
-run_dvc: chmod-dvc-sh ## lancement du dvc
-	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
+run_dvc: chmod-dvc-sh
+	@echo "🧠 Lancement DVC dans Docker (réseau partagé avec MLflow)"
 	docker run --rm \
-		-e DVC_TOKEN=$(DVC_TOKEN) \
+		--env-file .env.yaz \
+		--network ml_net \
 		-v $(PWD):/app \
 		-w /app \
-		$(IMAGE_PREFIX)-dvc
+		$(IMAGE_PREFIX)-dvc \
+		bash mlops/2_dvc/run_dvc.sh
+
+
+
+
 													
 run_fusion: ## Lancement de la fusion des données (Docker)
 	@echo "🌐 Fusion des données IPS et géographiques (Docker)"
@@ -226,7 +273,8 @@ run_SARIMAX: ## Build de l'image Docker de la modelisation SARIMAX
 run_evaluate: ## Build de l'image Docker de l'évaluation du modèle SARIMAX
 	docker run --rm $(IMAGE_PREFIX)-evalu	
 
-		
+mlflow-down: ## Stoppe le conteneur MLflow s’il tourne
+	docker stop compagnon_immo-mlflow || true
 # ===============================
 # 📁 Commandes DVC (via Docker)
 # ===============================
@@ -239,13 +287,7 @@ build-cache: .venv/.pip_installed ## Build dépendances si requirements.txt modi
 build-dvc-image: ## Build de l'image Docker DVC + DagsHub
 	docker build -f Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
 	
-run_dvc: ## lancement du dvc
-	@echo "🧠 Lancement DVC avec script run_dvc.sh (Docker)"
-	docker run --rm \
-		-e DVC_TOKEN=$(DVC_TOKEN) \
-		-v $(PWD):/app \
-		-w /app \
-		$(IMAGE_PREFIX)-dvc
+
 		
 run-dvc-repro: ## Exécution du pipeline DVC (repro) dans un conteneur DVC
 	docker run --rm \
@@ -316,6 +358,7 @@ clean_all: clean_exports clean_dvc
 # 📈 Tracking MLflow
 # ===============================
 
+	
 mlflow-run:
 	@echo "🚀 Lancement manuel d’un run MLflow (ex: clustering)"
 	python -m src.clustering \

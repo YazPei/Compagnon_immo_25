@@ -309,6 +309,7 @@ add_stage_analyse:
 	dvc stage add -n analyse \
 	-d data/X_test.csv \
 	-d data/y_test.csv \
+	-o data/exports/reg/shap_summary.png \
 	python mlops/6_Regression/4_Analyse/analyse.py
 
 add_stage_splitst:

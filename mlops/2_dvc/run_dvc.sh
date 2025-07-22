@@ -34,8 +34,7 @@ export MLFLOW_TRACKING_URI
 
 
 
-echo "📥 Import des données dans MLflow..."
-python mlops/1_import_donnees/import_data.py --folder-path data --output-folder data
+
 
 echo "🔐 Utilisateur DagsHub détecté : $DVC_USER"
 
@@ -51,6 +50,8 @@ dvc remote default origin
 echo "🚀 Lancement du pipeline DVC..."
 dvc pull
 dvc repro
+echo "📥 Import des données dans MLflow..."
+python mlops/1_import_donnees/import_data.py --folder-path data --output-folder data
 
 echo "📊 Affichage des métriques..."
 dvc metrics show

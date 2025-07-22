@@ -1,23 +1,24 @@
 FROM compagnon_immo-run
 
-# 1. Dépendances système minimales (sans dvc !)
+# 1. Dépendances système minimales
 RUN apt-get update && apt-get install -y git && apt-get clean
 
-
-# 2. Installation de DVC dans l’environnement virtuel existant
+# 2. Installation de DVC dans l’environnement Python global (ou virtuel déjà activé dans compagnon_immo-run)
 RUN pip install --no-cache-dir dvc[s3]
-
 
 # 3. Dossier de travail
 WORKDIR /app
 
-# 4. Copie du script et des sources
-COPY mlops/2_dvc/run_dvc.sh mlops/2_dvc/run_dvc.sh
+# 4. Copie du script shell + sources DVC
+COPY mlops/2_dvc/run_dvc.sh /app/mlops/2_dvc/run_dvc.sh
+COPY dvc.yaml dvc.lock .dvc .dvcignore .gitignore /app/
+COPY mlops/1_import_donnees /app/mlops/1_import_donnees
+COPY data /app/data  # facultatif mais utile si non monté
+COPY .env.yaz /app/
 
+# 5. Droits d’exécution
+RUN chmod +x /app/mlops/2_dvc/run_dvc.sh
 
-# 5. Droits d’exécution du script
-RUN chmod +x mlops/2_dvc/run_dvc.sh
-
-# 6. Commande par défaut
+# 6. Entrypoint = exécution du pipeline
 CMD ["bash", "/app/mlops/2_dvc/run_dvc.sh"]
 

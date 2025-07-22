@@ -9,10 +9,6 @@ RUN apt-get update && apt-get install -y \
 # 2. Dossier de travail
 WORKDIR /app
 
-# 3. Variables d’environnement
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
 # 4. Copie requirements.txt uniquement (cache)
 COPY ../../requirements.txt .
 

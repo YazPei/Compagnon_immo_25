@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export MLFLOW_TRACKING_URI=file://$(pwd)/mlruns
+
 # === 📦 Chargement des variables d’environnement ===
 ENV_FILE=".env.yaz"
 

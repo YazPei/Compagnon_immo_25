@@ -1,25 +1,43 @@
-from mlops.4_preprocessing.utils import (
-    annee_const,
-    clean_classe,
-    clean_exposition,
-    extract_principal,
-    get_numeric_cols,
-    calculate_bounds,
-    compute_medians,
-    mark_outliers,
-    clean_outliers,
-    log_figure,
-)
+#from preprocessing_4.utils import (
+#    annee_const,
+#    clean_classe,
+#    clean_exposition,
+#    extract_principal,
+#    get_numeric_cols,
+#    calculate_bounds,
+#    compute_medians,
+#    mark_outliers,
+#    clean_outliers,
+#    log_figure,
+#)
 
-#from app. import *
+# === Imports standards
+import os
+import sys
+import warnings
+warnings.filterwarnings("ignore")
+
+# === Imports compatibles Docker (headless / no-GUI)
+import matplotlib
+matplotlib.use('Agg')  # Empêche l'ouverture d'une fenêtre GUI, nécessaire en Docker
+
+import pandas as pd
+import click
+import seaborn as sns
+import matplotlib.pyplot as plt
+import mlflow
+
+from utils import *  
+
 
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === BEGIN PIPELINE ===
+    file_path = os.path.join(input_path, "df_sales_clean.csv") 
+    df = pd.read_csv(file_path, sep=";", dtype={"INSEE_COM": str})
     run_suffix = os.getenv("RUN_MODE", "default")
     GROUP_COL = "INSEE_COM"
 
-    df = pl.read_csv(input_path, separator=";").to_pandas()
     print("Nombres de lignes en double", df.duplicated().sum())
     df.drop_duplicates()
     print("Nombres de lignes en double après suppression", df.duplicated().sum())
@@ -214,11 +232,11 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         plt.tight_layout()
 
         # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
-	output_dir = Path("/app/reports/figures")
-	output_dir.mkdir(parents=True, exist_ok=True)
-	filename = f"boxplots_outliers_{run_suffix}.png"
-	fig_path = os.path.join(output_dir, "Boxplot_variables.png")
-	fig_o.savefig(fig_path)
+        output_dir = Path("/app/reports/figures")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"boxplots_outliers_{run_suffix}.png"
+        fig_path = os.path.join(output_dir, "Boxplot_variables.png")
+        fig_o.savefig(fig_path)
 	
 
         # 2. Log dans MLflow
@@ -597,28 +615,40 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     # === Tracking MLflow ===
     mlflow.log_param("input_path", input_path)
+    output_dir = Path(output_path)
+    print("✅ Dossier output:", output_dir.resolve())
+    print("✅ Contenu output dir:", list(output_dir.glob("*")))
 
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    train_clean.to_csv(output_dir / "df_sales_clean_train.csv", sep=";", index=False)
+    test_clean.to_csv(output_dir / "df_sales_clean_test.csv", sep=";", index=False)
+    df_sales_short_ST.to_csv(output_dir / "df_sales_clean_series.csv", sep=";", index=False)
 
-    pl.from_pandas(train_clean).write_csv(
-        output_path.replace(".csv", "_train.csv"), separator=";"
-    )
-    pl.from_pandas(test_clean).write_csv(
-        output_path.replace(".csv", "_test.csv"), separator=";"
-    )
-    pl.from_pandas(df_sales_short_ST).write_csv(
-        output_path.replace(".csv", "_series.csv"), separator=";"
-    )
+    print("✅ Écriture de :", output_dir / "df_sales_clean_train.csv")
+    print("✅ Écriture de :", output_dir / "df_sales_clean_test.csv")
+    print("✅ Écriture de :", output_dir / "df_sales_clean_series.csv")
 
-    mlflow.log_artifact(output_path.replace(".csv", "_train.csv"))
-    mlflow.log_artifact(output_path.replace(".csv", "_test.csv"))
-    mlflow.log_artifact(output_path.replace(".csv", "_series.csv"))
+
+
+    
+    mlflow.log_artifact(str(output_dir / "df_sales_clean_train.csv"))
+    mlflow.log_artifact(str(output_dir / "df_sales_clean_test.csv"))
+    mlflow.log_artifact(str(output_dir / "df_sales_clean_series.csv"))
 
     print(f" Données sauvegardées dans : {output_path}")
 
-
+    
 
     # === END PIPELINE ===
     print("✅ Pipeline preprocessing terminée avec succès")
 
+
+@click.command()
+@click.option('--input-path', type=click.Path(exists=True), prompt='📂 Chemin vers les données')
+@click.option('--output-path', type=click.Path(), prompt='📁 Dossier de sortie')
+def main(input_path, output_path):
+    run_preprocessing_pipeline(input_path=input_path, output_path=output_path)
+
+if __name__ == "__main__":
+    main()
 

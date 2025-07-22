@@ -142,12 +142,13 @@ docker_build:
 #@ketsia testé
 build-base:
 	docker build -f mlops/2_dvc/Dockerfile.dvc -t $(IMAGE_PREFIX)-dvc .
+	
 #@ketsia testé
 build-fusion:
 	docker build -f mlops/3_fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
 #@ketsia testé
 build-preprocessing:
-	docker build -f mlops/4_preprocessing/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
+	docker build -f mlops/preprocessing_4/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
 #@ketsia testé
 build-clustering:
 	docker build -f mlops/5_clustering/Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
@@ -189,10 +190,18 @@ run_dvc:
 		$(IMAGE_PREFIX)-dvc \
 		bash mlops/2_dvc/run_dvc.sh
 #@ketsia testé
+
 run_fusion:
-	docker run --rm $(IMAGE_PREFIX)-fus
+	docker run \
+		--rm \
+		--user $(id -u):$(id -g) \  # pour les permissions à runner avec son propre user
+		-v $(PWD)/data:/app/data \
+		$(IMAGE_PREFIX)-fus \
+		bash run_fusion.sh
+
 
 run_preprocessing:
+	export PYTHONPATH=$(PWD) && \
 	docker run -p 8001:8001 --rm $(IMAGE_PREFIX)-preprocess
 
 run_clustering:
@@ -268,7 +277,7 @@ add_stage_preprocessing:
 	-o data/train_clean.csv \
 	-o data/test_clean.csv \
 	-o data/df_sales_clean_ST.csv \	
-	python mlops/4_preprocessing/preprocessing.py
+	python mlops/preprocessing_4/preprocessing.py
 
 add_stage_clustering:
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \

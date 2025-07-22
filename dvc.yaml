@@ -1,18 +1,16 @@
 stages:
   import_data:
-    cmd: >
-      python mlops/1_import_donnees/import_data.py
-      --folder-path data
-      --output-folder data/
+    cmd: python mlops/1_import_donnees/import_data.py --folder-path data --output-folder data/
     deps:
       - mlops/1_import_donnees/import_data.py
       - data/merged_sales_data.csv
     outs:
-      - data/df_sample.csv
+      - data/df_sample.csv      
+   
   
   fusion_geo:
     cmd: >
-      python mlops/3_fusion/fusion_geo_dvf
+      python mlops/3_fusion/fusion_geo_dvf.py
       --folder-path1 data
       --folder-path2 data
       --output-folder data/clean
@@ -20,30 +18,33 @@ stages:
       - mlops/3_fusion/fusion_geo_dvf.py
       - data/DVF_donnees_macroeco.csv
       - data/df_sample.csv
+
     outs:
-      - data/clean/df_sales_clean_polars.csv
+      - data/clean/df_sales_clean.csv
 
   preprocessing:
-    cmd: >
-      python mlops/4_preprocessing/preprocessing.py
-      --input-path data/clean/df_sales_clean_polars.csv
-      --output-path data/processed/train_clean.csv
+    cmd: python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
     deps:
-      - mlops/4_preprocessing/preprocessing.py
-      - data/clean/df_sales_clean_polars.csv
+      - mlops/preprocessing_4/preprocessing.py
+      - mlops/preprocessing_4/utils.py
+      - data/clean/df_sales_clean.csv
     outs:
-      - data/processed/train_clean.csv
+      - data/processed/df_sales_clean_train.csv
+      - data/processed/df_sales_clean_test.csv
+      - data/processed/df_sales_clean_series.csv
 
+      
   clustering:
     cmd: >
       python mlops/5_clustering/Clustering.py
-      --input-path data/processed/train_clean.csv
+      --input-path data/processed
       --output-path exports/df_cluster.csv
     deps:
       - mlops/5_clustering/Clustering.py
-      - data/processed/train_clean.csv
+      - data/processed/df_sales_clean_train.csv
     outs:
       - exports/df_cluster.csv
+      - data/df_sales_clean_ST.csv
     params:
       - params.yaml:
           - clustering.n_clusters
@@ -57,7 +58,7 @@ stages:
     cmd: python mlops/6_Regression/1_Encoding/encoding.py 
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
-      - mlops/exports/df_cluster.csv
+      - exports/df_cluster.csv
     outs:
       - mlops/encoded/X_train.csv
       - mlops/encoded/X_test.csv

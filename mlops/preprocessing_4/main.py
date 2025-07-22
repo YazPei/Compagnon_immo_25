@@ -1,7 +1,7 @@
 # main.py (conteneur preprocessing)
 from fastapi import FastAPI
 from pydantic import BaseModel
-from mlops.4_preprocessing.preprocessing import run_preprocessing_pipeline
+from mlops.preprocessing_4.preprocessing import run_preprocessing_pipeline
 import uvicorn	
 
 app = FastAPI(title="Preprocessing Step", version="1.0.0") 

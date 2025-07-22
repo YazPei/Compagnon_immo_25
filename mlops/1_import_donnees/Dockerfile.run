@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 4. Copie requirements.txt uniquement (cache)
-COPY ../../requirements.txt .
+COPY requirements.txt .
 
 # 5. Création de l’environnement virtuel + install
 RUN pip install --upgrade pip && \

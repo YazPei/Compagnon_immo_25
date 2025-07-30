@@ -83,10 +83,11 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     ax.legend()
     
     # Sauvegarde
-    output_dir = Path("/app/reports/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
     filename = f"missing_values_{run_suffix}.png"
-    fig_path = os.path.join(output_dir, "Nan_distribution.png")
+    fig_path = os.path.join(figures_dir, "Nan_distribution.png")
     fig.savefig(fig_path)
     
     # Log MLflow
@@ -195,9 +196,14 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     plt.xticks(rotation=45, fontsize=8)
     plt.yticks(fontsize=8)
     plt.tight_layout()
-    output_dir = "/app/reports/figures"
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    fig_path = os.path.join(output_dir, "prix_m2_distribution.png")
+
+
+
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+
+    fig_path = os.path.join(figures_dir, "prix_m2_distribution.png")
     plt.savefig(fig_path)
     plt.close()
        
@@ -232,10 +238,12 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         plt.tight_layout()
 
         # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
-        output_dir = Path("/app/reports/figures")
-        output_dir.mkdir(parents=True, exist_ok=True)
+
+        figures_dir = Path(output_path) / "reports" / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
         filename = f"boxplots_outliers_{run_suffix}.png"
-        fig_path = os.path.join(output_dir, "Boxplot_variables.png")
+        fig_path = os.path.join(figures_dir, "Boxplot_variables.png")
         fig_o.savefig(fig_path)
 	
 
@@ -302,10 +310,11 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     print(anomalies_detected.to_string(index=False))  # ou .to_markdown() si tu veux joli
     
     # Sauvegarde dans un fichier CSV (optionnel)
-    output_dir = Path("/app/reports/extracts")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
     filename = "anomaly_logic_preview.csv"
-    csv_path = os.path.join(output_dir, "anomaly_logic_preview.csv")
+    csv_path = os.path.join(figures_dir, "anomaly_logic_preview.csv")
     anomalies_detected.to_csv(csv_path, index=False)
     
     # Logging MLflow
@@ -505,12 +514,13 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     plt.tight_layout()
     
-    # Sauvegarde dans dossier Docker-friendly
-    output_dir = Path("/app/reports/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
+
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
 
     filename = f"boxplots_outliers_clean_{run_suffix}.png"
-    fig_path = output_dir / filename
+    fig_path = figures_dir / filename
     fig.savefig(fig_path)
 
     # Logging MLflow

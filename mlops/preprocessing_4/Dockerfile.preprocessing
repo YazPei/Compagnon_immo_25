@@ -1,25 +1,31 @@
 FROM compagnon_immo-fus
 
-WORKDIR /app
-RUN apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# === Étape 1 : Création utilisateur non-root ===
+RUN adduser --disabled-password --gecos '' appuser && \
+    mkdir -p /app /data /mlruns && \
+    chown -R appuser:appuser /app /data /mlruns && \
+    chmod -R 777 /app /data /mlruns
 
+# === Étape 2 : Environnement ===
+WORKDIR /app
 ENV PYTHONPATH=/app
 
-    
-# Étape 3 : copie code
-COPY mlops/preprocessing_4 /app/mlops/preprocessing_4
+# === Étape 3 : Copie code et dépendances ===
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY mlops /app/mlops
 COPY data /app/data
-COPY mlops /app
 
-
+# === Étape 4 : Permissions post-copy ===
 USER root
-RUN chown -R 1000:1000 /app
+RUN chown -R appuser:appuser /app /data /mlops
 
-# Puis exécute avec un utilisateur non root
-USER 1000
+# === Étape 5 : Execution avec user générique ===
+USER appuser
 
-
-EXPOSE 8001 
+# === Étape 6 : Exposition port API et lancement ===
+EXPOSE 8001
 
 ENTRYPOINT ["uvicorn", "mlops.preprocessing_4.preprocessing_api:app", "--host", "0.0.0.0", "--port", "8001"]
+

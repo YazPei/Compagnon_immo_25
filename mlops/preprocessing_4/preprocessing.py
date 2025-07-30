@@ -83,10 +83,17 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     ax.legend()
     
     # Sauvegarde
-    output_dir = Path("/app/reports/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir = Path(output_path) / "reports" / "figures"
+
+    try:
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        os.system(f"chmod -R u+rwX {figures_dir.parent}")
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
     filename = f"missing_values_{run_suffix}.png"
-    fig_path = os.path.join(output_dir, "Nan_distribution.png")
+    fig_path = os.path.join(figures_dir, "Nan_distribution.png")
     fig.savefig(fig_path)
     
     # Log MLflow
@@ -149,10 +156,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     ### La variable "annee_construction" est transformée en variable catégorielle nominale
 
     # suppression des doublons
-    df_2.dropna(
-        subset=["prix_m2_vente", "surface_reelle_bati", "nombre_pieces_principales"],
-        inplace=True,
-    )
+    df_2.dropna(subset=["prix_m2_vente"], inplace=True)
     df_2 = annee_const(df_2)
     # 2. Application des fonctions sur df_2
 
@@ -195,9 +199,20 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     plt.xticks(rotation=45, fontsize=8)
     plt.yticks(fontsize=8)
     plt.tight_layout()
-    output_dir = "/app/reports/figures"
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    fig_path = os.path.join(output_dir, "prix_m2_distribution.png")
+
+
+
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        os.system(f"chmod -R u+rwX {figures_dir.parent}")
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
+
+    fig_path = os.path.join(figures_dir, "prix_m2_distribution.png")
     plt.savefig(fig_path)
     plt.close()
        
@@ -232,10 +247,12 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         plt.tight_layout()
 
         # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
-        output_dir = Path("/app/reports/figures")
-        output_dir.mkdir(parents=True, exist_ok=True)
+
+        figures_dir = Path(output_path) / "reports" / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
         filename = f"boxplots_outliers_{run_suffix}.png"
-        fig_path = os.path.join(output_dir, "Boxplot_variables.png")
+        fig_path = os.path.join(figures_dir, "Boxplot_variables.png")
         fig_o.savefig(fig_path)
 	
 
@@ -302,10 +319,11 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     print(anomalies_detected.to_string(index=False))  # ou .to_markdown() si tu veux joli
     
     # Sauvegarde dans un fichier CSV (optionnel)
-    output_dir = Path("/app/reports/extracts")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
     filename = "anomaly_logic_preview.csv"
-    csv_path = os.path.join(output_dir, "anomaly_logic_preview.csv")
+    csv_path = os.path.join(figures_dir, "anomaly_logic_preview.csv")
     anomalies_detected.to_csv(csv_path, index=False)
     
     # Logging MLflow
@@ -505,12 +523,13 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     plt.tight_layout()
     
-    # Sauvegarde dans dossier Docker-friendly
-    output_dir = Path("/app/reports/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
+
+    figures_dir = Path(output_path) / "reports" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
 
     filename = f"boxplots_outliers_clean_{run_suffix}.png"
-    fig_path = output_dir / filename
+    fig_path = figures_dir / filename
     fig.savefig(fig_path)
 
     # Logging MLflow
@@ -607,7 +626,8 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === Log des stats de distribution de la target ===
     prix_stats = train_clean["prix_m2_vente"].describe()
     for stat in ["mean", "std", "min", "25%", "50%", "75%", "max"]:
-        mlflow.log_metric(f"prix_m2_vente_{stat}", prix_stats[stat])
+        safe_stat = stat.replace("%", "pct")
+        mlflow.log_metric(f"prix_m2_vente_{safe_stat}", prix_stats[stat])
 
     df_sales_short_ST = pd.concat([train_clean_ST, test_clean_ST], axis=0).reset_index(
         drop=True

@@ -67,8 +67,7 @@ def run_clustering_pipeline(input_path: str, output_path: str):
                 file_path,
                 sep=";",
                 chunksize=chunksize,
-                parse_dates=["date"],
-                on_bad_lines="skip",
+                dtype={'date':str},
                 low_memory=False,
                 encoding=encoding,
             )
@@ -89,7 +88,7 @@ def run_clustering_pipeline(input_path: str, output_path: str):
     train_cluster = load_data(train_file, parse_dates=['date'])
     if train_cluster is None:
         raise ValueError("Le fichier a été lu mais le conteny est vide ou invalide")
-    train_cluster["date"] = pd.to_datetime(train_cluster['date'], format='%Y-%m')   
+    train_cluster["date"] = pd.to_datetime(train_cluster['date'], format='%Y-%m-%d')   
     train_cluster.set_index('date', inplace=True)
     train_cluster["Year"] = train_cluster.index.year
     train_cluster["Month"] = train_cluster.index.month

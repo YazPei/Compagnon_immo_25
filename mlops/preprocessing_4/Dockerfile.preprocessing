@@ -4,28 +4,29 @@ FROM compagnon_immo-fus
 RUN adduser --disabled-password --gecos '' appuser && \
     mkdir -p /app /data /mlruns && \
     chown -R appuser:appuser /app /data /mlruns && \
-    chmod -R 777 /app /data /mlruns
+    chmod -R 775 /app /data /mlruns
 
 # === Étape 2 : Environnement ===
 WORKDIR /app
 ENV PYTHONPATH=/app
 
-# === Étape 3 : Copie code et dépendances ===
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# === Étape 3 : Pré-création des dossiers nécessaires ===
+RUN mkdir -p /app/mlops \
+             /app/data/processed/reports/figures \
+             /app/data/preprocessed
 
+# === Étape 4 : Copie du code après pré-setup ===
 COPY mlops /app/mlops
-COPY data /app/data
+COPY data/preprocessed /app/data/preprocessed
 
-# === Étape 4 : Permissions post-copy ===
+# === Étape 5 : Permissions post-copy ===
 USER root
-RUN chown -R appuser:appuser /app /data /mlops
+RUN chown -R appuser:appuser /app
 
-# === Étape 5 : Execution avec user générique ===
+# === Étape 6 : Execution avec user générique ===
 USER appuser
 
-# === Étape 6 : Exposition port API et lancement ===
+# === Étape 7 : Exposition port API et lancement ===
 EXPOSE 8001
-
 ENTRYPOINT ["uvicorn", "mlops.preprocessing_4.preprocessing_api:app", "--host", "0.0.0.0", "--port", "8001"]
 

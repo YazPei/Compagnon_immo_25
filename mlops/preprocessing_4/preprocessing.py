@@ -84,7 +84,13 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     
     # Sauvegarde
     figures_dir = Path(output_path) / "reports" / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        os.system(f"chmod -R u+rwX {figures_dir.parent}")
+        figures_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"missing_values_{run_suffix}.png"
     fig_path = os.path.join(figures_dir, "Nan_distribution.png")
@@ -150,10 +156,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     ### La variable "annee_construction" est transformée en variable catégorielle nominale
 
     # suppression des doublons
-    df_2.dropna(
-        subset=["prix_m2_vente", "surface_reelle_bati", "nombre_pieces_principales"],
-        inplace=True,
-    )
+    df_2.dropna(subset=["prix_m2_vente"], inplace=True)
     df_2 = annee_const(df_2)
     # 2. Application des fonctions sur df_2
 
@@ -201,6 +204,12 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     figures_dir = Path(output_path) / "reports" / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        os.system(f"chmod -R u+rwX {figures_dir.parent}")
+        figures_dir.mkdir(parents=True, exist_ok=True)
 
 
     fig_path = os.path.join(figures_dir, "prix_m2_distribution.png")
@@ -617,7 +626,8 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === Log des stats de distribution de la target ===
     prix_stats = train_clean["prix_m2_vente"].describe()
     for stat in ["mean", "std", "min", "25%", "50%", "75%", "max"]:
-        mlflow.log_metric(f"prix_m2_vente_{stat}", prix_stats[stat])
+        safe_stat = stat.replace("%", "pct")
+        mlflow.log_metric(f"prix_m2_vente_{safe_stat}", prix_stats[stat])
 
     df_sales_short_ST = pd.concat([train_clean_ST, test_clean_ST], axis=0).reset_index(
         drop=True

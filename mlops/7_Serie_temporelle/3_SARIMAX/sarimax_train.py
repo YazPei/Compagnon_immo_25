@@ -115,7 +115,8 @@ def prepare_monthly_index(y: pd.Series,
     return y.asfreq("MS"), (ex_scaled.asfreq("MS") if ex_scaled is not None else None), scaler, full_idx
 
 # ─────────────────── Fit robuste avec fallback ───────────────────
-def fit_sarimax_robust(y, exog, order, seasonal_order, trend="c", maxiter=800, start_params=None):
+def fit_sarimax_robust(y, exog, order, seasonal_order, trend="c", maxiter=100, start_params=None):
+#initialement maxiter à 800 mais ca mouline
     # concentrate_scale=True aide souvent la convergence ; simple_differencing accélère
     model = sm.tsa.SARIMAX(
         y, exog=exog, order=order, seasonal_order=seasonal_order, trend=trend,
@@ -140,7 +141,7 @@ def fit_sarimax_robust(y, exog, order, seasonal_order, trend="c", maxiter=800, s
 
     # 2) BFGS
     try:
-        res = _quiet_fit("bfgs", maxiter // 2, gtol=1e-5)
+        res = _quiet_fit("bfgs", maxiter // 2, gtol=1e-4)
         if bool(res.mle_retvals.get("converged", 0)):
             return res, "bfgs"
     except Exception:
@@ -149,7 +150,7 @@ def fit_sarimax_robust(y, exog, order, seasonal_order, trend="c", maxiter=800, s
     # 3) Powell → L-BFGS
     try:
         res_p = _quiet_fit("powell", maxiter // 3, xtol=1e-3)
-        res = _quiet_fit("lbfgs", maxiter // 2, pgtol=1e-5, start_params=res_p.params)
+        res = _quiet_fit("lbfgs", maxiter // 2, pgtol=1e-4, start_params=res_p.params)
         if bool(res.mle_retvals.get("converged", 0)):
             return res, "powell→lbfgs"
     except Exception:
@@ -504,6 +505,8 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, default="", help="Suffixe à ajouter (copie supplémentaire)")
     parser.add_argument("--save-split", action="store_true", help="Sauvegarder les fichiers train/test par cluster")
     # bornes de la grille (accélération)
+    parser.add_argument("--corr-threshold", type=float, default=0.05,
+                        help="Seuil minimal d'|corr| pour garder une exog (ex: 0.2 ou 0.3).")
     parser.add_argument("--max-p", type=int, default=2, help="p maximum (AR)")
     parser.add_argument("--max-q", type=int, default=2, help="q maximum (MA)")
     parser.add_argument("--top-k-exog", type=int, default=8, help="Top-k exogènes par corrélation à garder")
@@ -531,5 +534,6 @@ if __name__ == "__main__":
         sample_last=args.sample_last,
         downsample_every=args.downsample_every,
         stop_on_first_valid=args.stop_on_first_valid,
+        corr_threshold=args.corr_threshold,
     )
 

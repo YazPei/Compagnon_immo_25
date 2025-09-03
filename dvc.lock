@@ -40,3 +40,141 @@ stages:
       hash: md5
       md5: 5d4ff9524073dee89a5f8794e35a1385
       size: 142497303
+  preprocessing:
+    cmd: "mkdir -p data/processed/reports/figures && python mlops/preprocessing_4/preprocessing.py
+      --input-path data/clean/ --output-path data/processed/\n"
+    deps:
+    - path: data/clean/df_sales_clean.csv
+      hash: md5
+      md5: 5d4ff9524073dee89a5f8794e35a1385
+      size: 142497303
+    - path: mlops/preprocessing_4/preprocessing.py
+      hash: md5
+      md5: 0db408688b3f702427061eeacbded627
+      size: 24219
+    - path: mlops/preprocessing_4/utils.py
+      hash: md5
+      md5: 9bb344fccdf9eb1ec6b708e44000308e
+      size: 6916
+    outs:
+    - path: data/processed/df_sales_clean_series.csv
+      hash: md5
+      md5: 0961e08ca0b3538aee689a61b9cce743
+      size: 143505368
+    - path: data/processed/df_sales_clean_test.csv
+      hash: md5
+      md5: 4c66eca3a0fb02542ac90bb05a23f675
+      size: 18944437
+    - path: data/processed/df_sales_clean_train.csv
+      hash: md5
+      md5: e1382aca60f2387fd2052d7009d1f63f
+      size: 75732754
+  clustering:
+    cmd: "python mlops/5_clustering/Clustering.py --input-path data/processed --output-path
+      exports/df_cluster.csv\n"
+    deps:
+    - path: data/processed/df_sales_clean_train.csv
+      hash: md5
+      md5: e1382aca60f2387fd2052d7009d1f63f
+      size: 75732754
+    - path: mlops/5_clustering/Clustering.py
+      hash: md5
+      md5: 6111d0fd9e934806a4864bb547a74d3a
+      size: 20069
+      isexec: true
+    params:
+      params.yaml:
+        clustering.n_clusters: 4
+    outs:
+    - path: data/df_sales_clean_ST.csv
+      hash: md5
+      md5: 721cef60ff08a042211ce434498bc7b6
+      size: 143279426
+    - path: exports/df_cluster.csv
+      hash: md5
+      md5: ec178a7b4cc6b114674d6a7f50c95bbe
+      size: 146100176
+    - path: mlflow_outputs/cluster_input.csv
+      hash: md5
+      md5: 13b20c5173e421c7a0f91e33ed64416f
+      size: 560707
+    - path: mlflow_outputs/elbow_plot.png
+      hash: md5
+      md5: a82bb257d30dd4ac7fe0cde45d692aae
+      size: 31055
+  encode:
+    cmd: python mlops/6_Regression/1_Encoding/encoding.py
+    deps:
+    - path: exports/df_cluster.csv
+      hash: md5
+      md5: ec178a7b4cc6b114674d6a7f50c95bbe
+      size: 146100176
+    - path: mlops/6_Regression/1_Encoding/encoding.py
+      hash: md5
+      md5: 5c40f8bff1fe9525326c8e27f20b6cef
+      size: 13108
+    outs:
+    - path: data/encoded/X_test.csv
+      hash: md5
+      md5: da431b85a1842ef44548c344a5ee9ce6
+      size: 64388025
+    - path: data/encoded/X_train.csv
+      hash: md5
+      md5: de16c593d43fd9379dd04ef7450a9199
+      size: 257563463
+    - path: data/encoded/y_test.csv
+      hash: md5
+      md5: d34e5f9df7159ca64b9decd5c5754b17
+      size: 758568
+    - path: data/encoded/y_train.csv
+      hash: md5
+      md5: 0414a44704ca3758d7c9d68bfe76e8d6
+      size: 3033709
+  splitst:
+    cmd: "python mlops/7_Serie_temporelle/1_SPLIT/load_split.py\n"
+    deps:
+    - path: data/clean/taux_immo.xlsx
+      hash: md5
+      md5: e867fbe9e9a89a44a083b9fe60b726c1
+      size: 12400
+      isexec: true
+    - path: data/df_sales_clean_ST.csv
+      hash: md5
+      md5: 721cef60ff08a042211ce434498bc7b6
+      size: 143279426
+    - path: data/processed/contours-codes-postaux.geojson
+      hash: md5
+      md5: fd8abea558099967148f7f22c881f3e8
+      size: 3010266
+      isexec: true
+    - path: mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+      hash: md5
+      md5: 657f58d41c46e031ca5c58cedcebfff6
+      size: 14959
+    outs:
+    - path: data/split
+      hash: md5
+      md5: 858f542f4d113d23909ac6f1a7ce3b53.dir
+      size: 200952373
+      nfiles: 4
+  decompose:
+    cmd: "python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py --input-folder
+      data/split --output-folder outputs/decomposition --suffix _yazrun\n"
+    deps:
+    - path: data/split/train_periodique_q12.csv
+      hash: md5
+      md5: 3fc67352923075133534cabcd6e71547
+      size: 44518
+    - path: mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
+      hash: md5
+      md5: 89c69612f060127d693c4b9402d95aad
+      size: 9485
+    outs:
+    - path: outputs/decomposition/decomposition_additive_cluster_0.png
+      hash: md5
+      md5: aa2abc87106aee8e687812fef739b3ae
+      size: 55039
+    - path: outputs/decomposition/decomposition_multiplicative_cluster_0.png
+      hash: md5
+      md5: 6c54b9c075415ac05c1439895ff46f62
+      size: 52849

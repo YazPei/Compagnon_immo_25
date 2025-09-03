@@ -108,6 +108,7 @@ run_pipeline_reset_all: run_dvc run_dvc_final add_stage_all run_dvc_final
 # ===============================
 # 📈️ MLflow Dockerisé
 # ===============================
+mlflow-dockerized: create-network build-mlflow mlflow-up
 create-network:
 	@docker network create ml_net || echo "✅ Réseau 'ml_net' déjà existant"
 #@ketsia testé
@@ -184,11 +185,14 @@ run_full:
 run_dvc:
 	docker run --rm \
 		--env-file .env.yaz \
+		--env MLFLOW_TRACKING_URI=file:///app/mlruns \
 		--network ml_net \
 		-v $(PWD):/app \
 		-w /app \
 		$(IMAGE_PREFIX)-dvc \
 		bash mlops/2_dvc/run_dvc.sh
+
+
 #@ketsia testé
 
 run_fusion:
@@ -198,7 +202,6 @@ run_fusion:
 		-v $(PWD)/data:/app/data \
 		$(IMAGE_PREFIX)-fus \
 		bash run_fusion.sh
-
 
 run_preprocessing:
 	export PYTHONPATH=$(PWD) && \
@@ -355,14 +358,18 @@ add_stage_evaluate:
 	-o exports/st/eval_metrics.json \
 	python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
 	
-run_dvc_final:
-	docker run -p 8010:8010 --rm \
+USER_FLAGS=--user $(shell id -u):$(shell id -g)
+
+run_dvc:
+	docker run --rm \
+		$(USER_FLAGS) \
 		--env-file .env.yaz \
 		--network ml_net \
 		-v $(PWD):/app \
 		-w /app \
-		$(DVC_IMAGE) \
-		dvc repro --force
+		$(IMAGE_PREFIX)-dvc \
+		bash mlops/2_dvc/run_dvc.sh
+
 
 # ===============================
 # 🧹 Nettoyage

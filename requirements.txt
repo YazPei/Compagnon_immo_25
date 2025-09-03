@@ -39,8 +39,9 @@ httptools==0.5.0
 
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML
-dvc[gdrive]==3.44.0             # Versionning stable de base de DVC
 dvc[all]==3.44.0
+openpyxl==3.1.2 
+
 # Monitoring et observabilité
 prometheus-client==0.20.0       # Monitoring de métriques (Prometheus)
 

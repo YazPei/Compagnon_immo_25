@@ -181,6 +181,8 @@ def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
         best_params_path = os.path.join(encoded_folder, "best_lgbm_params.pkl")
         joblib.dump(model, best_model_path)
         joblib.dump(best_params, best_params_path)
+        # Compat avec la stage 'analyse'
+        joblib.dump(model, os.path.join(encoded_folder, "lgbm_model.joblib"))
 
         mlflow.log_artifact(best_model_path)
         mlflow.log_artifact(best_params_path)

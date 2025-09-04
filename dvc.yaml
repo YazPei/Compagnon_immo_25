@@ -73,7 +73,7 @@ stages:
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
     outs:
-      - mlops/encoded/lgbm_model.joblib
+      - data/Training
 
   analyse:
     cmd: >
@@ -127,17 +127,11 @@ stages:
     deps:
       - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       - data/split/train_periodique_q12.csv
+      - data/split/test_periodique_q12.csv
       
       # attention faut il filtrer par cluster? verifier le script
     outs:
-      - outputs/best/cluster_0_sarimax.pkl
-      - outputs/best/forecast_cluster_0.csv
-      - outputs/best/cluster_1_sarimax.pkl
-      - outputs/best/forecast_cluster_1.csv
-      - outputs/best/cluster_2_sarimax.pkl
-      - outputs/best/forecast_cluster_2.csv
-      - outputs/best/cluster_3_sarimax.pkl
-      - outputs/best/forecast_cluster_3.csv
+      - outputs/best
 
          
   evaluate:
@@ -148,25 +142,9 @@ stages:
       --output-folder outputs/evaluate
       --suffix ${ST_SUFFIX}
     deps:
+      - outputs/best
+      - data/split   # force l’exécution de split_clusters avant
       - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
-      # séries d'entrée (issues de split)
-      - data/split/train_cluster_0.csv
-      - data/split/test_cluster_0.csv
-      - data/split/train_cluster_1.csv
-      - data/split/test_cluster_1.csv
-      - data/split/train_cluster_2.csv
-      - data/split/test_cluster_2.csv
-      - data/split/train_cluster_3.csv
-      - data/split/test_cluster_3.csv
-      # modèles SARIMAX entraînés
-      - outputs/best/cluster_0_sarimax.pkl
-      - outputs/best/cluster_1_sarimax.pkl
-      - outputs/best/cluster_2_sarimax.pkl
-      - outputs/best/cluster_3_sarimax.pkl
     outs:
-      - outputs/evaluate/forecast_cluster_0.png
-      - outputs/evaluate/forecast_cluster_1.png
-      - outputs/evaluate/forecast_cluster_2.png
-      - outputs/evaluate/forecast_cluster_3.png
-      - outputs/evaluate/sarimax_global_eval.csv
+      - outputs/evaluate
 

@@ -95,8 +95,8 @@ docker-logs:
 # ===============================
 ## @ketsia: faut-il garder cette partie?
 setup_dags:
-	@chmod +x setup_remote.sh
-	@./setup_remote.sh
+	@chmod +x setup_env.sh
+	@./setup_env.sh
 
 # ===============================
 # DVC Dockerisé

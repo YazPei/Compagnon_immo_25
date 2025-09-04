@@ -73,7 +73,7 @@ stages:
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
     outs:
-      - data/Training
+      - data/encoded/lgbm_model.joblib
 
   analyse:
     cmd: >

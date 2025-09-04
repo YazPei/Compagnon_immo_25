@@ -21,9 +21,10 @@ stages:
 
     outs:
       - data/clean/df_sales_clean.csv
-
   preprocessing:
-    cmd: python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
+    cmd: >
+      mkdir -p data/processed/reports/figures &&
+      python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
     deps:
       - mlops/preprocessing_4/preprocessing.py
       - mlops/preprocessing_4/utils.py
@@ -60,17 +61,17 @@ stages:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
     outs:
-      - mlops/encoded/X_train.csv
-      - mlops/encoded/X_test.csv
-      - mlops/encoded/y_train.csv
-      - mlops/encoded/y_test.csv
+      - data/encoded/X_train.csv
+      - data/encoded/X_test.csv
+      - data/encoded/y_train.csv
+      - data/encoded/y_test.csv
 
   train_lgbm:
     cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
-      - mlops/encoded/X_train.csv
-      - mlops/encoded/y_train.csv
+      - data/encoded/X_train.csv
+      - data/encoded/y_train.csv
     outs:
       - mlops/encoded/lgbm_model.joblib
 
@@ -79,53 +80,55 @@ stages:
       python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
-      - mlops/encoded/X_test.csv
-      - mlops/encoded/y_test.csv
-      - mlops/encoded/lgbm_model.joblib
+      - data/encoded/X_test.csv
+      - data/encoded/y_test.csv
+      - data/encoded/lgbm_model.joblib
 
-  split:
+  splitst:
     cmd: >
-      python mlops/7_Serie_temporelle/1_SPLIT/load_split  
-      --input-path data/df_sales_clean_ST.csv
-      --output-folder data/split
-      --suffix ${ST_SUFFIX}
+      python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
     deps:
+      - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       - data/df_sales_clean_ST.csv
-      - mlops/time_series/load_split.py
+      - data/processed/contours-codes-postaux.geojson
+      - data/clean/taux_immo.xlsx
     outs:
-      - data/split/train_cluster_0.csv
-      - data/split/test_cluster_0.csv
+      - data/split
+      
+
 
 
   decompose:
     cmd: >
-      python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp
+      python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       --input-folder data/split
       --output-folder outputs/decomposition
       --suffix ${ST_SUFFIX}
     deps:
-      - mlops/time_series/seasonal_decomp.py
-      - data/split/train_cluster_0.csv
+      - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
+      - data/split/train_periodique_q12.csv
+
     outs:
       - outputs/decomposition/decomposition_additive_cluster_0.png
       - outputs/decomposition/decomposition_multiplicative_cluster_0.png
 
+
   train_sarimax:
     cmd: >
-      python mlops.7_Serie_temporelle/3_SARIMAX/sarimax_train
+      python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       --input-folder data/split
       --output-folder outputs/best
       --suffix ${ST_SUFFIX}
+      --corr-threshold 0.25
+      --top-k-exog 3
+      --max-exog-comb-size 0
+      --stop-on-first-valid
+      --max-models 300
     deps:
-      - mlops/time_series/sarimax_train.py
-      - data/split/train_cluster_0.csv
-      - data/split/test_cluster_0.csv
-      - data/split/train_cluster_1.csv
-      - data/split/test_cluster_1.csv
-      - data/split/train_cluster_3.csv
-      - data/split/test_cluster_3.csv
-      - data/split/train_cluster_2.csv
-      - data/split/test_cluster_2.csv      
+      - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
+      - data/split/train_periodique_q12.csv
+      
+      # attention faut il filtrer par cluster? verifier le script
     outs:
       - outputs/best/cluster_0_sarimax.pkl
       - outputs/best/forecast_cluster_0.csv
@@ -135,42 +138,35 @@ stages:
       - outputs/best/forecast_cluster_2.csv
       - outputs/best/cluster_3_sarimax.pkl
       - outputs/best/forecast_cluster_3.csv
+
          
   evaluate:
     cmd: >
       python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
-      --input-folder exports/st
-      --output-folder exports/st
-      --model-folder exports/st
-      --suffix ""
-
+      --input-folder data/split
+      --model-folder outputs/best
+      --output-folder outputs/evaluate
+      --suffix ${ST_SUFFIX}
     deps:
       - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
-      - exports/st/cluster_0_series.csv
-      - exports/st/cluster_1_series.csv
-      - exports/st/cluster_2_series.csv
-      - exports/st/cluster_3_series.csv
-      - exports/st/cluster_4_series.csv
-      - exports/st/train_cluster_0.csv
-      - exports/st/test_cluster_0.csv
-      - exports/st/train_cluster_1.csv
-      - exports/st/test_cluster_1.csv
-      - exports/st/train_cluster_2.csv
-      - exports/st/test_cluster_2.csv
-      - exports/st/train_cluster_3.csv
-      - exports/st/test_cluster_3.csv
-      - exports/st/train_cluster_4.csv
-      - exports/st/test_cluster_4.csv      
-      - exports/st/cluster_0_sarimax.pkl
-      - exports/st/cluster_1_sarimax.pkl
-      - exports/st/cluster_2_sarimax.pkl
-      - exports/st/cluster_3_sarimax.pkl
-      - exports/st/cluster_4_sarimax.pkl
+      # séries d'entrée (issues de split)
+      - data/split/train_cluster_0.csv
+      - data/split/test_cluster_0.csv
+      - data/split/train_cluster_1.csv
+      - data/split/test_cluster_1.csv
+      - data/split/train_cluster_2.csv
+      - data/split/test_cluster_2.csv
+      - data/split/train_cluster_3.csv
+      - data/split/test_cluster_3.csv
+      # modèles SARIMAX entraînés
+      - outputs/best/cluster_0_sarimax.pkl
+      - outputs/best/cluster_1_sarimax.pkl
+      - outputs/best/cluster_2_sarimax.pkl
+      - outputs/best/cluster_3_sarimax.pkl
     outs:
-      - exports/st/forecast_cluster_0.png
-      - exports/st/forecast_cluster_1.png
-      - exports/st/forecast_cluster_2.png
-      - exports/st/forecast_cluster_3.png
-      - exports/st/forecast_cluster_4.png
-      - exports/st/sarimax_global_eval.csv
+      - outputs/evaluate/forecast_cluster_0.png
+      - outputs/evaluate/forecast_cluster_1.png
+      - outputs/evaluate/forecast_cluster_2.png
+      - outputs/evaluate/forecast_cluster_3.png
+      - outputs/evaluate/sarimax_global_eval.csv
 

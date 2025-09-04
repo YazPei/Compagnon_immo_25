@@ -1,5 +1,6 @@
 [core]
     remote = origin
+    autostage = true
 [cache]
     dir = cache
 ['remote "origin"']

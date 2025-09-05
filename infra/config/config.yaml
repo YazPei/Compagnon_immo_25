@@ -1,0 +1,9 @@
+# Configuration globale
+endpoints:
+  api: "https://mon-api.exemple.com"
+  monitoring: "http://prometheus:9090"
+credentials:
+  database:
+    user: "mon_user"
+    password: "mon_password"
+  api_key: "votre_api_key"

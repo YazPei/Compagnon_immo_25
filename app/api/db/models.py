@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean
 from sqlalchemy.sql import func
-from .database import Base
+from app.api.db.database import Base
+
 
 class Property(Base):
     """Modèle pour les propriétés immobilières."""
@@ -21,6 +22,7 @@ class Property(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+
 class Estimation(Base):
     """Modèle pour les estimations utilisateur."""
     __tablename__ = "estimations"
@@ -36,6 +38,7 @@ class Estimation(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class APIKey(Base):
     """Modèle pour les clés API."""
     __tablename__ = "api_keys"
@@ -46,5 +49,3 @@ class APIKey(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_used = Column(DateTime(timezone=True))
-
-# SUPPRIMÉ : MLModel (géré par MLflow)

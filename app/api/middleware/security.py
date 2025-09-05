@@ -63,6 +63,7 @@ class RequestSizeMiddleware(BaseHTTPMiddleware):
         
         return await call_next(request)
 
+
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """Middleware de timeout"""
     
@@ -83,6 +84,7 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
                 }
             )
 
+
 class APIVersionMiddleware(BaseHTTPMiddleware):
     """Middleware pour ajouter des informations sur la version de l'API"""
     
@@ -93,6 +95,7 @@ class APIVersionMiddleware(BaseHTTPMiddleware):
         response.headers["X-Service-Name"] = settings.PROJECT_NAME
         
         return response
+
 
 class CORSSecurityMiddleware(BaseHTTPMiddleware):
     """Middleware CORS avec vérifications de sécurité"""
@@ -112,11 +115,13 @@ class CORSSecurityMiddleware(BaseHTTPMiddleware):
         
         return await call_next(request)
 
+
 # Fonctions utilitaires pour les middlewares individuels (legacy support)
 async def security_headers_middleware(request: Request, call_next: Callable) -> Response:
     """Version fonction du middleware de sécurité (deprecated)"""
     middleware = SecurityHeadersMiddleware(app=None)
     return await middleware.dispatch(request, call_next)
+
 
 async def request_logging_middleware(request: Request, call_next: Callable) -> Response:
     """Logger les requêtes et réponses"""
@@ -160,20 +165,24 @@ async def request_logging_middleware(request: Request, call_next: Callable) -> R
         )
         raise
 
+
 async def cors_security_middleware(request: Request, call_next: Callable) -> Response:
     """Version fonction du middleware CORS (deprecated)"""
     middleware = CORSSecurityMiddleware(app=None)
     return await middleware.dispatch(request, call_next)
+
 
 async def api_version_middleware(request: Request, call_next: Callable) -> Response:
     """Version fonction du middleware de version (deprecated)"""
     middleware = APIVersionMiddleware(app=None)
     return await middleware.dispatch(request, call_next)
 
+
 async def request_size_middleware(request: Request, call_next: Callable) -> Response:
     """Version fonction du middleware de taille (deprecated)"""
     middleware = RequestSizeMiddleware(app=None)
     return await middleware.dispatch(request, call_next)
+
 
 async def timeout_middleware(request: Request, call_next: Callable) -> Response:
     """Version fonction du middleware de timeout (deprecated)"""

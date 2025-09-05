@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import json
 import mlflow
 
-from . import models
+from app.api.db.models import Property, Estimation 
 from app.api.models.schemas import PropertyCreate, EstimationCreate
 
 class EstimationCRUD:

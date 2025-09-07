@@ -65,12 +65,13 @@ async def create_estimation(
 ):
     """Crée une nouvelle estimation immobilière."""
     try:
+        logger.info(f"🔄 Début de création d'estimation pour {estimation}")
         response = compute_estimation(estimation)
         save_estimation(db, response.metadata.id_estimation, estimation, response)
-        logger.info(f"Estimation créée: {response.metadata.id_estimation}")
+        logger.info(f"✅ Estimation créée: {response.metadata.id_estimation}")
         return response
     except Exception as e:
-        logger.error(f"Erreur création estimation: {str(e)}")
+        logger.error(f"❌ Erreur création estimation: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -90,11 +91,13 @@ async def get_estimation(
 ):
     """Récupère une estimation par son ID."""
     try:
+        logger.info(f"🔄 Récupération de l'estimation {id_estimation}")
         db_obj = get_estimation_by_id(db, id_estimation)
         if not db_obj:
+            logger.warning(f"⚠️ Estimation non trouvée: {id_estimation}")
             raise HTTPException(status_code=404, detail="Estimation non trouvée")
         
-        logger.info(f"Estimation récupérée: {id_estimation}")
+        logger.info(f"✅ Estimation récupérée: {id_estimation}")
         return EstimationResponse(
             estimation=db_obj.estimation,
             marche=db_obj.marche,
@@ -103,7 +106,7 @@ async def get_estimation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erreur récupération estimation {id_estimation}: {str(e)}")
+        logger.error(f"❌ Erreur récupération estimation {id_estimation}: {str(e)}")
         raise HTTPException(status_code=500, detail="Erreur interne")
 
 
@@ -121,7 +124,7 @@ async def questionnaire_estimation(
     Enrichissement automatique avec les features du CSV.
     """
     try:
-        logger.info(f"Début estimation questionnaire pour CP: {data.code_postal}")
+        logger.info(f"🔄 Début estimation questionnaire pour CP: {data.code_postal}")
         
         # Enrichissement automatique des features
         enriched = enrich_features_from_code_postal(data.code_postal)
@@ -157,20 +160,20 @@ async def questionnaire_estimation(
         # Préparation de la requête
         req = _build_estimation_request(data, features)
         
-        logger.info("Appel à estimate_property")
+        logger.info("🔄 Appel à estimate_property")
         return estimate_property(req, enriched_features=features, debug_info={
             "enriched_before": debug_enriched_before,
             "selected_features": list(features.keys())
         })
         
     except Exception as e:
-        logger.error(f"Erreur questionnaire estimation: {str(e)}")
+        logger.error(f"❌ Erreur questionnaire estimation: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Fonctions utilitaires pour enrichir et préparer les données
 def _handle_coordinates(data: QuestionnaireRequest, enriched: dict) -> dict:
     """Gère la logique des coordonnées géographiques."""
-    # 1. Priorité aux coordonnées du payload
     lat_payload = getattr(data, 'latitude', None)
     lon_payload = getattr(data, 'longitude', None)
     
@@ -179,17 +182,10 @@ def _handle_coordinates(data: QuestionnaireRequest, enriched: dict) -> dict:
     if lon_payload is not None:
         enriched['mapCoordonneesLongitude'] = lon_payload
 
-    # 2. Sinon, coordonnées du CSV d'enrichissement
     if enriched.get('mapCoordonneesLatitude') in [None, '', 'nan', 'NaN', np.nan]:
-        enriched['mapCoordonneesLatitude'] = enriched.get('y', None)
+        enriched['mapCoordonneesLatitude'] = enriched.get('y', 0.0)
     if enriched.get('mapCoordonneesLongitude') in [None, '', 'nan', 'NaN', np.nan]:
-        enriched['mapCoordonneesLongitude'] = enriched.get('x', None)
-
-    # 3. Fallback explicite à 0
-    if enriched.get('mapCoordonneesLatitude') in [None, '', 'nan', 'NaN', np.nan]:
-        enriched['mapCoordonneesLatitude'] = 0.0
-    if enriched.get('mapCoordonneesLongitude') in [None, '', 'nan', 'NaN', np.nan]:
-        enriched['mapCoordonneesLongitude'] = 0.0
+        enriched['mapCoordonneesLongitude'] = enriched.get('x', 0.0)
         
     return enriched
 
@@ -202,7 +198,6 @@ def _get_ips_primaire(data: QuestionnaireRequest, enriched: dict) -> float:
     ips_val = enrich_ips_primaire(data.code_postal, lat, lon)
     
     if not ips_val:
-        # Fallback : moyenne IPS
         try:
             csv_path = _get_csv_path()
             if os.path.exists(csv_path):
@@ -212,7 +207,7 @@ def _get_ips_primaire(data: QuestionnaireRequest, enriched: dict) -> float:
             else:
                 ips_val = 0.0
         except Exception as e:
-            logger.warning(f"Erreur calcul moyenne IPS: {str(e)}")
+            logger.warning(f"⚠️ Erreur calcul moyenne IPS: {str(e)}")
             ips_val = 0.0
             
     return ips_val
@@ -224,25 +219,22 @@ def _encode_date_features(enriched: dict) -> dict:
         enriched_df = pd.DataFrame([enriched])
         enriched_df["date"] = pd.to_datetime(enriched_df["date"])
         
-        # Extraction des composantes temporelles
         enriched_df["month"] = enriched_df["date"].dt.month
         enriched_df["dow"] = enriched_df["date"].dt.weekday
         enriched_df["hour"] = enriched_df["date"].dt.hour
         
-        # Encodage cyclique
         for col, period in [("month", 12), ("dow", 7), ("hour", 24)]:
             enriched_df[f"{col}_sin"] = np.sin(2 * np.pi * enriched_df[col] / period)
             enriched_df[f"{col}_cos"] = np.cos(2 * np.pi * enriched_df[col] / period)
             enriched_df.drop(columns=[col], inplace=True)
         
-        # Ajout timestamp UNIX
         enriched_df['date'] = enriched_df['date'].astype('int64') // 10**9
         enriched_df.drop(columns=["date"], inplace=True, errors='ignore')
         
         return enriched_df.iloc[0].to_dict()
         
     except Exception as e:
-        logger.error(f"Erreur encodage date: {str(e)}")
+        logger.error(f"⚠️ Erreur encodage date: {str(e)}")
         return enriched
 
 
@@ -261,8 +253,6 @@ def _build_pipeline_features(data: QuestionnaireRequest, enriched: dict) -> dict
     ]
     
     features = {}
-    
-    # Les valeurs du questionnaire priment sur l'enrichissement
     for feat in pipeline_features:
         val = getattr(data, feat, None)
         if val is not None:
@@ -273,13 +263,11 @@ def _build_pipeline_features(data: QuestionnaireRequest, enriched: dict) -> dict
                 val = 0
             features[feat] = val
 
-    # Correction du type pour dpeL (ordinal)
     dpeL_mapping = {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}
     if 'dpeL' in features:
         val = str(features['dpeL']).strip().upper()
         features['dpeL'] = dpeL_mapping.get(val, 0)
 
-    # Nettoyage final
     for k in features:
         if features[k] == '':
             features[k] = 0
@@ -289,7 +277,6 @@ def _build_pipeline_features(data: QuestionnaireRequest, enriched: dict) -> dict
 
 def _build_estimation_request(data: QuestionnaireRequest, features: dict) -> EstimationRequest:
     """Construit la requête d'estimation."""
-    # Gestion des valeurs par défaut pour exposition et etat_general
     exposition_value = features.get('exposition', 'NC')
     if not exposition_value or str(exposition_value).lower() == 'nan':
         exposition_value = 'NC'

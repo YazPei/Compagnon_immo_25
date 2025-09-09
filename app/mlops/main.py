@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Orchestrateur Compagnon Immo")
 
+
 class PipelineRequest(BaseModel):
     input_path: str
     output_path: str

@@ -1,9 +1,10 @@
-#utils
+# utils
 from fastapi import FastAPI
 from pydantic import BaseModel
 from subprocess import run
 
 app = FastAPI()
+
 
 class utilsParams(BaseModel):
     input_path: str

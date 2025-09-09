@@ -1,6 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.api.main import app
+from unittest.mock import AsyncMock, patch
+from app.api.utils.dependency_checker import check_database, check_redis, check_mlflow
 
 client = TestClient(app)
 
@@ -49,3 +51,27 @@ class TestHealthEndpoints:
         assert response.elapsed.total_seconds() < 1.0, (
             f"Temps de réponse trop long : {response.elapsed.total_seconds()}s"
         )
+
+
+@pytest.mark.asyncio
+async def test_check_database():
+    with patch("app.db.database.engine.connect") as mock_connect:
+        mock_connect.return_value.__enter__.return_value.execute.return_value.fetchone.return_value = 1
+        result = await check_database()
+        assert result["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_check_redis():
+    with patch("redis.from_url") as mock_redis:
+        mock_redis.return_value.ping.return_value = True
+        result = await check_redis("redis://localhost")
+        assert result["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_check_mlflow():
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value.status_code = 200
+        result = await check_mlflow("http://localhost:5000")
+        assert result["status"] == "healthy"

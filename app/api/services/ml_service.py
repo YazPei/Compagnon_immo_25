@@ -1,29 +1,38 @@
 """
-Service pour gérer les modèles de machine learning.
+Service ML utilisant les métriques centralisées.
 """
+
+import time
+import logging
 import os
 import glob
 import joblib
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import logging
 import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
 import pickle
 
+from app.api.monitoring.prometheus_registry import (
+    metrics_collector,
+    MODELS_LOADED,
+    MODEL_LOAD_TIME
+)
 from app.api.services.dvc_connector import dvc_service
 
 logger = logging.getLogger(__name__)
 
 
 class MLService:
-    """Service ML avec intégration DVC complète."""
+    """Service de Machine Learning avec métriques intégrées."""
     
     def __init__(self):
         self.models = {}
+        self.model_versions = {}
         self.preprocessors = {}
+        self.models_path = Path(__file__).parent.parent / "models"
         self.is_loaded = False
         self.last_sync = None
         self.load_errors = []
@@ -252,6 +261,138 @@ class MLService:
             "is_loaded": self.is_loaded,
             "last_sync": self.last_sync.isoformat() if self.last_sync else None
         }
+    
+    def load_model(self, model_name: str, version: str = "latest") -> bool:
+        """
+        Charge un modèle avec suivi des métriques.
+        
+        Args:
+            model_name (str): Nom du modèle.
+            version (str): Version du modèle.
+            
+        Returns:
+            bool: True si chargement réussi.
+        """
+        start_time = time.time()
+        
+        try:
+            # Simuler le chargement du modèle
+            model_path = self.models_path / f"{model_name}_{version}.joblib"
+            
+            if not model_path.exists():
+                logger.error(f"Modèle non trouvé: {model_path}")
+                metrics_collector.record_model_prediction(
+                    model_name=model_name,
+                    model_version=version,
+                    duration=time.time() - start_time,
+                    success=False
+                )
+                return False
+            
+            # Charger le modèle (simulé)
+            self.models[model_name] = {
+                "version": version,
+                "path": str(model_path),
+                "loaded_at": time.time()
+            }
+            self.model_versions[model_name] = version
+            
+            # Métriques de chargement
+            load_duration = time.time() - start_time
+            MODEL_LOAD_TIME.labels(
+                model_name=model_name,
+                model_version=version
+            ).set(load_duration)
+            
+            # Mettre à jour le nombre de modèles chargés
+            MODELS_LOADED.set(len(self.models))
+            
+            logger.info(f"Modèle {model_name} v{version} chargé en {load_duration:.2f}s")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Erreur lors du chargement du modèle {model_name}: {e}")
+            metrics_collector.record_model_prediction(
+                model_name=model_name,
+                model_version=version,
+                duration=time.time() - start_time,
+                success=False
+            )
+            return False
+    
+    def predict(self, model_name: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Effectue une prédiction avec suivi des métriques.
+        
+        Args:
+            model_name (str): Nom du modèle.
+            data (dict): Données pour la prédiction.
+            
+        Returns:
+            dict: Résultat de la prédiction ou None si erreur.
+        """
+        start_time = time.time()
+        
+        if model_name not in self.models:
+            logger.error(f"Modèle {model_name} non chargé")
+            metrics_collector.record_model_prediction(
+                model_name=model_name,
+                model_version="unknown",
+                duration=time.time() - start_time,
+                success=False
+            )
+            return None
+        
+        try:
+            model_info = self.models[model_name]
+            model_version = model_info["version"]
+            
+            # Simuler la prédiction
+            prediction_result = {
+                "prediction": 250000.0,  # Valeur simulée
+                "confidence": 0.85,
+                "model_name": model_name,
+                "model_version": model_version
+            }
+            
+            # Enregistrer les métriques de succès
+            metrics_collector.record_model_prediction(
+                model_name=model_name,
+                model_version=model_version,
+                duration=time.time() - start_time,
+                success=True
+            )
+            
+            return prediction_result
+        
+        except Exception as e:
+            logger.error(f"Erreur lors de la prédiction avec {model_name}: {e}")
+            metrics_collector.record_model_prediction(
+                model_name=model_name,
+                model_version=self.model_versions.get(model_name, "unknown"),
+                duration=time.time() - start_time,
+                success=False
+            )
+            return None
+    
+    def get_models_status(self) -> Dict[str, Any]:
+        """
+        Retourne le statut des modèles chargés.
+        
+        Returns:
+            dict: Statut des modèles.
+        """
+        return {
+            "models_loaded": len(self.models),
+            "models": {
+                name: {
+                    "version": info["version"],
+                    "loaded_at": info["loaded_at"]
+                }
+                for name, info in self.models.items()
+            }
+        }
 
-# Instance globale du service
+
+# Instance globale du service ML
 ml_service = MLService()

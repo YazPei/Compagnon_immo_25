@@ -1,24 +1,30 @@
-"""Module pour charger les modèles."""
-import numpy as np
+"""
+Module pour charger les modèles et les préprocesseurs.
+"""
 
-def get_model():
-    """Retourne un modèle mock pour les tests."""
-    class MockModel:
-        def predict(self, X):
-            # S'assurer que X est un array numpy
-            if not isinstance(X, np.ndarray):
-                X = np.array(X)
-            
-            # Retourner une prédiction basée sur la surface (première feature)
-            if X.ndim == 1:
-                surface = X[0] if len(X) > 0 else 50
-            else:
-                surface = X[0, 0] if X.shape[1] > 0 else 50
-            
-            # Prix basé sur la surface * 5000€/m² (mock)
-            return np.array([float(surface * 5000)])
-    
-    return MockModel()
+import os
+import joblib
+import numpy as np
+from typing import Optional
+
+def get_model(version: Optional[str] = None):
+    """
+    Charge un modèle spécifique en fonction de la version.
+
+    Args:
+        version (str, optional): Version du modèle à charger. Si None, charge la dernière version.
+
+    Returns:
+        Modèle chargé.
+    """
+    model_dir = os.getenv("MODEL_DIR", "models/")
+    version = version or "latest"
+    model_path = os.path.join(model_dir, f"model_{version}.joblib")
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Modèle introuvable : {model_path}")
+
+    return joblib.load(model_path)
 
 def get_preprocessor():
     """Retourne un préprocesseur mock pour les tests."""
@@ -49,8 +55,16 @@ def get_preprocessor():
     
     return MockPreprocessor()
 
-def get_model_metadata():
-    """Retourne les métadonnées du modèle."""
+def get_model_metadata(version: Optional[str] = None):
+    """
+    Retourne les métadonnées du modèle.
+
+    Args:
+        version (str, optional): Version du modèle. Si None, retourne les métadonnées de la dernière version.
+
+    Returns:
+        dict: Métadonnées du modèle.
+    """
     return {
         "feature_names": [
             "surface", "nb_pieces", "nb_chambres", "etage",
@@ -59,6 +73,6 @@ def get_model_metadata():
             "type_vente", "type_appartement", "type_maison",
             "type_studio", "type_loft"
         ],
-        "version": "1.0.0",
+        "version": version or "latest",
         "model_type": "RandomForestRegressor"
     }

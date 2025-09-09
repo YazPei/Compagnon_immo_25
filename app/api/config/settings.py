@@ -1,104 +1,90 @@
-from pydantic_settings import BaseSettings
-from typing import Optional, List
+"""
+Configuration de l'application adaptée pour Kubernetes.
+"""
+
 import os
 from pathlib import Path
+from typing import Optional
+from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
-    """Configuration de l'application."""
+    """Configuration de l'application avec support Kubernetes."""
     
-    # Application
-    APP_NAME: str = "Compagnon Immo API"
-    APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
-    ENVIRONMENT: str = "development"
+    # Configuration de base
+    PROJECT_NAME: str = Field(default="Compagnon Immobilier API", env="PROJECT_NAME")
+    VERSION: str = Field(default="1.0.0", env="APP_VERSION")
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
     
-    # API
-    API_PREFIX: str = "/api/v1"
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Compagnon Immobilier API"
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
-    API_WORKERS: int = 1
+    # Configuration serveur
+    API_HOST: str = Field(default="0.0.0.0", env="API_HOST")  # Bind sur toutes interfaces pour K8s
+    API_PORT: int = Field(default=8000, env="API_PORT")
     
-    # Sécurité
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "compagnon-immo-secret-2024")
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "compagnon-immo-jwt-secret-2024")
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    API_KEYS: List[str] = ["dev-api-key", "test-api-key"]
+    # Mode debug basé sur l'environnement
+    DEBUG: bool = Field(default=False, env="DEBUG")
     
-    # Base de données
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./data/compagnon_immo.db")
-    DATABASE_ECHO: bool = False
+    @property
+    def is_development(self) -> bool:
+        """Vérifie si on est en mode développement."""
+        return self.ENVIRONMENT.lower() == "development"
     
-    # MLflow et DVC - CORRIGÉ
-    MLFLOW_TRACKING_URI: str = os.getenv(
-        "MLFLOW_TRACKING_URI", 
-        "https://dagshub.com/YazPei/compagnon_immo.mlflow"
+    @property
+    def is_production(self) -> bool:
+        """Vérifie si on est en mode production."""
+        return self.ENVIRONMENT.lower() == "production"
+    
+    # Configuration base de données
+    DATABASE_URL: str = Field(
+        default="sqlite:///./app.db",
+        env="DATABASE_URL",
+        description="URL de connexion à la base de données"
     )
-    MLFLOW_EXPERIMENT_NAME: str = "compagnon-immo-production"
-    DVC_REMOTE_URL: str = os.getenv("DVC_REMOTE_URL", "")
-    DAGSHUB_TOKEN: str = os.getenv("DAGSHUB_TOKEN", "")
-    DAGSHUB_USERNAME: str = os.getenv("DAGSHUB_USERNAME", "YazPei")
     
-    # Redis Cache
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CACHE_TTL: int = 3600
+    # Configuration Redis pour cache distribué
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379/0",
+        env="REDIS_URL",
+        description="URL Redis pour le cache distribué"
+    )
     
-    # CORS
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:3000"
-    ]
-    CORS_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE"]
-    CORS_HEADERS: List[str] = ["*"]
+    # Configuration MLflow
+    MLFLOW_TRACKING_URI: str = Field(
+        default="http://localhost:5000",
+        env="MLFLOW_TRACKING_URI",
+        description="URI du serveur MLflow"
+    )
     
-    # Rate Limiting
-    RATE_LIMIT_REQUESTS: int = 100
-    RATE_LIMIT_WINDOW: int = 60
+    # Configuration des modèles pour stockage distribué
+    MODEL_REGISTRY_URL: Optional[str] = Field(
+        default=None,
+        env="MODEL_REGISTRY_URL",
+        description="URL du registre de modèles (S3, GCS, etc.)"
+    )
     
-    # Monitoring
-    PROMETHEUS_ENABLED: bool = os.getenv("PROMETHEUS_ENABLED", "false").lower() == "true"
+    # Configuration logging
+    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
+    LOG_FORMAT: str = Field(default="json", env="LOG_FORMAT")  # json pour K8s
     
-    # Logging
-    LOG_LEVEL: str = "INFO"
-    LOG_FILE: str = "logs/api.log"
+    # Configuration workers (pour production)
+    WORKERS: int = Field(default=1, env="WORKERS")
     
-    # Modèles et données
-    MODELS_PATH: str = "app/api/models"
-    DATA_PATH: str = "data"
-    CSV_SALES_PATH: str = "df_sales_clean_with_cluster.csv"
-    MODEL_CACHE_SIZE: int = 10
+    # Configuration timeouts
+    REQUEST_TIMEOUT: int = Field(default=30, env="REQUEST_TIMEOUT")
     
-    # Limites
-    REQUEST_TIMEOUT: int = 30
-    MAX_REQUEST_SIZE: int = 10 * 1024 * 1024  # 10MB
+    # Configuration health checks
+    HEALTH_CHECK_TIMEOUT: int = Field(default=5, env="HEALTH_CHECK_TIMEOUT")
+    
+    # Configuration métriques
+    METRICS_ENABLED: bool = Field(default=True, env="METRICS_ENABLED")
+    METRICS_PORT: int = Field(default=9090, env="METRICS_PORT")
+    
+    # Configuration sécurité
+    API_KEY: Optional[str] = Field(default=None, env="API_KEY")
+    CORS_ORIGINS: str = Field(default="*", env="CORS_ORIGINS")
     
     class Config:
         env_file = ".env"
-        env_file_encoding = "utf-8"
         case_sensitive = True
 
 
-# Instance globale
 settings = Settings()
-
-
-# Validation des chemins
-def validate_paths():
-    """Valide et crée les chemins nécessaires."""
-    paths_to_create = [
-        Path(settings.DATA_PATH),
-        Path(settings.MODELS_PATH),
-        Path("logs"),
-        Path("cache")
-    ]
-    
-    for path in paths_to_create:
-        path.mkdir(parents=True, exist_ok=True)
-
-
-# Auto-validation au import
-validate_paths()

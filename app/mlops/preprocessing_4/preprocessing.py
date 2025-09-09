@@ -1,25 +1,58 @@
-#from preprocessing_4.utils import (
-#    annee_const,
-#    clean_classe,
-#    clean_exposition,
-#    extract_principal,
-#    get_numeric_cols,
-#    calculate_bounds,
-#    compute_medians,
-#    mark_outliers,
-#    clean_outliers,
-#    log_figure,
-#)
+"""
+Pipeline de prétraitement des données avec suivi MLflow.
+"""
+
+import os
+import pandas as pd
+import mlflow
+from pathlib import Path
+from datetime import datetime
+
+run_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def run_preprocessing_pipeline(input_path: str, output_path: str):
+    """
+    Exécute le pipeline de prétraitement des données.
+
+    Args:
+        input_path (str): Chemin vers le fichier d'entrée.
+        output_path (str): Chemin vers le fichier de sortie.
+    """
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"))
+    mlflow.set_experiment("Preprocessing Données Immo")
+
+    with mlflow.start_run(run_name="preprocessing_pipeline"):
+        mlflow.set_tag("phase", "preprocessing")
+        mlflow.set_tag("version", "v1.0")
+
+        # Charger les données
+        df = pd.read_csv(input_path, sep=";")
+        mlflow.log_metric("initial_row_count", len(df))
+
+        # Supprimer les doublons
+        df.drop_duplicates(inplace=True)
+        mlflow.log_metric("row_count_after_deduplication", len(df))
+
+        # Sauvegarder les données nettoyées
+        output_file = Path(output_path) / f"cleaned_data_{run_suffix}.csv"
+        df.to_csv(output_file, index=False)
+        mlflow.log_artifact(str(output_file), artifact_path="cleaned_data")
+
+        print(f"Données nettoyées sauvegardées dans : {output_file}")
+
 
 # === Imports standards
 import os
 import sys
 import warnings
+
 warnings.filterwarnings("ignore")
 
 # === Imports compatibles Docker (headless / no-GUI)
 import matplotlib
-matplotlib.use('Agg')  # Empêche l'ouverture d'une fenêtre GUI, nécessaire en Docker
+
+matplotlib.use("Agg")  # Empêche l'ouverture d'une fenêtre GUI, nécessaire en Docker
 
 import pandas as pd
 import click
@@ -27,13 +60,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import mlflow
 
-from utils import *  
-
+from utils import *
 
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === BEGIN PIPELINE ===
-    file_path = os.path.join(input_path, "df_sales_clean.csv") 
+    file_path = os.path.join(input_path, "df_sales_clean.csv")
     df = pd.read_csv(file_path, sep=";", dtype={"INSEE_COM": str})
     run_suffix = os.getenv("RUN_MODE", "default")
     GROUP_COL = "INSEE_COM"
@@ -42,7 +74,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     df.drop_duplicates()
     print("Nombres de lignes en double après suppression", df.duplicated().sum())
     print("Shape du Dataset après élimination des doublons : ", df.shape)
-    
+
     ### Proportions des NANs
     missing_data_percentage_sales = df.isna().sum() * 100 / len(df)
 
@@ -59,7 +91,6 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     missing_value_percentage_sales.index = range(
         1, len(missing_value_percentage_sales) + 1
     )
-
 
     ### visualisation des doublons
     # 📊 Création de la figure
@@ -444,38 +475,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     #### Imputation par mediane par code insee
     # SPLIT ET PARAMÈTRES
 
-    # SPLIT
-
-    train_data, test_data = train_test_split(df_3, test_size=0.2, random_state=42)
-
-    #  Constantes et paramètres ─────────────
-    LOWER_PERC = 0.001  # 1er dixième de percentile
-    UPPER_PERC = 0.999  # dernier dixième de percentile
-    GROUP_COL = "INSEE_COM"  # colonne de regroupement
-    TARGET_COL = "prix_m2_vente"  # variable à prédire
-    OUTLIER_TAG = -999  # valeur pour différencier les outliers
-
-    # Application des fonctions de nettoyage ----------------
-    ## Bounds
-    bounds = calculate_bounds(train_data, numeric_cols, LOWER_PERC, UPPER_PERC)
-
-    ## Médianes
-    group_medians, global_medians = compute_medians(train_data, bounds, GROUP_COL)
-
-    ## Marquage des outliers
-    train_marked = mark_outliers(train_data, bounds)
-    test_marked = mark_outliers(test_data, bounds)
-
-    ### masque de conservation
-    mask_train_keep = train_marked[f"{TARGET_COL}_outlier_flag"] == 0
-    mask_test_keep = test_marked[f"{TARGET_COL}_outlier_flag"] == 0
-
-    ### application du filtre et suppression des outliers de la target
-    train_marked = train_marked[mask_train_keep]
-    test_marked = test_marked[mask_test_keep]
-
-    # Calcul du nombre d'outliers identifiés par colonne avant leur remplacement
-    outlier_counts = {col: train_marked[f"{col}_outlier_flag"].sum() for col in bounds}
+    # SPL
     
     mlflow.log_dict(outlier_counts, "metrics/outlier_counts.json")
 

@@ -121,11 +121,12 @@ mlflow-up:
 		--network ml_net \
 		-v $(PWD)/mlruns:/mlflow/mlruns \
 		-p 5050:5050 \
-		-e MLFLOW_TRACKING_URI=http://0.0.0.0:5050 \
 		$(MLFLOW_IMAGE) \
 		mlflow server --host 0.0.0.0 --port 5050 \
-		          --backend-store-uri sqlite:///mlflow.db \
-		          --default-artifact-root /mlflow/mlruns
+		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
+		  --default-artifact-root /mlflow/mlruns
+
+
 #@ketsia testé
 mlflow-down:
 	docker stop compagnon_immo-mlflow || true

@@ -20,6 +20,9 @@ from prophet import Prophet
 from sklearn.preprocessing import StandardScaler
 import joblib
 
+
+mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050"))
+
 # ───────────────────────── Warnings ─────────────────────────
 warnings.filterwarnings("ignore", category=ValueWarning,
                         message="No frequency information was provided.*")

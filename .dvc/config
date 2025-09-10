@@ -1,7 +1,9 @@
 [core]
-    remote = origin
+    remote = dagshub
     autostage = true
 [cache]
     dir = cache
 ['remote "origin"']
     url = https://dagshub.com/YazPei/compagnon_immo.dvc.git
+['remote "dagshub"']
+    url = https://dagshub.com/YazPei/Compagnon_immo.dvc

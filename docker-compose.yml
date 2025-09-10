@@ -21,11 +21,9 @@ services:
       "--port","5000"
     ]
     environment:
-      # 1 seul worker + timeouts généreux pour éviter le kill
       GUNICORN_CMD_ARGS: "--workers 1 --timeout 180 --graceful-timeout 180 --log-level info"
     networks:
       - ml_net
-    # enlève le healthcheck pour l’instant (on le remettra après)
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000'); sys.exit(0)\" || exit 1"]
       interval: 20s
@@ -284,30 +282,23 @@ services:
     build:
       context: .
       dockerfile: mlops/2_dvc/Dockerfile.dvc
-    user: "${UID:-1000}:${GID:-1000}"
+#    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
       - ~/.dvc:/app/.dvc
     working_dir: /app
     tty: true
     stdin_open: true
-    command: ["bash", "-lc", "sh"]
+    command: ["sh", "-lc", "./run_dvc.sh"]
     depends_on:
       mlflow:
-        condition: service_healthy
+        condition: service_started  
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     networks:
       - ml_net
 
-  # --------- Scripts Factices ----------
-  regression_script:
-    image: busybox
-    command: ["/bin/sh", "-c", "echo 'Présence logique de regression/run_all.sh'"]
 
-  st_script:
-    image: busybox
-    command: ["/bin/sh", "-c", "echo 'Présence logique de Serie_temporelle/run_all_st.sh'"]
 
 networks:
   ml_net:

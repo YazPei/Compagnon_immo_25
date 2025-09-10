@@ -12,7 +12,7 @@ PY = "python"
 
 MLFLOW_URI = Variable.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 ST_SUFFIX = Variable.get("ST_SUFFIX", "")
-default_args = {"retries": 2, "retry_delay": pendulum.duration(minutes=10)}
+default_args = {"retries": 4, "retry_delay": pendulum.duration(minutes=10)}
 
 def bash_task(task_id, cmd, timeout_min=None, env_extra=None, cwd=REPO):
 env = {"MLFLOW_TRACKING_URI": MLFLOW_URI, "RUN_MODE": "full", "ST_SUFFIX": ST_SUFFIX}

@@ -1,4 +1,4 @@
-FROM compagnon_immo-run
+FROM python:3.10-slim
 WORKDIR /mlflow
 # Installation MLflow
 RUN pip install --no-cache-dir mlflow==2.12.1

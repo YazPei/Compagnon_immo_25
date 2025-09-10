@@ -1,4 +1,4 @@
-FROM compagnon_immo-split-st
+FROM python:3.10-slim
 WORKDIR /app
 
 

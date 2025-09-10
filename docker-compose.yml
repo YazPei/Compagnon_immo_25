@@ -12,18 +12,19 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/mlflow
-    command: >-
-      mlflow server
-      --backend-store-uri sqlite:////mlflow/mlflow.db
-      --default-artifact-root /mlflow
-      --host 0.0.0.0
-      --port 5000
+      - ./mlruns:/mlflow/mlruns
+    command: [
+      "mlflow" , "server",
+      "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
+      "--default-artifact-root", "/mlflow/mlruns",
+      "--host", "0.0.0.0",
+      "--port", "5000"
+    ]
     networks:
       - ml_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
-      interval: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 20s
       timeout: 5s
       retries: 5
 
@@ -218,4 +219,91 @@ services:
     build:
       context: .
       dockerfile: mlops/7_Serie_temporelle/3_SARIMAX/Dockerfile.sarimax.ST
-    user: "${UID:-1000}:${GID
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./exports:/app/exports
+      - ./mlops:/app/mlops
+    command: >-
+      python /app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py
+      --input-folder /app/exports/st
+      --output-folder /app/exports/st
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX:-q12}
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    networks:
+      - ml_net
+    profiles: ["series"]
+
+  evaluate:
+    build:
+      context: .
+      dockerfile: mlops/7_Serie_temporelle/4_EVALUATE/Dockerfile.evaluate.ST
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./exports:/app/exports
+      - ./mlops:/app/mlops
+      - ./data:/app/data
+    entrypoint: ["python", "/app/mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"]
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - RUN_MODE=full
+      - ST_SUFFIX=${ST_SUFFIX:-q12}
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    networks:
+      - ml_net
+    profiles: ["series"]
+
+  series_pipeline:
+    build:
+      context: .
+      dockerfile: mlops/7_Serie_temporelle/Dockerfile.series_pipeline
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./mlops:/app/mlops
+      - ./data:/app/data
+      - ./exports:/app/exports
+    command: ["python", "/app/mlops/7_Serie_temporelle/pipeline.py", "--help"]
+    networks:
+      - ml_net
+    profiles: ["series"]
+
+  # --------- DVC ----------
+  dvc-runner:
+    build:
+      context: .
+      dockerfile: mlops/2_dvc/Dockerfile.dvc
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - .:/app
+      - ~/.dvc/config.local:/app/.dvc/config.local:ro
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: ["bash", "-lc", "sh"]
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    networks:
+      - ml_net
+
+  # --------- Scripts Factices ----------
+  regression_script:
+    image: busybox
+    command: ["/bin/sh", "-c", "echo 'Présence logique de regression/run_all.sh'"]
+
+  st_script:
+    image: busybox
+    command: ["/bin/sh", "-c", "echo 'Présence logique de Serie_temporelle/run_all_st.sh'"]
+
+networks:
+  ml_net:
+    driver: bridge
+

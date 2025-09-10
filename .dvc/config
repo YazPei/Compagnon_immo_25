@@ -4,4 +4,5 @@
 [cache]
     dir = cache
 ['remote "origin"']
-    url = https://dagshub.com/YazPei/compagnon_immo.dvc.git
+    url = https://dagshub.com/YazPei/compagnon_immo.dvc
+    auth = basic

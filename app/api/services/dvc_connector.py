@@ -15,13 +15,22 @@ class DVCConnector:
         Initialise le connecteur DVC.
         :param repo_path: Chemin vers le répertoire contenant le fichier dvc.yaml.
         """
-        # Définir le chemin du dépôt DVC
-        self.repo_path = Path(repo_path) if repo_path else Path("/app")  # Par défaut pour Docker
-        # En local, vous pouvez utiliser :
-        # self.repo_path = Path("/home/ketsiapedro/Bureau/MLE/Compagnon_immo")
-        
-        self.models_dir = self.repo_path / "models"
+        # Détection automatique du chemin selon l'environnement
+        if repo_path:
+            self.repo_path = Path(repo_path)
+        elif os.getenv("KUBERNETES_NAMESPACE"):
+            self.repo_path = Path("/app")
+        elif os.path.exists("/home/ketsiapedro/Bureau/MLE/Compagnon_immo"):
+            self.repo_path = Path("/home/ketsiapedro/Bureau/MLE/Compagnon_immo")
+        else:
+            self.repo_path = Path.cwd()
+            
+        self.models_dir = self.repo_path / "app/api/models"
         self.dvc_file = self.repo_path / "dvc.yaml"
+        
+        # Vérification de l'existence des fichiers critiques
+        if not self.dvc_file.exists():
+            logger.warning(f"⚠️ Fichier DVC non trouvé : {self.dvc_file}")
 
     def is_dvc_available(self) -> bool:
         """Vérifie si DVC est installé et accessible."""

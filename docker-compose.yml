@@ -14,19 +14,25 @@ services:
     volumes:
       - ./mlruns:/mlflow/mlruns
     command: [
-      "mlflow" , "server",
-      "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
-      "--default-artifact-root", "/mlflow/mlruns",
-      "--host", "0.0.0.0",
-      "--port", "5000"
+      "mlflow","server",
+      "--backend-store-uri","sqlite:///mlflow.db",
+      "--default-artifact-root","/mlflow/mlruns",
+      "--host","0.0.0.0",
+      "--port","5000"
     ]
+    environment:
+      # 1 seul worker + timeouts généreux pour éviter le kill
+      GUNICORN_CMD_ARGS: "--workers 1 --timeout 180 --graceful-timeout 180 --log-level info"
     networks:
       - ml_net
+    # enlève le healthcheck pour l’instant (on le remettra après)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000'); sys.exit(0)\" || exit 1"]
       interval: 20s
       timeout: 5s
-      retries: 5
+      retries: 15
+    restart: unless-stopped
+
 
   # --------- Pipeline de lancement ----------
   run_full:
@@ -281,7 +287,7 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
-      - ~/.dvc/config.local:/app/.dvc/config.local:ro
+      - ~/.dvc:/app/.dvc
     working_dir: /app
     tty: true
     stdin_open: true

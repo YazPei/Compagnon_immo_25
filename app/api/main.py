@@ -24,16 +24,11 @@ except ImportError as e:
 
 # Imports conditionnels pour éviter les erreurs
 try:
-    from app.api.routes import main as main_routes
     from app.api.routes import estimation, health, metrics
 except ImportError as e:
-    logging.warning(f"Routes manquantes: {e}")
-    # Créer des routers vides temporaires
+    logging.warning(f"Routes non disponibles : {e}")
     from fastapi import APIRouter
-    main_routes = APIRouter()
-    estimation = APIRouter()
-    health = APIRouter()
-    metrics = APIRouter()
+    estimation, health, metrics = APIRouter(), APIRouter(), APIRouter()
 
 try:
     from app.api.middleware.monitoring import PrometheusMiddleware
@@ -124,13 +119,10 @@ async def _initialize_services():
     
     # Chargement des modèles ML
     try:
-        from app.api.services import ml_service  # Instance, pas classe
-        models_loaded = await ml_service.load_models_from_dvc()
-        services_status['ml_models'] = models_loaded.get("models_loaded", 0) > 0
-        logger.info(f"Modèles ML chargés: {models_loaded.get('models_loaded', 0)}")
-    except Exception as e:
-        logger.warning(f"Modèles ML non disponibles: {e}")
-        services_status['ml_models'] = False
+        from app.api.services import ml_service  # Instance globale
+    except ImportError as e:
+        logging.warning(f"Service ML non disponible : {e}")
+        ml_service = None
     
     # Stockage du statut pour les health checks
     app.state.services_status = services_status

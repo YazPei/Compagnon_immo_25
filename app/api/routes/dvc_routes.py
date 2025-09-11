@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
 
-from app.services.dvc_connector import dvc_connector
-from app.services.ml_service import ml_service
+from app.api.services.dvc_connector import dvc_connector
+from app.api.services.ml_service import ml_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/dvc", tags=["dvc"])

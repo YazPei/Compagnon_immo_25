@@ -1,8 +1,11 @@
+"""Service DVC pour la gestion des modèles."""
+
 import logging
 from typing import Dict, Any
 from .dvc_connector import dvc_connector
 
 logger = logging.getLogger(__name__)
+
 
 class DVCService:
     """Service DVC pour la gestion des modèles."""

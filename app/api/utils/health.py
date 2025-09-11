@@ -10,9 +10,9 @@ import httpx
 import redis
 from sqlalchemy import text
 
-from app.config.settings import settings
-from app.db.database import engine
-from app.services.ml_service import ml_service
+from app.api.config.settings import settings
+from app.api.db.database import engine
+from app.api.services.ml_service import ml_service
 
 logger = logging.getLogger(__name__)
 

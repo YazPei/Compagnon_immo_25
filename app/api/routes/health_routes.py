@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Response, HTTPException
 import logging
 from typing import Dict, Any
 
-from app.services.health_service import health_service
+from app.api.services.health_service import health_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Health"])

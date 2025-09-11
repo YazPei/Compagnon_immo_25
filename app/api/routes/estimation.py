@@ -318,22 +318,29 @@ def _build_estimation_request(data: QuestionnaireRequest, features: dict) -> Est
 
 
 def _get_csv_path() -> str:
-    """Retourne le chemin vers le CSV des clusters."""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-        'data', 
-        'df_sales_clean_with_cluster.csv'
-    )
+    """Retourne le chemin vers le CSV des clusters - compatible Docker."""
+    from app.api.config.settings import settings
+    
+    # Utiliser les chemins configurés dans settings
+    if hasattr(settings, 'DATA_DIR'):
+        return settings.DATA_DIR / 'df_sales_clean_with_cluster.csv'
+    
+    # Fallback pour développement
+    base_dir = Path(__file__).parent.parent.parent.parent
+    return str(base_dir / 'data' / 'df_sales_clean_with_cluster.csv')
 
 @lru_cache(maxsize=1)
 def get_ips_dataframe():
-    """Cache du dataframe IPS."""
+    """Cache du dataframe IPS - compatible Docker."""
     try:
-        csv_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            'data',
-            'X_train_encoded_for_api.csv'
-        )
+        from app.api.config.settings import settings
+        
+        if hasattr(settings, 'DATA_DIR'):
+            csv_path = settings.DATA_DIR / 'X_train_encoded_for_api.csv'
+        else:
+            base_dir = Path(__file__).parent.parent.parent.parent
+            csv_path = base_dir / 'data' / 'X_train_encoded_for_api.csv'
+            
         df = pd.read_csv(csv_path, sep=';', usecols=["codePostal", "IPS_primaire"])
         df["IPS_primaire"] = pd.to_numeric(df["IPS_primaire"].astype(str), errors="coerce")
         return df

@@ -8,9 +8,9 @@ import sys
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
-from app.services.dvc_service import dvc_service
-from app.services.ml_service import ml_service
-from app.db.database import check_db_connection
+from app.api.services.dvc_service import dvc_service
+from app.api.services.ml_service import ml_service
+from app.api.db.database import check_db_connection
 
 logger = logging.getLogger(__name__)
 

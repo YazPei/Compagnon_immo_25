@@ -11,23 +11,34 @@ class DVCConnector:
     """Connecteur pour gérer les interactions avec DVC."""
 
     def __init__(self, repo_path: Optional[str] = None):
-        """
-        Initialise le connecteur DVC.
-        :param repo_path: Chemin vers le répertoire contenant le fichier dvc.yaml.
-        """
+        """Initialise le connecteur DVC avec détection d'environnement."""
+        # Variables d'environnement pour DagsHub
+        self.dagshub_username = os.getenv("DAGSHUB_USERNAME")
+        self.dagshub_token = os.getenv("DAGSHUB_TOKEN")
+        
         # Détection automatique du chemin selon l'environnement
         if repo_path:
             self.repo_path = Path(repo_path)
         elif os.getenv("KUBERNETES_NAMESPACE"):
             self.repo_path = Path("/app")
-        elif os.path.exists("/home/ketsiapedro/Bureau/MLE/Compagnon_immo"):
-            self.repo_path = Path("/home/ketsiapedro/Bureau/MLE/Compagnon_immo")
+        elif os.path.exists("/.dockerenv"):
+            self.repo_path = Path("/app")
+        elif os.getenv("GITHUB_ACTIONS"):
+            self.repo_path = Path("/github/workspace")
         else:
-            self.repo_path = Path.cwd()
+            # Développement local - détection automatique
+            current_path = Path.cwd()
+            if "Compagnon_immo" in str(current_path):
+                self.repo_path = current_path
+            else:
+                self.repo_path = Path("/home/ketsiapedro/Bureau/MLE/Compagnon_immo")
             
         self.models_dir = self.repo_path / "app/api/models"
         self.dvc_file = self.repo_path / "dvc.yaml"
         
+        logger.info(f"📂 Chemin DVC: {self.repo_path}")
+        logger.info(f"🤖 Répertoire modèles: {self.models_dir}")
+
         # Vérification de l'existence des fichiers critiques
         if not self.dvc_file.exists():
             logger.warning(f"⚠️ Fichier DVC non trouvé : {self.dvc_file}")

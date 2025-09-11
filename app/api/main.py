@@ -124,11 +124,10 @@ async def _initialize_services():
     
     # Chargement des modèles ML
     try:
-        from app.api.services.ml_service import MLService
-        ml_service = MLService()
-        models_loaded = ml_service.load_all_models()
-        services_status['ml_models'] = len(models_loaded) > 0
-        logger.info(f"Modèles ML chargés: {len(models_loaded)}")
+        from app.api.services import ml_service  # Instance, pas classe
+        models_loaded = await ml_service.load_models_from_dvc()
+        services_status['ml_models'] = models_loaded.get("models_loaded", 0) > 0
+        logger.info(f"Modèles ML chargés: {models_loaded.get('models_loaded', 0)}")
     except Exception as e:
         logger.warning(f"Modèles ML non disponibles: {e}")
         services_status['ml_models'] = False

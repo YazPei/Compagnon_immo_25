@@ -272,20 +272,31 @@ services:
       - ml_net
       
   # --------- Tracking MLflow ----------
+  # --------- Tracking MLflow ----------
   mlflow:
-    image: ghcr.io/mlflow/mlflow
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: compagnon_immo-mlflow
     ports:
       - "5000:5000"
     volumes:
       - ./mlruns:/mlflow/mlruns
-    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0
+    command: [
+      "mlflow","server",
+      "--backend-store-uri","sqlite:///mlflow.db",
+      "--default-artifact-root","/mlflow/mlruns",
+      "--host","0.0.0.0",
+      "--port","5000"
+    ]
+    environment:
+      GUNICORN_CMD_ARGS: "--workers 1 --timeout 180 --graceful-timeout 180 --log-level info"
     networks:
       - ml_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
-      interval: 10s
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000'); sys.exit(0)\" || exit 1"]
+      interval: 20s
       timeout: 5s
-      retries: 3  
+      retries: 15
+    restart: unless-stopped  
 
 
 networks:

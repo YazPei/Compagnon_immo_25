@@ -61,11 +61,11 @@ api-dev: ## Démarre l'API en mode développement
 	@echo "🚀 Démarrage de l'API…"
 	@echo "📍 API : http://localhost:8000"
 	@echo "📚 Docs : http://localhost:8000/docs"
-	@PYTHONPATH=api_test nohup uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+	@PYTHONPATH=api nohup uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
 
 api-test: ## Lance les tests de l'API
 	@echo "🧪 Tests de l'API…"
-	@cd api_test && ../$(PYTHON_BIN) -m pytest app/tests/ -v
+	@cd api && ../$(PYTHON_BIN) -m pytest app/tests/ -v
 
 api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan)
 	@pkill -f "uvicorn app.routes.main:app" || echo "Aucun uvicorn à stopper"
@@ -126,7 +126,7 @@ docker-logs: ## Logs compose
 # API image seule
 
 docker-api-build: ## Build image API
-	@cd api_test && docker build -t $(IMAGE_PREFIX)-api .
+	@cd api && docker build -t $(IMAGE_PREFIX)-api .
 
 docker-api-run: docker-api-build ## Run image API
 	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api $(IMAGE_PREFIX)-api

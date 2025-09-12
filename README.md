@@ -1,122 +1,219 @@
 # 🏠 **Pipeline MLOps - Prédiction des prix immobiliers**
 
-Ce dépôt contient une pipeline complète de prédiction des prix immobiliers, divisée en deux approches :
+Ce dépôt contient une pipeline complète pour la prédiction des prix immobiliers, divisée en deux approches principales :
 
-- 🔁 Modélisation par régression (`LightGBM`, `XGBoost`)
-- ⏳ Modélisation par séries temporelles (`SARIMAX`)
-- 🖥️ App via une API et Streamlit
-
-## 🧩 Stack technologique
-
-- 🐍 `Click` pour l’interface CLI
-- 📈 `MLflow` pour le tracking des métriques & modèles
-- 📦 `DVC` pour le versionnement des données et étapes
-- 🐳 `Docker` pour l’isolation et la reproductibilité
-- 🧪 `Makefile` pour l'orchestration simplifiée
+- 🔁 **Modélisation par régression** (`LightGBM`, `XGBoost`)
+- ⏳ **Modélisation par séries temporelles** (`SARIMAX`)
+- 🌐 **API FastAPI** pour servir les modèles et les prédictions
 
 ---
 
-## 📁 Arborescence
+## 🧩 **Stack technologique**
 
+- 🐍 **Click** : Interface CLI pour exécuter les pipelines
+- 📈 **MLflow** : Suivi des métriques, modèles et artefacts
+- 📦 **DVC** : Versionnement des données et gestion des artefacts
+- 🐳 **Docker** : Isolation et reproductibilité des environnements
+- 🧪 **Makefile** : Orchestration simplifiée des tâches
+- 🌐 **FastAPI** : API pour exposer les prédictions
+- ⏳ **Airflow** *(prévu)* : Orchestration des pipelines
+
+---
+
+## 📁 **Arborescence du projet**
 
 ```bash
 .
-├── api_test
-├── mlops/
-│   ├── clustering/
-│   ├── fusion/
-│   ├── preprocessing/
-│   ├── Regression/
-│   │   ├── regression_pipeline.py
-│   │   ├── encoding.py
-│   │   ├── train_lgbm.py
-│   │   ├── train_xgb.py
-│   │   ├── analyse.py
-│   │   ├── utils.py
-│   │   ├── run_all.sh
-│   └── Serie_temporelle/
-│       ├── load_split.py
-│       ├── seasonal_decomp.py
-│       ├── sarimax_train.py
-│       ├── metrics.py
-│       ├── utils.py
-│       ├── run_all_st.sh
-
-├── data/
-│   ├── df_cluster.csv
-│   └── df_sales_clean_ST.csv
-├── exports/
-│   ├── reg/
-│   │   ├── X_train.csv, X_test.csv, y_train.csv, y_test.csv
-│   │   ├── lightgbm_model.joblib, xgboost_model.joblib
-│   └── st/
-│       ├── X_train.csv, X_test.csv, y_train.csv, y_test.csv
-│       └── model_sarimax_cluster_*.pkl
-├── Dockerfile.*
-├── docker-compose.yml
-├── dvc.yaml
-├── run_all_full.sh
-├── requirements.txt
-├── README.md  ⬅️ (ce fichier)
-├── Makefile
-.dvc
+├── app/
+│   ├── api/
+│   │   ├── main.py                # Point d'entrée de l'API FastAPI
+│   │   ├── routes/                # Routes de l'API
+│   │   ├── services/              # Services (DVC, MLflow, etc.)
+│   │   ├── config/                # Configuration de l'application
+│   └── mlops/
+│       ├── clustering/            # Segmentation des données
+│       ├── fusion/                # Jointure des données
+│       ├── preprocessing/         # Nettoyage et enrichissement des données
+│       ├── Regression/            # Modélisation par régression
+│       │   ├── regression_pipeline.py
+│       │   ├── train_lgbm.py
+│       │   ├── train_xgb.py
+│       ├── Serie_temporelle/      # Modélisation par séries temporelles
+│       │   ├── seasonal_decomp.py
+│       │   ├── sarimax_train.py
+│       │   ├── metrics.py
+├── data/                          # Données brutes et traitées
+├── exports/                       # Artefacts générés (modèles, snapshots)
+├── infra/                         # Infrastructure (Docker, CI/CD)
+│   ├── deployment/
+│   │   ├── docker-compose.yml     # Configuration Docker pour le développement
+│   │   ├── docker-compose.prod.yml # Configuration Docker pour la production
+├── .github/workflows/             # Pipelines CI/CD GitHub Actions
+├── dvc.yaml                       # Pipeline DVC
+├── requirements.txt               # Dépendances Python
+├── Makefile                       # Commandes simplifiées
+├── README.md                      # Ce fichier
 ```
 
 ---
-## 📌 Étapes de la pipeline
-0. **setup**: installation de DVC
-1. **Fusion** : Jointure des données DVF et indices socio-économiques
-2. **Préprocessing** : Nettoyage et enrichissement
-3. **Clustering** : Segmentation KMeans avec log MLflow
-4. **Régression** : Modélisation LightGBM / XGBoost
-5. **Séries temporelles** : SARIMAX par cluster
-6. **Tracking MLflow** : Logging complet des modèles et artefacts
+
+## 📌 **Étapes de la pipeline**
+
+1. **Fusion des données :**
+   - Jointure des données DVF et indices socio-économiques.
+   - Export des données fusionnées dans `data/`.
+
+2. **Préprocessing :**
+   - Nettoyage des données, gestion des valeurs manquantes et encodage.
+   - Export des snapshots encodés dans `exports/`.
+
+3. **Clustering :**
+   - Segmentation des données avec KMeans.
+   - Suivi des métriques et artefacts dans MLflow.
+
+4. **Régression :**
+   - Modélisation avec LightGBM et XGBoost.
+   - Suivi des performances (`MAE`, `RMSE`, `R²`) dans MLflow.
+
+5. **Séries temporelles :**
+   - Modélisation SARIMAX par cluster.
+   - Export des modèles dans `exports/st/`.
+
+6. **Suivi des expériences :**
+   - Suivi des modèles, métriques et artefacts dans MLflow.
+   - Versionnement des données et modèles avec DVC.
 
 ---
 
+## 🐳 **Lancement avec Docker**
 
-
-## 🐳 Lancement avec Docker
+### **1. Lancer tous les services :**
 ```bash
-make chmod_all
-make dvc_all
-make build-dvc-image     # construit l'image Docker DVC
-make run-dvc-repro       # exécute dvc repro en conteneur sécurisé
-# Construire l’image Docker et Exécuter tous les pipelines dans Docker
-
-make docker_auto
+docker-compose -f infra/deployment/docker-compose.yml up --build
 ```
 
-Nous pouvons également, si on le souhaite ne lancer que le modèle de régression ou le modèle Serie Temporelle:
+### **2. Lancer en production :**
 ```bash
-make docker_build # Construire l’image Docker
-make docker_run_regression # Exécuter uniquement la régression
-make docker_run_series # Exécuter uniquement les séries temporelles
+docker-compose -f docker-compose.prod.yml up --build
 ```
-## 📊 Suivi d'expériences avec MLflow
 
-- 📍 **Accès UI** : [http://localhost:5001](http://localhost:5001)
-- 🎯 **Tracking automatique** :
-  - Modèles : Régression (LightGBM/XGB), Séries temporelles (SARIMAX), Clustering (KMeans)
+### **3. Commandes Makefile :**
+- Construire l'image Docker :
+  ```bash
+  make docker_build
+  ```
+- Lancer uniquement la régression :
+  ```bash
+  make docker_run_regression
+  ```
+- Lancer uniquement les séries temporelles :
+  ```bash
+  make docker_run_series
+  ```
+
+---
+
+## 📊 **Suivi des expériences avec MLflow**
+
+- **Accès à l'interface MLflow :**
+  - URL : [http://localhost:5001](http://localhost:5001)
+
+- **Suivi des modèles et métriques :**
+  - Modèles : LightGBM, XGBoost, SARIMAX, KMeans.
   - Métriques : `MAE`, `RMSE`, `R²`, `Silhouette score`, etc.
-  - Paramètres : hyperparamètres, transformations, n_clusters...
-- 📦 **Artéfacts loggués** :
-  - Modèles `.joblib`, `.pkl`
-  - Graphes de décomposition, coudes, prévisions
-  - Fichiers de données traitées
+  - Artefacts : Modèles (`.joblib`, `.pkl`), graphiques, données traitées.
 
+---
 
-## 🧪 Tests, Export et noettoyage
+## 🧪 **Tests et nettoyage**
 
-    Modèles exportés dans exports/
-    Snapshots encodés dans X_train.csv, X_test.csv, etc.
-    Nettoyage:
+### **1. Lancer les tests :**
+- Tests unitaires et d'intégration :
+  ```bash
+  pytest app/api/tests/ -v
+  ```
+
+### **2. Nettoyage des fichiers générés :**
+- Nettoyer les exports :
+  ```bash
+  make clean_exports
+  ```
+- Nettoyer le cache DVC :
+  ```bash
+  make clean_dvc
+  ```
+- Nettoyer tout :
+  ```bash
+  make clean_all
+  ```
+
+---
+
+## 📦 **Gestion des données avec DVC**
+
+### **1. Initialisation de DVC :**
 ```bash
-make clean_all
+dvc init
 ```
-Nous pouvons également faire un nettoyage sélectif:
+
+### **2. Ajouter des données :**
 ```bash
-make clean_exports #  nettoyer les fichiers générés
-make clean_dvc # ou nettoyer les DVC cahe
+dvc add data/
 ```
+
+### **3. Synchroniser avec DagsHub :**
+- Ajouter un remote :
+  ```bash
+  dvc remote add -d origin https://dagshub.com/<DAGSHUB_USERNAME>/compagnon-immo.dvc
+  dvc remote modify origin --local auth basic
+  dvc remote modify origin --local user $DAGSHUB_USERNAME
+  dvc remote modify origin --local password $DAGSHUB_TOKEN
+  ```
+- Pousser les données :
+  ```bash
+  dvc push
+  ```
+
+### **4. Récupérer les données :**
+```bash
+dvc pull
+```
+
+---
+
+## 🚀 **Pipeline CI/CD**
+
+- **GitHub Actions :**
+  - Tests automatisés (unitaires et d'intégration).
+  - Construction et déploiement de l'image Docker.
+  - Synchronisation des artefacts avec DagsHub.
+
+- **Commandes principales :**
+  - Lancer les tests :
+    ```bash
+    pytest
+    ```
+  - Construire et pousser l'image Docker :
+    ```bash
+    docker build -t ghcr.io/<USERNAME>/compagnon-immo-api:latest .
+    docker push ghcr.io/<USERNAME>/compagnon-immo-api:latest
+    ```
+
+---
+
+## 📌 **À venir :**
+- Intégration complète avec Airflow pour l'orchestration des pipelines.
+- Optimisation des performances des modèles.
+- Documentation détaillée des endpoints de l'API.
+
+---
+
+## 🛠️ **Contributeurs**
+- **Pedro Ketsia** - Développeur principal
+- **Collaborateurs** - Merci à tous les contributeurs du projet !
+
+---
+
+## 📄 **Licence**
+Ce projet est sous licence MIT. Consultez le fichier `LICENSE` pour plus d'informations.
 

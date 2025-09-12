@@ -391,3 +391,18 @@ jobs:
             \"api_url\": \"${{ needs.deploy-infrastructure.outputs.api_url }}\",
             \"mlflow_url\": \"${{ needs.deploy-infrastructure.outputs.mlflow_url }}\"
           }"
+
+  verify-secrets:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Vérification des secrets
+      run: |
+        if [ -z "${{ secrets.PRODUCTION_HOST }}" ]; then
+          echo "❌ PRODUCTION_HOST n'est pas défini."
+          exit 1
+        fi
+        if [ -z "${{ secrets.PRODUCTION_SSH_KEY }}" ]; then
+          echo "❌ PRODUCTION_SSH_KEY n'est pas défini."
+          exit 1
+        fi
+        echo "✅ Tous les secrets nécessaires sont définis."

@@ -300,3 +300,17 @@ jobs:
       run: |
         echo "🧹 Cleaning up old artifacts..."
         # Nettoyer les anciennes images Docker, logs, etc.
+  Vérification des variables d'environnement:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Vérification des variables d'environnement
+      run: |
+        if [ -z "${{ secrets.DAGSHUB_USERNAME }}" ]; then
+          echo "❌ DAGSHUB_USERNAME n'est pas défini."
+          exit 1
+        fi
+        if [ -z "${{ secrets.DAGSHUB_TOKEN }}" ]; then
+          echo "❌ DAGSHUB_TOKEN n'est pas défini."
+          exit 1
+        fi
+        echo "✅ Toutes les variables d'environnement nécessaires sont définies."

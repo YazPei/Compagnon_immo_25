@@ -1,0 +1,12 @@
+FROM python:3.10-slim
+WORKDIR /app
+
+COPY requirements.txt .
+#RUN pip install --no-cache-dir -r requirements.txt
+
+COPY mlops/6_Regression/3_UTILS mlops/6_Regression/3_UTILS
+
+ENTRYPOINT ["uvicorn", "utils_api:app", "--host", "0.0.0.0", "--port", "8009"]
+
+
+

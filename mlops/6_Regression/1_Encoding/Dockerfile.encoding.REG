@@ -1,0 +1,11 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY mlops/6_Regression/1_Encoding mlops/6_Regression/1_Encoding
+COPY data /app/data
+COPY exports /app/exports
+
+
+ENTRYPOINT ["uvicorn", "encoding_api:app", "--host", "0.0.0.0", "--port", "8003"]
+

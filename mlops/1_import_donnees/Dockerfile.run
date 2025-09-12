@@ -1,0 +1,25 @@
+FROM python:3.10-slim
+
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y \
+    git \
+    bash \
+    && apt-get clean
+
+# 2. Dossier de travail
+WORKDIR /app
+
+# 4. Copie requirements.txt uniquement (cache)
+COPY requirements.txt .
+
+# 5. Création de l’environnement virtuel + install
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# 6. Copie uniquement les scripts nécessaires à l’étape d’import (optionnel ici)
+COPY mlops/1_import_donnees /app/mlops/1_import_donnees
+
+# 7. Création des dossiers requis
+RUN mkdir -p data output && touch data/.gitkeep
+
+

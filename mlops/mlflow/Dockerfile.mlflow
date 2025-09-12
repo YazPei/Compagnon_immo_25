@@ -1,0 +1,9 @@
+FROM python:3.10-slim
+WORKDIR /mlflow
+# Installation MLflow
+RUN pip install --no-cache-dir mlflow==2.12.1
+
+# Créer le backend store SQLite par défaut
+RUN touch mlflow.db
+
+CMD ["mlflow", "ui", "--host", "0.0.0.0", "--port", "5000", "--backend-store-uri", "sqlite:///mlflow.db", "--default-artifact-root", "/mlflow/mlruns"]

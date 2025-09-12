@@ -1,0 +1,9 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY mlops/5_clustering mlops/5_clustering
+COPY data/processed data/processed
+COPY exports exports
+
+ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]

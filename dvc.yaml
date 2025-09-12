@@ -73,7 +73,7 @@ stages:
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
     outs:
-      - data/encoded/lgbm_model.joblib
+      -data/encoded/lgbm_model.joblib
 
   analyse:
     cmd: >
@@ -129,7 +129,6 @@ stages:
       - data/split/train_periodique_q12.csv
       - data/split/test_periodique_q12.csv
       
-      # attention faut il filtrer par cluster? verifier le script
     outs:
       - outputs/best
 
@@ -144,7 +143,6 @@ stages:
     deps:
       - outputs/best
       - data/split   # force l’exécution de split_clusters avant
-      - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
     outs:
       - outputs/evaluate
 

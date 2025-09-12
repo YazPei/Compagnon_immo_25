@@ -1,0 +1,19 @@
+# Configuration DagsHub pour le projet
+project:
+  name: "compagnon-immo"
+  description: "API d'estimation immobilière avec ML"
+  
+mlflow:
+  tracking_uri: "https://dagshub.com/[USERNAME]/compagnon-immo.mlflow"
+  experiment_name: "compagnon-immo-experiments"
+  
+dvc:
+  remote: "dagshub-storage"
+  
+git:
+  remote: "dagshub"
+  
+automation:
+  auto_stage: true
+  auto_push_data: true
+  auto_log_metrics: true

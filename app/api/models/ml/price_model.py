@@ -7,10 +7,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from lightgbm import LGBMRegressor
-from api_test.app.models.ml.custom_functions import replace_minus1
+from app.api.models.ml.custom_functions import replace_minus1
 
 # Fonction custom utilisée lors de l'entraînement du modèle
 # À adapter si tu as la vraie logique, sinon retourne x
+
 
 def replace_minus1(x):
     return x
@@ -45,7 +46,7 @@ class PriceModel:
             raise FileNotFoundError(f"Le fichier modèle {model_path} n'existe pas")
         try:
             import sys
-            from api_test.app.models.ml import custom_functions
+            from app.api.models.ml import custom_functions
             # Ajoute toutes les fonctions custom dans le scope global de __main__
             for func_name in dir(custom_functions):
                 func = getattr(custom_functions, func_name)

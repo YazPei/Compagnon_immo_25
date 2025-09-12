@@ -1,4 +1,4 @@
-FROM compagnon_immo-dvc
+FROM python:3.10-slim
 
 WORKDIR /app
 # Copie le reste du projet

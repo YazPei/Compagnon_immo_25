@@ -1,4 +1,4 @@
-FROM compagnon_immo-clust
+FROM python:3.10-slim
 WORKDIR /app
 
 COPY mlops/Serie_temporelle/load_split.py /app/mlops/Serie_temporelle/

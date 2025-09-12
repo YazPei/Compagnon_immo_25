@@ -15,6 +15,7 @@ import joblib
 import mlflow
 import json
 
+mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050"))
 warnings.filterwarnings("ignore", category=FutureWarning)
 try:
     import psutil

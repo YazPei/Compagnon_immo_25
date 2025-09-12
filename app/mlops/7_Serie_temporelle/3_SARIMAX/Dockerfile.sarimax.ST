@@ -1,4 +1,4 @@
-FROM compagnon_immo-decomp
+FROM python:3.10-slim
 WORKDIR /app
 
 COPY mlops/Serie_temporelle/sarimax_train.py /app/mlops/Serie_temporelle/	

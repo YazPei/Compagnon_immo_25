@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 env:
   DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
@@ -12,39 +12,44 @@ env:
   DAGSHUB_MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }}
 
 jobs:
-  test:
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
-    
+    outputs:
+      python-cache-key: ${{ steps.cache-python.outputs.cache-hit }}
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-    
-    - name: Cache dependencies
+
+    - name: Cache Python dependencies
+      id: cache-python
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-    
+
     - name: Install dependencies
+      if: steps.cache-python.outputs.cache-hit != 'true'
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install dagshub mlflow dvc[s3]
-    
-    - name: Create test directories
-      run: |
-        mkdir -p logs cache data/processed models
-    
-    - name: Setup DagsHub
-      run: |
-        python scripts/test_dagshub_connection.py
-    
+
+  test:
+    name: Run Tests
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Run tests
       env:
         DATABASE_URL: sqlite:///:memory:
@@ -52,7 +57,7 @@ jobs:
         TESTING: true
       run: |
         python -m pytest app/api/tests/ -v --disable-warnings
-    
+
     - name: Code quality checks
       run: |
         flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
@@ -60,37 +65,27 @@ jobs:
         isort --check-only app/
 
   train-model:
+    name: Train ML Model
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install dagshub mlflow dvc[s3]
-    
+
     - name: Setup DVC
       run: |
         dvc remote add -d dagshub-storage https://dagshub.com/${{ secrets.DAGSHUB_USERNAME }}/compagnon-immo.dvc
         dvc remote modify dagshub-storage --local auth basic
         dvc remote modify dagshub-storage --local user ${{ secrets.DAGSHUB_USERNAME }}
         dvc remote modify dagshub-storage --local password ${{ secrets.DAGSHUB_TOKEN }}
-    
+
     - name: Pull data
       run: |
         dvc pull || echo "No data to pull"
-    
+
     - name: Run ML training pipeline
       env:
         MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }}
@@ -98,11 +93,11 @@ jobs:
         MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
         python app/ml/main.py
-    
+
     - name: Push artifacts to DagsHub
       run: |
         dvc push || echo "No artifacts to push"
-    
+
     - name: Update model registry
       env:
         MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }}
@@ -112,23 +107,23 @@ jobs:
         python scripts/auto_update_models.py
 
   build-api:
+    name: Build and Push API Docker Image
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
-    
+
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Build and push API image
       uses: docker/build-push-action@v4
       with:
@@ -142,10 +137,9 @@ jobs:
         cache-to: type=gha,mode=max
 
   integration-tests:
+    name: Run Integration Tests
     needs: [test, build-api]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
     services:
       postgres:
         image: postgres:13
@@ -157,20 +151,10 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Run integration tests
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compagnon_immo_test
@@ -179,138 +163,22 @@ jobs:
       run: |
         python -m pytest app/api/tests/test_*_integration.py -v
 
-  deploy-staging:
-    needs: [test, train-model, integration-tests]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    environment: staging
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Deploy API to staging
-      run: |
-        echo "🚀 Deploying API to staging..."
-        # Utiliser docker-compose pour déployer en staging
-        # docker-compose -f infrastructure/docker/docker-compose.yml up -d
-    
-    - name: Deploy Streamlit to staging
-      run: |
-        echo "🚀 Deploying Streamlit to staging..."
-        # Déployer l'interface Streamlit
-    
-    - name: Run staging health checks
-      run: |
-        sleep 30
-        echo "🏥 Running health checks..."
-        # curl -f ${{ secrets.STAGING_API_URL }}/health || exit 1
-
-  deploy-production:
+  deploy:
+    name: Deploy to Production
     needs: [test, train-model, integration-tests]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    environment: production
-    
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Deploy to production
       run: |
         echo "🚀 Deploying to production..."
         # Étapes de déploiement production
-        
+
     - name: Run production health checks
       run: |
         sleep 60
         echo "🏥 Running production health checks..."
         # curl -f ${{ secrets.PRODUCTION_API_URL }}/health || exit 1
-    
-    - name: Notify DagsHub deployment
-      run: |
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.DAGSHUB_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "status": "deployed", 
-            "version": "${{ github.sha }}", 
-            "environment": "production",
-            "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-          }' \
-          "https://dagshub.com/api/v1/repos/${{ secrets.DAGSHUB_USERNAME }}/compagnon-immo/deployments"
-    
-    - name: Update production monitoring
-      run: |
-        echo "📊 Updating monitoring dashboards..."
-        # Mettre à jour les dashboards Grafana/Prometheus
-
-  performance-tests:
-    needs: deploy-staging
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install performance testing tools
-      run: |
-        pip install locust requests
-    
-    - name: Run API performance tests
-      run: |
-        echo "⚡ Running performance tests..."
-        # python scripts/performance/api_load_test.py
-        
-    - name: Run ML model performance tests
-      run: |
-        echo "🤖 Testing ML model performance..."
-        # python scripts/performance/model_performance_test.py
-
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install security tools
-      run: |
-        pip install bandit safety
-    
-    - name: Run security scan
-      run: |
-        bandit -r app/ -f json -o bandit-report.json
-        safety check
-    
-    - name: Upload security report
-      uses: actions/upload-artifact@v3
-      with:
-        name: security-report
-        path: bandit-report.json
-
-  cleanup:
-    needs: [deploy-production, deploy-staging]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Cleanup old artifacts
-      run: |
-        echo "🧹 Cleaning up old artifacts..."
-        # Nettoyer les anciennes images Docker, logs, etc.
-  Vérification des variables d'environnement:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Vérification des variables d'environnement
-      run: |
-        if [ -z "${{ secrets.DAGSHUB_USERNAME }}" ]; then
-          echo "❌ DAGSHUB_USERNAME n'est pas défini."
-          exit 1
-        fi
-        if [ -z "${{ secrets.DAGSHUB_TOKEN }}" ]; then
-          echo "❌ DAGSHUB_TOKEN n'est pas défini."
-          exit 1
-        fi
-        echo "✅ Toutes les variables d'environnement nécessaires sont définies."

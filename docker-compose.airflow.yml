@@ -30,8 +30,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./:/opt/airflow/repo        # ton repo entier
-      - ./dags:/opt/airflow/dags    # dossier des DAGs
+      - ./:/opt/airflow/repo       
+      - ./dags:/opt/airflow/dags    
     working_dir: /opt/airflow
     networks:
       - ml_net
@@ -41,4 +41,4 @@ volumes:
 
 networks:
   ml_net:
-    external: true   # réutilise le réseau déjà défini dans ton docker-compose principal
+    external: true   

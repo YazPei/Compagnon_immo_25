@@ -26,7 +26,7 @@ class TestDeploymentIntegration:
         except requests.exceptions.RequestException:
             pytest.skip("API non disponible pour les tests")
 
-    @patch('app.api.services.dvc_connector.subprocess.run')
+    @patch("subprocess.run")
     def test_deployment_script_execution(self, mock_subprocess):
         """Test d'exécution du script de déploiement."""
         mock_subprocess.return_value = MagicMock(
@@ -34,6 +34,7 @@ class TestDeploymentIntegration:
             stdout="Deployment successful",
             stderr=""
         )
-        
-        # Test sans dépendances externes
-        assert mock_subprocess.called or True  # Test basique
+
+        result = mock_subprocess(["bash", "run_deployment.sh"])
+        assert result.returncode == 0
+        assert "Deployment successful" in result.stdout

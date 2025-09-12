@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.api.routes import historique, estimation
 import pytest
 from fastapi.testclient import TestClient
+from app.api.main import app
 
 
 def create_test_app() -> FastAPI:
@@ -16,7 +17,11 @@ def create_test_app() -> FastAPI:
     # Ajout des endpoints de base avec des operation_id uniques
     @app.get("/", tags=["Base"], operation_id="test_root")
     def root():
-        return {"message": "Bienvenue sur mon Compagnon d'Estimation Immobilière."}
+        return {
+            "message": (
+                "Bienvenue sur mon Compagnon d'Estimation Immobilière."
+            )
+        }
 
     @app.get("/health", tags=["Base"], operation_id="test_health")
     def health():
@@ -82,19 +87,18 @@ class TestBaseEndpoints:
 
 class TestAPIStructure:
     """Tests de la structure de l'API."""
-    
+
     def test_api_v1_prefix(self):
         """Vérifie que les routes API utilisent le bon préfixe."""
         response = client.get("/openapi.json")
         schema = response.json()
         paths = schema.get("paths", {})
-        
-        # Vérifie qu'il y a des routes avec le préfixe /api/v1
         api_v1_paths = [path for path in paths.keys() if path.startswith("/api/v1")]
         assert len(api_v1_paths) > 0, "Aucune route /api/v1 trouvée"
     
     def test_unique_operation_ids(self):
-        """Vérifie que tous les operation_id dans le schéma OpenAPI sont uniques."""
+        """Vérifie que tous les operation_id dans le schéma OpenAPI 
+        sont uniques."""
         response = client.get("/openapi.json")
         schema = response.json()
         operation_ids = []
@@ -104,7 +108,9 @@ class TestAPIStructure:
                 if operation_id:
                     operation_ids.append(operation_id)
         
-        assert len(operation_ids) == len(set(operation_ids)), "Des operation_id dupliqués ont été trouvés"
+        assert len(operation_ids) == len(set(operation_ids)), (
+            "Des operation_id dupliqués ont été trouvés"
+        )
 
 
 if __name__ == "__main__":

@@ -54,6 +54,10 @@ quick-start-pipeline: build-all run-all-docker ## Build images + lance tous les 
 
 quick-start-test: quick-start-pipeline dvc-repro-all ## + DVC repro complet
 
+quick-start-test-2: quick-start-pipeline dvc-repro-all airflow ## + DVC repro complet
+
+init-env: 
+	@./setup_env_dagshub.sh
 # ===============================
 # 🌐 API et Interface Web
 # ===============================
@@ -402,7 +406,7 @@ ports-check: ## Vérifie les ports locaux
 # ===============================
 #  Airflow (via compose)
 # ===============================
-airflow: airflow-up ## Raccourci
+airflow: airflow-up airflow-run ## Raccourci
 
 airflow-up: ## Démarre Airflow (compose)
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml up -d

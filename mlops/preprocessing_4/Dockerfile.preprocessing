@@ -13,7 +13,7 @@ ENV PYTHONPATH=/app
 # === Étape 3 : Pré-création des dossiers nécessaires ===
 RUN mkdir -p /app/mlops \
              /app/data/processed/reports/figures \
-             /app/data/preprocessed
+             /app/data/processed
 
 # === Étape 4 : Copie du code après pré-setup ===
 COPY mlops /app/mlops

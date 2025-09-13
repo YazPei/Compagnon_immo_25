@@ -89,6 +89,7 @@ Ce dépôt contient une pipeline complète pour la prédiction des prix immobili
 
 ### **1. Lancer tous les services :**
 ```bash
+./setup_env_dagshub.sh
 docker-compose -f infra/deployment/docker-compose.yml up --build
 ```
 

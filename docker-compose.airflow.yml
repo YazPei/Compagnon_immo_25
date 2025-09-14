@@ -16,25 +16,21 @@ services:
     image: apache/airflow:2.9.0
     depends_on:
       - postgres-airflow
-    # 👉 Charge les secrets/params depuis .env (voir plus bas)
     env_file:
       - .env
     environment:
-      # Airflow
+      # --- Airflow (DB locale) ---
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
 
-      # -------- DagsHub / MLflow (depuis .env) --------
-      # MLFLOW_TRACKING_URI, MLFLOW_TRACKING_USERNAME, MLFLOW_TRACKING_PASSWORD
-      # sont injectées via .env (ne pas dupliquer ici)
-      #
-      # Optionnel : exposer une connection Airflow prête à l’emploi (HTTP) vers l'endpoint MLflow de DagsHub
-      # ATTENTION : encodage URL si caractères spéciaux dans le token !
+      # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
+      # (Les 3 variables viennent du .env et suffisent au client mlflow)
+      # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:
       AIRFLOW_CONN_DAGSHUB_MLFLOW: "https://${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}@dagshub.com/${DAGSHUB_REPO_OWNER}/${DAGSHUB_REPO_NAME}.mlflow"
 
-      # Optionnel : variables “génériques” DagsHub accessibles dans les DAGs
+      # Optionnel : accessibles dans les DAGs
       DAGSHUB_USER: "${DAGSHUB_USER}"
       DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
       DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
@@ -51,8 +47,6 @@ services:
     volumes:
       - ./:/opt/airflow/repo
       - ./dags:/opt/airflow/dags
-      # Optionnel : pour Git/DVC avec token via .netrc (voir étape 3)
-      # - ./secrets/netrc:/home/airflow/.netrc:ro
     working_dir: /opt/airflow
     networks:
       - ml_net

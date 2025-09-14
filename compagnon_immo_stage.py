@@ -1,3 +1,4 @@
+import osimport mlflow
 import pendulum
 from airflow import DAG
 from airflow.models import Variable
@@ -10,17 +11,18 @@ BASE = f"{REPO}/mlops"  # tes dossiers 1_import_donnees, 2_dvc, ...
 PARIS = pendulum.timezone("Europe/Paris")
 PY = "python"
 
-MLFLOW_URI = Variable.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI") 
 ST_SUFFIX = Variable.get("ST_SUFFIX", "")
 default_args = {"retries": 2, "retry_delay": pendulum.duration(minutes=10)}
 
 
 def bash_task(task_id, cmd, timeout_min=None, env_extra=None, cwd=REPO):
-    env = {
-        "MLFLOW_TRACKING_URI": MLFLOW_URI,
-        "RUN_MODE": "full",
-        "ST_SUFFIX": ST_SUFFIX,
-    }
+    env = os.environ.copy()                      
+    if MLFLOW_URI:                               
+        env["MLFLOW_TRACKING_URI"] = MLFLOW_URI
+    env["RUN_MODE"] = "full"
+    env["ST_SUFFIX"] = ST_SUFFIX
+    
     if env_extra:
         env.update(env_extra)
     return BashOperator(
@@ -81,9 +83,9 @@ preprocessing = bash_task(
     cmd=(
         f"{PY} {BASE}/preprocessing_4/preprocessing.py "
         f"--input-path data "
-        f"--output-folder1 data "
-        f"--output-folder2 data "
-        f"--run-date {{ {{ ds }} }}"
+        f"--output-path data "
+        f"--run-date {{ ds }}"
+
     ),
     timeout_min=30,
 )
@@ -154,7 +156,7 @@ evaluate = bash_task(
 
 # Dépendances (ordre exact)
 (
-    sping_mlflow
+    ping_mlflow
     >> import_data
     >> dvc_ops
     >> fusion_geo

@@ -48,13 +48,13 @@ lint: ## Vérifie quelques pièges courants
 # ===============================
 # 📦 Quick start
 # ===============================
-quick-start: quick-start-pipeline ## Build + run docker + dvc repro
+quick-start: init-env quick-start-pipeline ## Build + run docker + dvc repro
 
-quick-start-pipeline: build-all run-all-docker ## Build images + lance tous les conteneurs éphémères
+quick-start-pipeline: init-env build-all run-all-docker ## Build images + lance tous les conteneurs éphémères
 
 quick-start-test: quick-start-pipeline dvc-repro-all ## + DVC repro complet
 
-quick-start-test-2: quick-start-pipeline dvc-repro-all airflow ## + DVC repro complet
+quick-start-test-2: quick-start-pipeline-tests airflow ## + DVC repro complet
 
 init-env: 
 	@./setup_env_dagshub.sh
@@ -147,7 +147,10 @@ setup_dags: ## Exécute le script d'init DagsHub
 # ===============================
 # 📈️ Build images "étapes" pipeline
 # ===============================
-build-all: docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
+build-all: docker-basepre docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
+
+docker-basepre:
+	docker build -f mlops/Dockerfile.base -t compagnon_immo-base:latest .
 
 docker_build:
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .

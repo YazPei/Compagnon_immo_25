@@ -1,0 +1,21 @@
+# mlops/Dockerfile.base
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Dépendances système (build + matplotlib)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --prefer-binary -r /app/requirements.txt

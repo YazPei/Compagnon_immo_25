@@ -27,11 +27,20 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import mlflow
 
+from pathlib import Path
+import math
+from sklearn.model_selection import train_test_split
+
 from utils import *  
 
 
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
+    # === Config MLflow (DagsHub) ===
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    mlflow.set_tracking_username(os.getenv("MLFLOW_TRACKING_USERNAME"))
+    mlflow.set_tracking_password(os.getenv("MLFLOW_TRACKING_PASSWORD"))
+
     # === BEGIN PIPELINE ===
     file_path = os.path.join(input_path, "df_sales_clean.csv") 
     df = pd.read_csv(file_path, sep=";", dtype={"INSEE_COM": str})
@@ -39,7 +48,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     GROUP_COL = "INSEE_COM"
 
     print("Nombres de lignes en double", df.duplicated().sum())
-    df.drop_duplicates()
+    df.drop_duplicates(inplace=True)
     print("Nombres de lignes en double après suppression", df.duplicated().sum())
     print("Shape du Dataset après élimination des doublons : ", df.shape)
     

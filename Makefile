@@ -17,6 +17,7 @@ USER_FLAGS   := --user $(shell id -u):$(shell id -g)
 DOCKER_COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 .PHONY: \
+  build-base \
   prepare-dirs install help lint \
   quick-start quick-start-pipeline quick-start-test \
   api-dev api-test api-stop \
@@ -114,6 +115,9 @@ mlflow-down: ## Stoppe MLflow (docker)
 prepare-dirs:
 	@mkdir -p data exports mlruns
 	@touch data/.gitkeep
+
+docker-build-base: 
+	DOCKER_BUILDKIT=1 docker build -f mlops/Dockerfile.base -t compagnon_immo-base:lastest .
 
 docker-build: prepare-dirs ## Build via compose
 	@$(DOCKER_COMPOSE) build
@@ -412,7 +416,7 @@ ports-check: ## Vérifie les ports locaux
 airflow: airflow-up airflow-run ## Raccourci
 
 airflow-up: ## Démarre Airflow (compose)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml up -d
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml up -d --build
 
 airflow-down: ## Stoppe Airflow (compose)
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml down

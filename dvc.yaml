@@ -21,9 +21,9 @@ stages:
 
     outs:
       - data/clean/df_sales_clean.csv
+      
   preprocessing:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       mkdir -p data/processed/reports/figures &&
       python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
     deps:
@@ -38,7 +38,6 @@ stages:
       
   clustering:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/5_clustering/Clustering.py
       --input-path data/processed
       --output-path exports/df_cluster.csv
@@ -59,7 +58,6 @@ stages:
 
   encode:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/6_Regression/1_Encoding/encoding.py 
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
@@ -72,7 +70,6 @@ stages:
 
   train_lgbm:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
@@ -91,7 +88,6 @@ stages:
 
   analyse:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
@@ -115,7 +111,6 @@ stages:
 
   decompose:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       --input-folder data/split
       --output-folder outputs/decomposition
@@ -131,7 +126,6 @@ stages:
 
   train_sarimax:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       --input-folder data/split
       --output-folder outputs/best
@@ -152,7 +146,6 @@ stages:
          
   evaluate:
     cmd: >
-      export MLFLOW_TRACKING_URI="http://192.168.1.42:5000" &&
       python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       --input-folder data/split
       --model-folder outputs/best

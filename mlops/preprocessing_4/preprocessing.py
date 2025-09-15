@@ -33,11 +33,53 @@ from sklearn.model_selection import train_test_split
 
 from utils import *  
 
+def _ensure_mlflow_run(experiment_name: str | None = None, run_name: str | None = None):
+    if mlflow.active_run() is None:
+        mlflow.set_experiment(experiment_name or "Preprocessing")
+        mlflow.start_run(run_name=run_name or "preprocessing")
+
+
+def log_figure(fig, path: str | None = None, *, filename: str | None = None, artifact_path: str | None = None,
+    experiment_name: str | None = None, run_name: str | None = None,
+    dpi: int = 120,
+    close: bool = False,
+):
+    """
+    Sauvegarde la figure `fig` vers `path` (ou `filename`) puis la loggue dans MLflow.
+    - Utiliser `path` (recommandé) ou `filename` (alias rétro-compatible).
+    """
+    # Alias rétro-compat
+    if path is None and filename is not None:
+        path = filename
+    if path is None:
+        raise ValueError("log_figure: fournir `path` (ou `filename`).")
+
+    # S'assurer d'un run MLflow actif
+    _ensure_mlflow_run(experiment_name=experiment_name, run_name=run_name)
+
+    # Créer le répertoire si besoin
+    out_dir = os.path.dirname(path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    # Sauvegarde locale
+    try:
+        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+    finally:
+        if close:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+            except Exception:
+                pass
+
+    # Log MLflow
+    mlflow.log_artifact(path, artifact_path=artifact_path)
 
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === Config MLflow (DagsHub) ===
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))#, "file:./mlruns"))
 
 
     # === BEGIN PIPELINE ===
@@ -679,4 +721,5 @@ def main(input_path, output_path):
 
 if __name__ == "__main__":
     main()
-
+if mlflow.active_run():
+    mlflow.end_run()

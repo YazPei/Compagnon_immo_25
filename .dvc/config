@@ -4,6 +4,7 @@
 [cache]
     dir = cache
     protected = false
+    type = copy
 ['remote "origin"']
     url = https://dagshub.com/YazPei/compagnon_immo.dvc.git
 ['remote "dagshub"']

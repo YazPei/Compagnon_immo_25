@@ -3,6 +3,7 @@
     autostage = true
 [cache]
     dir = cache
+    protected = false
 ['remote "origin"']
     url = https://dagshub.com/YazPei/compagnon_immo.dvc.git
 ['remote "dagshub"']

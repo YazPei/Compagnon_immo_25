@@ -1,10 +1,23 @@
 FROM python:3.10-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+    
+    
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 # Copie le reste du projet
-COPY . .
-COPY mlops/3_fusion mlops/3_fusion
+COPY mlops/3_fusion /app/3_fusion
 
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+    
 # Lancement automatique du script
 ENTRYPOINT ["bash", "mlops/3_fusion/run_fusion.sh"]
 

@@ -5,6 +5,7 @@ import os
 import logging
 from pathlib import Path
 import csv
+import mlflow
 
 import numpy as np
 import pandas as pd
@@ -157,9 +158,10 @@ def enrich_and_split():
         if not Path(p).exists():
             raise FileNotFoundError(f"Fichier introuvable: {Path(p).resolve()}")
     Path(OUTPUT_FOLDER).mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
-    MLFLOW.set_experiment("ST-Split-Full")
-    with MLFLOW.start_run(run_name="full_encoding"):
+    mlflow.set_experiment("ST-Split-Full")
+    with mlflow.start_run(run_name="full_encoding"):
 
         # -------- Données ventes --------
         df = pd.read_csv(INPUT_PATH, sep=";", parse_dates=["date"], low_memory=False)
@@ -335,10 +337,10 @@ def enrich_and_split():
         agg_train[final_vars].to_csv(train_q12_path, sep=";", index=False)
         agg_test[final_vars].to_csv(test_q12_path, sep=";", index=False)
 
-        MLFLOW.log_artifact(train_clean_path)
-        MLFLOW.log_artifact(test_clean_path)
-        MLFLOW.log_artifact(train_q12_path)
-        MLFLOW.log_artifact(test_q12_path)
+        mlflow.log_artifact(train_clean_path)
+        mlflow.log_artifact(test_clean_path)
+        mlflow.log_artifact(train_q12_path)
+        mlflow.log_artifact(test_q12_path)
 
         print("✅ Données enrichies et exportées.")
 

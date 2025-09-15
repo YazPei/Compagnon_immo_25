@@ -1,0 +1,9 @@
+# MLOps
+mlflow==2.13.0                  # Tracking d’expériences ML ok
+
+
+# ML Stack
+numpy>=1.26.0,<2.0.0 ok
+pandas==2.2.1 ok
+scikit-learn==1.6.1 ok
+

@@ -37,9 +37,8 @@ from utils import *
 
 def run_preprocessing_pipeline(input_path: str, output_path: str):
     # === Config MLflow (DagsHub) ===
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
-    mlflow.set_tracking_username(os.getenv("MLFLOW_TRACKING_USERNAME"))
-    mlflow.set_tracking_password(os.getenv("MLFLOW_TRACKING_PASSWORD"))
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
+
 
     # === BEGIN PIPELINE ===
     file_path = os.path.join(input_path, "df_sales_clean.csv") 

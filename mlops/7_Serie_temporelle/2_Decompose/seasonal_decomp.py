@@ -142,6 +142,7 @@ def _save_fig_and_components(decomp, cluster_id, model, output_folder, suffix=""
 
 def run_decomposition(input_folder: str, output_folder: str, suffix: str = "", expected_clusters: List[int] = None):
     os.makedirs(output_folder, exist_ok=True)
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
     mlflow.set_experiment("ST-Decomposition")
 
     full = _load_periodique_concat(input_folder)

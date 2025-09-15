@@ -17,7 +17,6 @@ USER_FLAGS   := --user $(shell id -u):$(shell id -g)
 DOCKER_COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 .PHONY: \
-  build-base \
   prepare-dirs install help lint \
   quick-start quick-start-pipeline quick-start-test \
   api-dev api-test api-stop \
@@ -116,8 +115,6 @@ prepare-dirs:
 	@mkdir -p data exports mlruns
 	@touch data/.gitkeep
 
-docker-build-base: 
-	DOCKER_BUILDKIT=1 docker build -f mlops/Dockerfile.base -t compagnon_immo-base:lastest .
 
 docker-build: prepare-dirs ## Build via compose
 	@$(DOCKER_COMPOSE) build

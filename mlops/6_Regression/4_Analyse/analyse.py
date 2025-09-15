@@ -9,6 +9,7 @@ from utils import compute_metrics, print_metrics, plot_residuals, shap_summary_p
 @click.option('--encoded-folder', prompt='Dossier des fichiers encodés', type=click.Path(exists=True))
 @click.option('--model', type=click.Choice(['lightgbm', 'xgboost']), prompt='Modèle à analyser')
 def analyse_model(encoded_folder, model):
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
     mlflow.set_experiment("regression_pipeline")
     with mlflow.start_run(run_name=f"analyse_{model}"):
         model_path = os.path.join(encoded_folder, f'{model}_model.joblib')

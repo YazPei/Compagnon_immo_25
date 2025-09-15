@@ -233,7 +233,7 @@ services:
   dvc-runner:
     build:
       context: .
-      dockerfile: mlops/2_dvc/Dockerfile.dvc
+      dockerfile: mlops/2_dvc/Dockerfile
     volumes:
       - .:/app
       - ./.dvc:/app/.dvc
@@ -246,6 +246,19 @@ services:
     networks:
       - ml_net
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root file:///mlartifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - ./mlflow-data:/mlartifacts
+      - ./mlflow-data:/mlruns
+    ports:
+      - "5000:5000"
 
 networks:
   ml_net:

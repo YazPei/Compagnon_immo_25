@@ -1,7 +1,27 @@
 FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+    
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
+    
 WORKDIR /app
 
-COPY mlops/Serie_temporelle/load_split.py /app/mlops/Serie_temporelle/
+COPY ../../exports /app/exports
+COPY mlops/7_Serie_temporelle/1_SPLIT/ /app/mlops/7_Serie_temporelle/1_SPLIT/
 COPY services /app
+COPY ../../data /app/data
+
+
+
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+    
 
 ENTRYPOINT ["uvicorn", "split_ST_api:app", "--host", "0.0.0.0", "--port", "8006"]

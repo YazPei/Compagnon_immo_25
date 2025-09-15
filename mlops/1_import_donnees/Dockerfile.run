@@ -1,23 +1,28 @@
 FROM python:3.10-slim
-
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+    
 # 1. Dépendances système
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     git \
-    bash \
-    && apt-get clean
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 2. Dossier de travail
 WORKDIR /app
 
+
+
+
 # 4. Copie requirements.txt uniquement (cache)
-COPY requirements.txt .
+COPY mlops/1_import_donnees/requirements.txt /app/requirements.txt
+COPY mlops/1_import_donnees /app/mlops/1_import_donnees
 
 # 5. Création de l’environnement virtuel + install
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
-
-# 6. Copie uniquement les scripts nécessaires à l’étape d’import (optionnel ici)
-COPY mlops/1_import_donnees /app/mlops/1_import_donnees
 
 # 7. Création des dossiers requis
 RUN mkdir -p data output && touch data/.gitkeep

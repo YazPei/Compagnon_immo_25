@@ -1,5 +1,16 @@
 FROM python:3.10-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+    
+# 1. Dépendances système
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    libfreetype6 \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/*
+    
 # === Étape 1 : Création utilisateur non-root ===
 RUN adduser --disabled-password --gecos '' appuser && \
     mkdir -p /app /data /mlruns && \
@@ -16,13 +27,16 @@ RUN mkdir -p /app/mlops \
              /app/data/processed
 
 # === Étape 4 : Copie du code après pré-setup ===
-COPY mlops /app/mlops
-COPY data/preprocessed /app/data/preprocessed
+
+COPY mlops/preprocessing_4 /app/mlops/preprocessing_4
+COPY data/processed /app/data/processed
 
 # === Étape 5 : Permissions post-copy ===
 USER root
 RUN chown -R appuser:appuser /app
-
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+    
 # === Étape 6 : Execution avec user générique ===
 USER appuser
 

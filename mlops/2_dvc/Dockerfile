@@ -2,8 +2,9 @@ FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-    
-# 1. Dépendances système
+
+
+# Dépendances système (build + matplotlib)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
@@ -12,13 +13,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY mlops/5_clustering /app/5_clustering
-COPY data/processed data/processed
-COPY exports /app/exports
+    
+# 4. Copie du script shell + sources DVC
+COPY mlops/2_dvc app/2_dvc
+COPY .env.yaz /app/
 
-
+# 5. Droits d’exécution
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
-    
+RUN chmod +x mlops/2_dvc/run_dvc.sh
 
-ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]
+# 6. Entrypoint = exécution du pipeline
+CMD ["bash", "mlops/2_dvc/run_dvc.sh"]
+

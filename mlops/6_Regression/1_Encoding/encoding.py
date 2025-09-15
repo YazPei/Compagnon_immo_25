@@ -226,6 +226,7 @@ def get_feature_names(preprocessor: ColumnTransformer, X_fit: pd.DataFrame) -> l
 @click.option("--random-state", default=42, show_default=True, help="Seed.")
 def main(data_path, output, experiment, random_state):
     os.makedirs(output, exist_ok=True)
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
     mlflow.set_experiment(experiment)
     with mlflow.start_run(run_name="encode_only"):

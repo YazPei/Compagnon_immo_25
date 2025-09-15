@@ -3,6 +3,14 @@ import click
 import joblib
 import pandas as pd
 import mlflow
+from pathlib import Path
+import sys
+
+# Ajout mlops/6_Regression/3_UTILS au PYTHONPATH pour trouver utils.py
+UTILS_DIR = Path(__file__).resolve().parent.parent / "3_UTILS"
+if str(UTILS_DIR) not in sys.path:
+    sys.path.insert(0, str(UTILS_DIR))
+
 from utils import compute_metrics, print_metrics, plot_residuals, shap_summary_plot
 
 @click.command()

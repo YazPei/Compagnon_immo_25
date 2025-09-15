@@ -1,0 +1,5 @@
+ST_SUFFIX: q12
+
+clustering:
+  n_clusters: 4   # ajuste si besoin (4 par défaut)
+

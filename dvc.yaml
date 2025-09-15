@@ -47,9 +47,6 @@ stages:
     outs:
       - exports/df_cluster.csv
       - data/df_sales_clean_ST.csv
-    params:
-      - params.yaml:
-          - clustering.n_clusters
     metrics:
       - mlflow_outputs/cluster_input.csv:
           cache: false

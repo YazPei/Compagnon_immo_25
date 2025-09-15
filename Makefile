@@ -150,15 +150,15 @@ setup_dags: ## Exécute le script d'init DagsHub
 # ===============================
 # 📈️ Build images "étapes" pipeline
 # ===============================
-build-all: docker-basepre docker_build build-base build-fusion build-preprocessing build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
+build-all: docker-basepre docker_build build-base build-fusion build-preprocessing fix-perms-clustering build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
 
-docker-basepre:
-	docker build -f mlops/Dockerfile.base -t $(IMAGE_PREFIX)-base:latest .
+
+
 
 docker_build:
 	docker build -f mlops/1_import_donnees/Dockerfile.run -t $(IMAGE_PREFIX)-run .
 
-# ⚠️ IMPORTANT : ne pas appeler un Dockerfile "*.dvc"
+
 build-base:
 	docker build -f mlops/2_dvc/Dockerfile -t $(DVC_IMAGE) .
 
@@ -167,7 +167,11 @@ build-fusion:
 
 build-preprocessing:
 	docker build -f mlops/preprocessing_4/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
-
+fix-perms-clustering:
+	sudo chown -R $(shell id -u):$(shell id -g) exports
+	dvc unprotect exports/df_cluster.csv || true
+	chmod u+rw exports/df_cluster.csv || true
+	
 build-clustering:
 	docker build -f mlops/5_clustering/Dockerfile.clustering -t $(IMAGE_PREFIX)-clust .
 

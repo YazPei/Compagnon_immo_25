@@ -101,16 +101,16 @@ stages:
       md5: a82bb257d30dd4ac7fe0cde45d692aae
       size: 31055
   encode:
-    cmd: python mlops/6_Regression/1_Encoding/encoding.py
+    cmd: "python mlops/6_Regression/1_Encoding/encoding.py \n"
     deps:
     - path: exports/df_cluster.csv
       hash: md5
-      md5: ec178a7b4cc6b114674d6a7f50c95bbe
+      md5: cf7ef5fa89d3b63cb16e71ead772b49b
       size: 146100176
     - path: mlops/6_Regression/1_Encoding/encoding.py
       hash: md5
-      md5: 5c40f8bff1fe9525326c8e27f20b6cef
-      size: 13108
+      md5: 8985ab8b4b3934fb54387eef789bf04c
+      size: 13170
     outs:
     - path: data/encoded/X_test.csv
       hash: md5
@@ -138,7 +138,7 @@ stages:
       isexec: true
     - path: data/df_sales_clean_ST.csv
       hash: md5
-      md5: 721cef60ff08a042211ce434498bc7b6
+      md5: 48defd022ce98866e3bfc9db390bdb7f
       size: 143279426
     - path: data/processed/contours-codes-postaux.geojson
       hash: md5
@@ -147,12 +147,12 @@ stages:
       isexec: true
     - path: mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       hash: md5
-      md5: 657f58d41c46e031ca5c58cedcebfff6
-      size: 14959
+      md5: 58b563075c7767a3ff8622a73acebd5d
+      size: 15035
     outs:
     - path: data/split
       hash: md5
-      md5: 858f542f4d113d23909ac6f1a7ce3b53.dir
+      md5: b48acdd47f887d30057395bd90d15d74.dir
       size: 200952373
       nfiles: 4
   decompose:
@@ -165,8 +165,8 @@ stages:
       size: 44518
     - path: mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       hash: md5
-      md5: 89c69612f060127d693c4b9402d95aad
-      size: 9485
+      md5: 4ccb5d106ff2f5c33ebd0f9a6c8459bd
+      size: 9547
     outs:
     - path: outputs/decomposition/decomposition_additive_cluster_0.png
       hash: md5
@@ -191,16 +191,16 @@ stages:
       size: 44518
     - path: mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       hash: md5
-      md5: 6f59aa31ede3c7782ccaa63f064304d6
-      size: 24650
+      md5: 31b0624303ff6795528b65545d6652bb
+      size: 24710
     outs:
     - path: outputs/best
       hash: md5
-      md5: 9682e76ce6a01d705fd48dde74d013d0.dir
+      md5: c85d3866de324077e7a042f83066ad48.dir
       size: 4087334
       nfiles: 12
   train_lgbm:
-    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: "python mlops/6_Regression/2_LGBM/train_lgbm.py\n"
     deps:
     - path: data/encoded/X_train.csv
       hash: md5
@@ -212,13 +212,21 @@ stages:
       size: 3033709
     - path: mlops/6_Regression/2_LGBM/train_lgbm.py
       hash: md5
-      md5: daa08863a35baef449f210389562e2eb
-      size: 7887
+      md5: bb9fefbebed97b7e0d37c3beeb05cc5e
+      size: 9029
     outs:
     - path: data/encoded/lgbm_model.joblib
       hash: md5
-      md5: e5a9f0581e3603511c9fa182d3afa9ab
-      size: 2363385
+      md5: 4d6c10cb7cf3a4152f7c8ce54498fdc4
+      size: 2363411
+    - path: metrics/train_lgbm.json
+      hash: md5
+      md5: 108009166d9ce3ba7ca243b7e23831da
+      size: 426
+    - path: reports/feature_importance.json
+      hash: md5
+      md5: b0ee5bd3956d157c22422ecfb0aeeed5
+      size: 3329
   analyse:
     cmd: "python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm\n"
     deps:
@@ -228,16 +236,16 @@ stages:
       size: 64388025
     - path: data/encoded/lgbm_model.joblib
       hash: md5
-      md5: e5a9f0581e3603511c9fa182d3afa9ab
-      size: 2363385
+      md5: 4d6c10cb7cf3a4152f7c8ce54498fdc4
+      size: 2363411
     - path: data/encoded/y_test.csv
       hash: md5
       md5: d34e5f9df7159ca64b9decd5c5754b17
       size: 758568
     - path: mlops/6_Regression/4_Analyse/analyse.py
       hash: md5
-      md5: 133083cf63647d015f2382ec66a51653
-      size: 1466
+      md5: 0ad9de64f743042bad85ba6e54a7fc6f
+      size: 1774
   evaluate:
     cmd: "python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py --input-folder
       data/split --model-folder outputs/best --output-folder outputs/evaluate --suffix
@@ -245,21 +253,17 @@ stages:
     deps:
     - path: data/split
       hash: md5
-      md5: 858f542f4d113d23909ac6f1a7ce3b53.dir
+      md5: b48acdd47f887d30057395bd90d15d74.dir
       size: 200952373
       nfiles: 4
-    - path: mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
-      hash: md5
-      md5: 3f86e34546333f6e9148a3a2a2266dd9
-      size: 5773
     - path: outputs/best
       hash: md5
-      md5: 9682e76ce6a01d705fd48dde74d013d0.dir
+      md5: c85d3866de324077e7a042f83066ad48.dir
       size: 4087334
       nfiles: 12
     outs:
     - path: outputs/evaluate
       hash: md5
-      md5: d751713988987e9331980363e24189ce.dir
-      size: 0
-      nfiles: 0
+      md5: ca235b2c7f2f06a5052907c2600f7748.dir
+      size: 1921
+      nfiles: 4

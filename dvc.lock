@@ -77,24 +77,20 @@ stages:
     deps:
     - path: data/processed/df_sales_clean_train.csv
       hash: md5
-      md5: e1382aca60f2387fd2052d7009d1f63f
+      md5: 25f0f0c111d040affe836bac18745b2a
       size: 75732754
     - path: mlops/5_clustering/Clustering.py
       hash: md5
       md5: 6111d0fd9e934806a4864bb547a74d3a
       size: 20069
-      isexec: true
-    params:
-      params.yaml:
-        clustering.n_clusters: 4
     outs:
     - path: data/df_sales_clean_ST.csv
       hash: md5
-      md5: 721cef60ff08a042211ce434498bc7b6
+      md5: 48defd022ce98866e3bfc9db390bdb7f
       size: 143279426
     - path: exports/df_cluster.csv
       hash: md5
-      md5: ec178a7b4cc6b114674d6a7f50c95bbe
+      md5: cf7ef5fa89d3b63cb16e71ead772b49b
       size: 146100176
     - path: mlflow_outputs/cluster_input.csv
       hash: md5

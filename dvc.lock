@@ -51,8 +51,8 @@ stages:
       size: 142497303
     - path: mlops/preprocessing_4/preprocessing.py
       hash: md5
-      md5: 18729e0a4820ca4c811f195018432720
-      size: 25988
+      md5: a31851f6feb9abb13e6cf980d1e6f4ef
+      size: 25991
       isexec: true
     - path: mlops/preprocessing_4/utils.py
       hash: md5
@@ -61,7 +61,7 @@ stages:
     outs:
     - path: data/processed/df_sales_clean_series.csv
       hash: md5
-      md5: 0961e08ca0b3538aee689a61b9cce743
+      md5: 20e3e2cdabd129899b700b341136c0b0
       size: 143505368
     - path: data/processed/df_sales_clean_test.csv
       hash: md5
@@ -69,7 +69,7 @@ stages:
       size: 18944437
     - path: data/processed/df_sales_clean_train.csv
       hash: md5
-      md5: e1382aca60f2387fd2052d7009d1f63f
+      md5: 25f0f0c111d040affe836bac18745b2a
       size: 75732754
   clustering:
     cmd: "python mlops/5_clustering/Clustering.py --input-path data/processed --output-path

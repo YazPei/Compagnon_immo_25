@@ -31,10 +31,11 @@ stages:
       hash: md5
       md5: b3b4585e6ddb9279d2285e69f07d1914
       size: 111280786
+      isexec: true
     - path: mlops/3_fusion/fusion_geo_dvf.py
       hash: md5
-      md5: d211588ee51d940de784123451d39ecf
-      size: 5083
+      md5: 36ca98d4489b16a84b8e4653e02da6fc
+      size: 5058
     outs:
     - path: data/clean/df_sales_clean.csv
       hash: md5
@@ -50,8 +51,9 @@ stages:
       size: 142497303
     - path: mlops/preprocessing_4/preprocessing.py
       hash: md5
-      md5: 0db408688b3f702427061eeacbded627
-      size: 24219
+      md5: 18729e0a4820ca4c811f195018432720
+      size: 25988
+      isexec: true
     - path: mlops/preprocessing_4/utils.py
       hash: md5
       md5: 9bb344fccdf9eb1ec6b708e44000308e

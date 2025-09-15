@@ -2,6 +2,7 @@
 
 set -e
 
+
 echo "=== Configuration de l'environnement Airflow/DagsHub ==="
 
 read -p "Ton login DagsHub: " dagshub_user

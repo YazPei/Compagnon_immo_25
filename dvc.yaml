@@ -21,6 +21,7 @@ stages:
 
     outs:
       - data/clean/df_sales_clean.csv
+      
   preprocessing:
     cmd: >
       mkdir -p data/processed/reports/figures &&
@@ -56,7 +57,8 @@ stages:
       - mlflow_outputs/elbow_plot.png
 
   encode:
-    cmd: python mlops/6_Regression/1_Encoding/encoding.py 
+    cmd: >
+      python mlops/6_Regression/1_Encoding/encoding.py 
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
@@ -67,13 +69,22 @@ stages:
       - data/encoded/y_test.csv
 
   train_lgbm:
-    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: >
+      python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
+
     outs:
-      -data/encoded/lgbm_model.joblib
+      - data/encoded/lgbm_model.joblib
+
+    metrics:
+      - metrics/train_lgbm.json:
+          cache: false
+    plots:
+      - reports/feature_importance.json:
+          cache: false
 
   analyse:
     cmd: >

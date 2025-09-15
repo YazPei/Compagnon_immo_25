@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 
 
-mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050"))
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
 # ───────────────────────── Warnings ─────────────────────────
 warnings.filterwarnings("ignore", category=ValueWarning,

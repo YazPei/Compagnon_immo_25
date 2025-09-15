@@ -1,0 +1,35 @@
+# Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
+
+# Core Scientific & Data Manipulation
+
+
+# Visualisation
+matplotlib>=3.8.0               # Tracé de graphes classiques ok
+seaborn>=0.13.0                 # Visualisation statistique ok
+
+
+# API + Frontend
+fastapi==0.111.0                # API REST
+uvloop
+uvicorn[standard]==0.29.0       # Serveur ASGI pour FastAPI
+python-multipart==0.0.9         # Pour gérer les fichiers FastAPI
+pydantic==2.7.1                 # Validation de données (FastAPI, modèles)
+streamlit==1.35.0               # Interface utilisateur web interactive
+httptools==0.5.0
+
+# MLOps
+mlflow==2.13.0                  # Tracking d’expériences ML ok
+
+# API Framework
+python-dotenv==1.1.0
+
+
+# ML Stack ok
+numpy>=1.26.0,<2.0.0
+pandas==2.2.1
+scikit-learn==1.6.1
+statsmodels==0.14.1 
+joblib==1.5.1
+
+
+

@@ -233,18 +233,45 @@ services:
   dvc-runner:
     build:
       context: .
-      dockerfile: mlops/2_dvc/Dockerfile.dvc
+      dockerfile: mlops/2_dvc/Dockerfile
     volumes:
       - .:/app
       - ./.dvc:/app/.dvc
     working_dir: /app
     tty: true
     stdin_open: true
-    command: ["sh", "-lc", "./run_dvc.sh"]
     env_file:
-      - .env
+      - .env        
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5050
+    command: ["sh", "-lc", "./run_dvc.sh"]
     networks:
       - ml_net
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root file:///mlartifacts
+      --host 0.0.0.0
+      --port 5050
+    volumes:
+      - ./mlflow-data:/mlartifacts
+      - ./mlflow-data:/mlruns
+    ports:
+      - "5050:5050"
+    networks:
+      - ml_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -X POST -H 'Content-Type: application/json' -d '{}' http://localhost:5050/api/2.0/mlflow/experiments/list >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 
 networks:

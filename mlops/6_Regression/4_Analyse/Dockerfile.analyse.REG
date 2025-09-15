@@ -1,7 +1,15 @@
-FROM python:3.10-slim
+FROM Dockerfile.util.REG
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+    
+# 1. Dépendances système
+
+    
 WORKDIR /app
 
-COPY mlops/6_Regression/4_Analyse mlops/6_Regression/4_Analyse 
+COPY mlops/6_Regression/4_Analyse /app/6_Regression/4_Analyse 
+
 COPY exports /app/exports
 
 ENTRYPOINT ["uvicorn", "analyse_api:app", "--host", "0.0.0.0", "--port", "8005"]

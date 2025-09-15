@@ -83,7 +83,7 @@ def impute_missing_ips(df_sales_clean):
 @click.option('--folder-path2', type=click.Path(exists=True), prompt='📂 Chemin vers les données DVF')
 @click.option('--output-folder', type=click.Path(), prompt='📁 Dossier de sortie')
 def main(folder_path1, folder_path2, output_folder):
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5050"))
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
     mlflow.set_experiment("Fusion Données IPS")
 
     with mlflow.start_run(run_name="fusion_geo_dvf"):

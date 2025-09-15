@@ -113,6 +113,7 @@ def evaluate_model(cluster_id, df_train, df_test, model_path, output_folder, suf
 
 
 def main(input_folder, output_folder, model_folder, suffix=""):
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
     mlflow.set_experiment("ST-SARIMAX-Evaluation")
     results = []
 

@@ -4,5 +4,5 @@ __pycache__
 .mlruns
 .git
 .env
-data/
+.env.yaz
 mlruns/

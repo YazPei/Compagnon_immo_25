@@ -4,41 +4,38 @@
 import os
 import re
 import warnings
+import json
+from pathlib import Path
+
 import click
 import numpy as np
 import pandas as pd
-
 from sklearn.model_selection import StratifiedKFold, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import r2_score, mean_squared_error
 from lightgbm import LGBMRegressor
 import joblib
 import mlflow
-import json
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 try:
     import psutil
     N_PHYS = psutil.cpu_count(logical=False) or os.cpu_count() or 1
 except Exception:
     N_PHYS = os.cpu_count() or 1
-    
+
 TARGET = "prix_m2_vente"
 
 # ---------- Sanitizer des noms de colonnes (LightGBM-safe) ----------
 def sanitize_feature_names(cols):
-    """
-    Conserve uniquement [A-Za-z0-9_], remplace le reste par '_'.
-    Évite les collisions en suffixant __2, __3, ...
-    Force un préfixe 'f_' si le nom commence par un chiffre.
-    """
     safe = []
     used = set()
     mapping = {}
     for c in cols:
         orig = str(c)
-        new = re.sub(r'[^A-Za-z0-9_]', '_', orig)          # remplace caractères spéciaux
-        new = re.sub(r'_+', '_', new).strip('_')            # compresse / trim underscores
+        new = re.sub(r'[^A-Za-z0-9_]', '_', orig)
+        new = re.sub(r'_+', '_', new).strip('_')
         if new == "" or new[0].isdigit():
             new = f"f_{new}" if new != "" else "f"
         base = new
@@ -53,8 +50,6 @@ def sanitize_feature_names(cols):
 
 def apply_mapping(df, mapping):
     return df.rename(columns=mapping)
-
-# --------------------------------------------------------------------
 
 @click.command()
 @click.option("--encoded-folder", default="data/encoded", show_default=True,
@@ -113,13 +108,13 @@ def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
             colsample_bytree=0.9,
             reg_alpha=0.0,
             reg_lambda=0.0,
-            n_jobs=N_PHYS, 
-            
+            n_jobs=N_PHYS,
         )
         if mem_mode.lower() == "row":
             base_params["force_row_wise"] = True
         elif mem_mode.lower() == "col":
             base_params["force_col_wise"] = True
+
         model = LGBMRegressor(**base_params)
         best_params = base_params.copy()
 
@@ -153,31 +148,37 @@ def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
         else:
             model.fit(X_train, y_train)
 
+        # --- Évaluations ---
         # Hold-out
-        y_pred = model.predict(X_test)
-        r2  = r2_score(y_test, y_pred)
-        rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
+        y_pred_test = model.predict(X_test)
+        r2_test  = float(r2_score(y_test, y_pred_test))
+        rmse_test = float(np.sqrt(mean_squared_error(y_test, y_pred_test)))
 
-        print(f"R²  : {r2:.4f}")
-        print(f"RMSE: {rmse:,.2f}")
-        mlflow.log_metric("r2_test", r2)
-        mlflow.log_metric("rmse_test", rmse)
+        # Train
+        y_pred_train = model.predict(X_train)
+        rmse_train = float(np.sqrt(mean_squared_error(y_train, y_pred_train)))
+
+        mlflow.log_metric("r2_test", r2_test)
+        mlflow.log_metric("rmse_test", rmse_test)
+        mlflow.log_metric("rmse_train", rmse_train)
 
         # CV stratifiée (sur quantiles de y) — optionnelle
+        cv_mean = None
+        cv_std  = None
         try:
             y_strat = pd.qcut(y_train, q=5, duplicates='drop', labels=False)
             skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
             cv_scores = cross_val_score(model, X_train, y_train,
                                         cv=skf.split(X_train, y_strat),
                                         scoring='r2', n_jobs=1)
-            print(f"Scores R² par fold : {cv_scores}")
-            print(f"Score R² moyen (CV) : {np.mean(cv_scores):.4f} ± {np.std(cv_scores):.4f}")
-            mlflow.log_metric("cv_r2_mean", float(np.mean(cv_scores)))
-            mlflow.log_metric("cv_r2_std",  float(np.std(cv_scores)))
+            cv_mean = float(np.mean(cv_scores))
+            cv_std  = float(np.std(cv_scores))
+            mlflow.log_metric("cv_r2_mean", cv_mean)
+            mlflow.log_metric("cv_r2_std",  cv_std)
         except Exception as e:
             print(f"[WARN] CV stratifiée non calculée : {e}")
 
-        # Sauvegardes
+        # Sauvegardes modèles
         best_model_path  = os.path.join(encoded_folder, "best_lgbm_model.pkl")
         best_params_path = os.path.join(encoded_folder, "best_lgbm_params.pkl")
         joblib.dump(model, best_model_path)
@@ -190,7 +191,36 @@ def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
         for k, v in best_params.items():
             mlflow.log_param(k, v)
 
+        # --- Feature importance (JSON pour DVC plots) ---
+        try:
+            feature_names = getattr(model, "feature_name_", None)
+            if feature_names is None:
+                feature_names = list(X_train.columns)
+            fi = (
+                pd.DataFrame({"feature": feature_names,
+                              "importance": getattr(model, "feature_importances_", [])})
+                .sort_values("importance", ascending=False)
+            )
+            Path("reports").mkdir(parents=True, exist_ok=True)
+            fi.to_json("reports/feature_importance.json", orient="records", indent=2)
+        except Exception as e:
+            print(f"[WARN] Feature importance non écrite : {e}")
+
+        # --- Écriture des métriques pour DVC ---
+        metrics = {
+            "r2_test": r2_test,
+            "rmse_test": rmse_test,
+            "rmse_train": rmse_train,
+            "cv_mean": cv_mean,
+            "cv_std": cv_std,
+            "best_params": best_params,
+        }
+        Path("metrics").mkdir(parents=True, exist_ok=True)
+        with open("metrics/train_lgbm.json", "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=2)
+
         print("✅ Entraînement terminé. Modèle & params sauvegardés.")
+        print("📈 Metrics JSON écrit:", Path("metrics/train_lgbm.json").resolve())
 
 if __name__ == "__main__":
     main()

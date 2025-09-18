@@ -1,8 +1,4 @@
 # docker-compose.yml — Compagnon Immo (version corrigée)
-# - Aligne chemins Dockerfile/scripts avec le Makefile
-# - Fixe MLflow (backend + artifact root) et healthcheck
-# - Uniformise mounts, users, networks, depends_on (service_healthy)
-# - Ajoute des profiles (regression, series) pour cibler les runs
 
 services:
   # --------- Pipeline de lancement ----------
@@ -56,10 +52,9 @@ services:
       - ./mlops/preprocessing_4:/app/mlops/preprocessing_4
     env_file:
       - .env
-    command: >-
-      python mlops/preprocessing_4/preprocessing.py
-      --input-path /app/data
-      --output-path /app/data
+    command: ["python","mlops/preprocessing_4/preprocessing.py",
+          "--input-path","/app/data",
+          "--output-path","/app/data"]
     networks:
       - ml_net
     profiles: ["regression", "series"]
@@ -76,11 +71,10 @@ services:
       - .env
     networks:
       - ml_net
-    command: >-
-      python mlops/5_clustering/Clustering.py
-      --input-path /app/data/train_clean.csv
-      --output-path1 /app/data/df_cluster.csv
-      --output-path2 /app/data/df_sales_clean_ST.csv
+    command: ["python","mlops/5_clustering/Clustering.py",
+          "--input-path","/app/data/train_clean.csv",
+          "--output-path1","/app/data/df_cluster.csv",
+          "--output-path2","/app/data/df_sales_clean_ST.csv"]
     profiles: ["regression", "series"]
 
   encode:
@@ -160,10 +154,9 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: >-
-      python /app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
-      --input-folder /app/exports/st
-      --output-folder /app/exports/st
+    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py",
+          "--input-folder","/app/exports/st",
+          "--output-folder","/app/exports/st"]
     env_file:
       - .env
     environment:
@@ -181,10 +174,9 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: >-
-      python /app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py
-      --input-folder /app/exports/st
-      --output-folder /app/exports/st
+    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py",
+          "--input-folder","/app/exports/st",
+          "--output-folder","/app/exports/st"]
     env_file:
       - .env
     environment:
@@ -241,10 +233,9 @@ services:
     tty: true
     stdin_open: true
     env_file:
-      - .env        
+      - .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
-    command: ["sh", "-lc", "./run_dvc.sh"]
     networks:
       - ml_net
     depends_on:
@@ -252,29 +243,85 @@ services:
         condition: service_healthy
 
 
+  #------------mlflow---------
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.15.1
-    command: >
-      mlflow server
-      --backend-store-uri sqlite:///mlflow.db
-      --default-artifact-root file:///mlartifacts
-      --host 0.0.0.0
-      --port 5050
+    working_dir: /mlflow
+    command: ["mlflow","server",
+              "--backend-store-uri","sqlite:///mlflow.db",
+              "--default-artifact-root","file:///mlartifacts",
+              "--host","0.0.0.0","--port","5050"]
     volumes:
-      - ./mlflow-data:/mlartifacts
-      - ./mlflow-data:/mlruns
-    ports:
-      - "5050:5050"
-    networks:
-      - ml_net
+      - ./mlflow-data:/mlflow           # DB sqlite + state
+      - ./mlflow-artifacts:/mlartifacts # artefacts
+    ports: ["5050:5050"]
+    networks: ["ml_net"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -X POST -H 'Content-Type: application/json' -d '{}' http://localhost:5050/api/2.0/mlflow/experiments/list >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request; req=urllib.request.Request('http://localhost:5050/api/2.0/mlflow/experiments/list', data=b'{}', headers={'Content-Type':'application/json'}); urllib.request.urlopen(req, timeout=3); print('ok')\nPY"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 20s
 
+
+
+#----airflow--------
+
+  postgres-airflow:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db:/var/lib/postgresql/data
+    networks:
+      - ml_net
+
+  airflow:
+    image: apache/airflow:2.9.0
+    depends_on:
+      - postgres-airflow
+    env_file:
+      - .env
+    environment:
+      # --- Airflow (DB locale) ---
+      MLFLOW_TRACKING_URI: "http://mlflow:5050"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
+
+      # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
+      # (Les 3 variables viennent du .env et suffisent au client mlflow)
+      # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:
+      AIRFLOW_CONN_DAGSHUB_MLFLOW: "https://${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}@dagshub.com/${DAGSHUB_REPO_OWNER}/${DAGSHUB_REPO_NAME}.mlflow"
+
+      # Optionnel : accessibles dans les DAGs
+      DAGSHUB_USER: "${DAGSHUB_USER}"
+      DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
+      DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
+      DAGSHUB_REPO_NAME: "${DAGSHUB_REPO_NAME}"
+
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com &&
+      airflow webserver & airflow scheduler
+      "
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./:/opt/airflow/repo
+      - ./dags:/opt/airflow/dags
+    working_dir: /opt/airflow
+    networks:
+      - ml_net
+
+volumes:
+  airflow_db:
 
 networks:
   ml_net:
-    driver: bridge
+    external: true
 

@@ -1,0 +1,19 @@
+{
+  "r2_test": 0.9649108917441874,
+  "rmse_test": 461.86173137454904,
+  "rmse_train": 417.3099578318155,
+  "cv_mean": 0.962318570660601,
+  "cv_std": 0.001319620072334328,
+  "best_params": {
+    "random_state": 42,
+    "n_estimators": 800,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "max_depth": -1,
+    "subsample": 0.9,
+    "colsample_bytree": 0.9,
+    "reg_alpha": 0.0,
+    "reg_lambda": 0.0,
+    "n_jobs": 6
+  }
+}

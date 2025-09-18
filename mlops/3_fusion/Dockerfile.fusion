@@ -13,10 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 # Copie le reste du projet
-COPY mlops/3_fusion /app/3_fusion
+COPY mlops/3_fusion/requirements.txt /app/mlops/3_fusion/requirements.txt
+COPY mlops/3_fusion /app/mlops/3_fusion
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/3_fusion/requirements.txt
     
 # Lancement automatique du script
 ENTRYPOINT ["bash", "mlops/3_fusion/run_fusion.sh"]

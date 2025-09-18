@@ -1,4 +1,4 @@
-s# Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
+# Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
 
 # Core Scientific & Data Manipulation
 numpy==1.26.4                    # Calcul scientifique

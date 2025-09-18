@@ -13,13 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     
 WORKDIR /app
 
-COPY mlops/7_Serie_temporelle/3_SARIMAX /app/7_Serie_temporelle/3_SARIMAX
+COPY mlops/7_Serie_temporelle/3_SARIMAX/requirements.txt /app/mlops/7_Serie_temporelle/3_SARIMAX/requirements.txt
+COPY mlops/7_Serie_temporelle/3_SARIMAX /app/mlops/7_Serie_temporelle/3_SARIMAX
 COPY data/ /app/data/
 COPY exports/ /app/exports
 
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/7_Serie_temporelle/3_SARIMAX/requirements.txt
     
 EXPOSE 8007
 ENTRYPOINT ["uvicorn", "sarimax_api:app", "--host", "0.0.0.0", "--port", "8007"]

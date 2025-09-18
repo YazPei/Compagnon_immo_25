@@ -1,8 +1,4 @@
 # docker-compose.yml — Compagnon Immo (version corrigée)
-# - Aligne chemins Dockerfile/scripts avec le Makefile
-# - Fixe MLflow (backend + artifact root) et healthcheck
-# - Uniformise mounts, users, networks, depends_on (service_healthy)
-# - Ajoute des profiles (regression, series) pour cibler les runs
 
 services:
   # --------- Pipeline de lancement ----------
@@ -56,10 +52,9 @@ services:
       - ./mlops/preprocessing_4:/app/mlops/preprocessing_4
     env_file:
       - .env
-    command: >-
-      python mlops/preprocessing_4/preprocessing.py
-      --input-path /app/data
-      --output-path /app/data
+    command: ["python","mlops/preprocessing_4/preprocessing.py",
+          "--input-path","/app/data",
+          "--output-path","/app/data"]
     networks:
       - ml_net
     profiles: ["regression", "series"]
@@ -76,11 +71,10 @@ services:
       - .env
     networks:
       - ml_net
-    command: >-
-      python mlops/5_clustering/Clustering.py
-      --input-path /app/data/train_clean.csv
-      --output-path1 /app/data/df_cluster.csv
-      --output-path2 /app/data/df_sales_clean_ST.csv
+    command: ["python","mlops/5_clustering/Clustering.py",
+          "--input-path","/app/data/train_clean.csv",
+          "--output-path1","/app/data/df_cluster.csv",
+          "--output-path2","/app/data/df_sales_clean_ST.csv"]
     profiles: ["regression", "series"]
 
   encode:
@@ -160,10 +154,9 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: >-
-      python /app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
-      --input-folder /app/exports/st
-      --output-folder /app/exports/st
+    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py",
+          "--input-folder","/app/exports/st",
+          "--output-folder","/app/exports/st"]
     env_file:
       - .env
     environment:
@@ -181,10 +174,9 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: >-
-      python /app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py
-      --input-folder /app/exports/st
-      --output-folder /app/exports/st
+    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py",
+          "--input-folder","/app/exports/st",
+          "--output-folder","/app/exports/st"]
     env_file:
       - .env
     environment:
@@ -241,37 +233,37 @@ services:
     tty: true
     stdin_open: true
     env_file:
-      - .env        
+      - .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
-    command: ["sh", "-lc", "./run_dvc.sh"]
     networks:
       - ml_net
     depends_on:
       mlflow:
         condition: service_healthy
 
-#------------mlflow---------
+
+  #------------mlflow---------
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.15.1
-    command: >
-      mlflow server
-      --backend-store-uri sqlite:///mlflow.db
-      --default-artifact-root file:///mlartifacts
-      --host 0.0.0.0
-      --port 5050
+    working_dir: /mlflow
+    command: ["mlflow","server",
+              "--backend-store-uri","sqlite:///mlflow.db",
+              "--default-artifact-root","file:///mlartifacts",
+              "--host","0.0.0.0","--port","5050"]
     volumes:
-      - ./mlflow-data:/mlartifacts
-      - ./mlflow-data:/mlruns
-    ports:
-      - "5050:5050"
-    networks:
-      - ml_net
+      - ./mlflow-data:/mlflow           # DB sqlite + state
+      - ./mlflow-artifacts:/mlartifacts # artefacts
+    ports: ["5050:5050"]
+    networks: ["ml_net"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -X POST -H 'Content-Type: application/json' -d '{}' http://localhost:5050/api/2.0/mlflow/experiments/list >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request; req=urllib.request.Request('http://localhost:5050/api/2.0/mlflow/experiments/list', data=b'{}', headers={'Content-Type':'application/json'}); urllib.request.urlopen(req, timeout=3); print('ok')\nPY"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 20s
+
+
 
 #----airflow--------
 

@@ -7,6 +7,7 @@
 *.Dockerfile.*
 # .dvcignore
 *.env
+.env.yaz
 mlops/2_dvc/Dockerfile.dvc
 mlops/2_dvc/Dockerfile.APIdvc
 

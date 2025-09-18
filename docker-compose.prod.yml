@@ -3,7 +3,11 @@ version: '3.8'
 services:
   api:
     build: .
-    command: gunicorn app.api.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+    command: >
+      sh -c "
+      dvc pull &&
+      gunicorn app.api.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+      "
     ports:
       - "8000:8000"
       - "9090:9090"
@@ -15,9 +19,13 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - METRICS_ENABLED=true
+      - DAGSHUB_USERNAME=${DAGSHUB_USERNAME}
+      - DAGSHUB_TOKEN=${DAGSHUB_TOKEN}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - MLFLOW_TRACKING_USERNAME=${MLFLOW_TRACKING_USERNAME}
+      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_TRACKING_PASSWORD}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
     depends_on:
       - redis
       - db

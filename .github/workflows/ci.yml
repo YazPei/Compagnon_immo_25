@@ -42,28 +42,28 @@ jobs:
         pip install -r requirements.txt
         pip install dagshub mlflow dvc[s3]
 
-  test:
-    name: Run Tests
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
+test:
+  name: Run Tests
+  needs: setup
+  runs-on: ubuntu-latest
+  steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run tests
-      env:
-        DATABASE_URL: sqlite:///:memory:
-        JWT_SECRET_KEY: test-secret-key
-        TESTING: true
+    - name: Install dependencies
       run: |
-        python -m pytest app/api/tests/ -v --disable-warnings
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install dagshub mlflow dvc[s3]
+
+    - name: Run tests
+      run: pytest app/api/tests/ -v
 
     - name: Code quality checks
       run: |
         flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
         black --check app/
         isort --check-only app/
-
   train-model:
     name: Train ML Model
     needs: test
@@ -124,17 +124,13 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push API image
+    - name: Build and push Docker image
       uses: docker/build-push-action@v4
       with:
         context: .
-        file: ./infrastructure/docker/Dockerfile.api
+        file: ./docker-compose.prod.yml
         push: true
-        tags: |
-          ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:${{ github.sha }}
-          ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        tags: ghcr.io/<username>/compagnon-immo-api:latest
 
   integration-tests:
     name: Run Integration Tests

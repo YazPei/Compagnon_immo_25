@@ -1,4 +1,4 @@
-FROM Dockerfile.util.REG
+FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -8,8 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     
 WORKDIR /app
 
-COPY mlops/6_Regression/4_Analyse /app/6_Regression/4_Analyse 
-
+COPY mlops/6_Regression/4_Analyse/requirements.txt /app/mlops/6_Regression/4_Analyse/requirements.txt
+COPY mlops/6_Regression/4_Analyse /app/mlops/6_Regression/4_Analyse 
 COPY exports /app/exports
 
+RUN pip install --upgrade pip && \
+    pip install -r /app/mlops/6_Regression/4_Analyse/requirements.txt
+    
 ENTRYPOINT ["uvicorn", "analyse_api:app", "--host", "0.0.0.0", "--port", "8005"]

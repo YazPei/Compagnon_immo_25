@@ -12,13 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY mlops/6_Regression/2_LGBM mlops/6_Regression/2_LGBM
+COPY mlops/6_Regression/2_LGBM/requirements.txt /app/mlops/6_Regression/2_LGBM/requirements.txt
+COPY mlops/6_Regression/2_LGBM /app/mlops/6_Regression/2_LGBM
 COPY ../../exports /app/exports
 
 
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/6_Regression/2_LGBM/requirements.txt
     
 
 ENTRYPOINT ["uvicorn", "train_lgbm_api:app", "--host", "0.0.0.0", "--port", "8004"]

@@ -12,13 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY mlops/5_clustering /app/5_clustering
+COPY mlops/5_clustering/requirements.txt /app/mlops/5_clustering/requirements.txt
+COPY mlops/5_clustering /app/mlops/5_clustering
 COPY data/processed data/processed
 COPY exports /app/exports
 
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/5_clustering/requirements.txt
     
 
 ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]

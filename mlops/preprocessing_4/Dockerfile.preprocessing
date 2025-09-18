@@ -27,15 +27,18 @@ RUN mkdir -p /app/mlops \
              /app/data/processed
 
 # === Étape 4 : Copie du code après pré-setup ===
-
-COPY mlops/preprocessing_4 /app/mlops/preprocessing_4
+COPY mlops/preprocessing_4/requirements.txt /app/mlops/preprocessing_4/requirements.txt
+COPY mlops/preprocessing_4/ /app/mlops/preprocessing_4/
 COPY data/processed /app/data/processed
+
+
+
 
 # === Étape 5 : Permissions post-copy ===
 USER root
 RUN chown -R appuser:appuser /app
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/preprocessing_4/requirements.txt
     
 # === Étape 6 : Execution avec user générique ===
 USER appuser

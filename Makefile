@@ -5,6 +5,7 @@
 .DEFAULT_GOAL := help
 
 # ===== Variables =====
+SHELL := /usr/bin/env bash
 IMAGE_PREFIX   := compagnon_immo
 NETWORK        := ml_net
 PYTHON_BIN     := .venv/bin/python
@@ -53,14 +54,12 @@ lint: ## Vérifie quelques pièges courants
 # ===============================
 # 📦 Quick start
 # ===============================
-quick-start: init-env quick-start-pipeline ## Build + run docker + dvc repro
+quick-start: setup_dags build-all ## Build + run docker
 
-quick-start-pipeline: init-env build-all run-all-docker ## Build images + lance tous les conteneurs éphémères
 
-quick-start-test: quick-start-pipeline dvc-repro-all ## + DVC repro complet
+quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 
-init-env:
-	@./setup_env_dagshub.sh
+
 
 # ===============================
 # 🌐 API et Interface Web
@@ -115,6 +114,10 @@ mlflow-down: ## Stoppe MLflow (docker)
 # ===============================
 # 🐳 Docker - orchestrations
 # ===============================
+build-all: prepare-dirs docker-build docker-stack-up 
+run_permission_airflow:
+	@chmod +x ./dags-airflow-permission.sh && ./dags-airflow-permission.sh
+
 prepare-dirs:
 	@mkdir -p data exports mlruns
 	@touch data/.gitkeep
@@ -145,12 +148,12 @@ docker-api-stop: ## Stop & rm API container
 # ☁️ DagsHub Setup
 # ===============================
 setup_dags: ## Exécute le script d'init DagsHub
-	@chmod +x setup_env_dagshub.sh && ./setup_env_dagshub.sh
+	@chmod +x ./setup_env_dagshub.sh && ./setup_env_dagshub.sh
 
 # ===============================
 # 📈️ Build images "étapes" pipeline
 # ===============================
-build-all: docker-basepre docker_build build-base build-fusion build-preprocessing fix-perms-clustering build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
+build-all: docker_build build-base build-fusion build-preprocessing fix-perms-clustering build-clustering build-encoding build-lgbm build-util build-analyse build-splitST build-decompose build-SARIMAX build-evaluate ## Build de toutes les images
 
 
 
@@ -166,7 +169,7 @@ build-fusion:
 	docker build -f mlops/3_fusion/Dockerfile.fusion -t $(IMAGE_PREFIX)-fus .
 
 build-preprocessing:
-	docker build -f mlops/preprocessing_4/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocess .
+	docker build -f mlops/preprocessing_4/Dockerfile.preprocessing -t $(IMAGE_PREFIX)-preprocessing .
 fix-perms-clustering:
 	sudo chown -R $(shell id -u):$(shell id -g) exports
 	dvc unprotect exports/df_cluster.csv || true
@@ -509,20 +512,18 @@ ports-check: ## Vérifie les ports locaux
 # ===============================
 airflow: airflow-up airflow-run ## Raccourci
 
-airflow-up: ## Démarre Airflow (compose)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml up -d --build
-
-airflow-down: ## Stoppe Airflow (compose)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml down
-
-airflow-restart: airflow-down airflow-up ## Restart Airflow
 
 airflow-logs: ## Logs du service Airflow
 	@docker logs -f airflow
 
 airflow-run: ## Run un service airflow via compose
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml run --rm airflow
+	@$(DOCKER_COMPOSE) run --rm airflow
 
 airflow-ps: ## ps des services airflow
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.airflow.yml ps -a
+	@$(DOCKER_COMPOSE)  ps -a
 
+airflow-down: ## Down propre
+	@$(DOCKER_COMPOSE) down airflow
+
+airflow-restart: ## Redémarre Airflow
+	@$(DOCKER_COMPOSE) restart airflow

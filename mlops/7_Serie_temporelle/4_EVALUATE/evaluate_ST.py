@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore")
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
 # ========= MLflow utils =========
-def setup_mlflow(exp_name: str = "ST-SARIMAX-Evaluation") -> None:
+def setup_mlflow(exp_name: str = "ST-SARIMAX-Evaluation-remote") -> None:
     """
     Utilise MLFLOW_TRACKING_URI si défini, sinon fallback local file:./mlruns
     Crée/sélectionne l'expérience exp_name.

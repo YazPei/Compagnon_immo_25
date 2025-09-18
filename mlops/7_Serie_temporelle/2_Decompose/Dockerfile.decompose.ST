@@ -15,14 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 
-COPY services /app
-COPY mlops/7_Serie_temporelle/2_Decompose /app/7_Serie_temporelle/2_Decompose
+COPY mlops/7_Serie_temporelle/2_Decompose/requirements.txt /app/mlops/7_Serie_temporelle/2_Decompose/requirements.txt
+COPY mlops/7_Serie_temporelle/2_Decompose /app/mlops/7_Serie_temporelle/2_Decompose
 COPY ../../exports /app/exports
 COPY ../../data /app/data
 
 
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r /app/mlops/7_Serie_temporelle/2_Decompose/requirements.txt
     
     
 EXPOSE 8007

@@ -94,10 +94,11 @@ jobs:
       postgres:
         image: postgres:13
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: compagnon_immo_test
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -123,13 +124,24 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
+      #  attendre explicitement que la DB réponde
+      - name: Wait for Postgres
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          for i in {1..30}; do
+            pg_isready -h postgres -p 5432 -U postgres && break
+            echo "waiting postgres..."; sleep 2
+          done
+
       - name: Run integration tests
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compagnon_immo_test
+          # hostname 'postgres' 
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/compagnon_immo_test
           JWT_SECRET_KEY: test-secret-key
-          TESTING: true
+          TESTING: "true"
         run: |
           python -m pytest app/api/tests/test_*_integration.py -v
+
 
   train-model:
     name: Train ML Model (with DagsHub MLflow)

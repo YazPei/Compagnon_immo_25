@@ -56,9 +56,20 @@ with DAG(
 # dossier: mlops/1_import_donnees/
 import_data = bash_task(
     "import_donnees",
-    cmd=f"{PY} {BASE}/1_import_donnees/import_data.py",
-    timeout_min=20,
+    cmd=(
+        f"{PY} {BASE}/1_import_donnees/import_data.py "
+        f"--folder-path {REPO}/data/raw "
+        f"--input-file merged_sales_data.csv "
+        f"--output-folder {REPO}/data/incremental/{{ ds }} "
+        f"--cumulative-path {REPO}/data/df_sample.csv "
+        f"--checkpoint-path /opt/airflow/data/state/immo_checkpoint.parquet "
+        f"--date-column date_vente "
+        f"--key-columns id_transaction "
+        f"--sep ';' "
+    ),
+    timeout_min=30,
 )
+
 
 # 2) Étapes DVC (si tu as des utilitaires ici)
 # dossier: mlops/2_dvc/

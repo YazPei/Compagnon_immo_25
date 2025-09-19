@@ -263,16 +263,16 @@ jobs:
 
       - name: 🏥 API Health check
         run: |
-          sleep 60  # Attendre que les services démarrent
+          sleep 60
           api_url="${{ needs.deploy-infrastructure.outputs.api_url }}"
-          curl -f "${api_url}/health" 
+          curl -f "${api_url}/health"
           curl -f "${api_url}/api/v1/health"
 
       - name: 🔬 MLflow Health check
         run: |
           mlflow_url="${{ needs.deploy-infrastructure.outputs.mlflow_url }}"
-          # MLflow n'a pas /health → on check la page racine pour "MLflow"
-          curl -fsSL "${mlflow_url}/" | grep -qi "mlflow" || echo "MLflow UI non détectée (warning)"
+          # MLflow n’expose pas /health → on teste la racine pour le mot “MLflow”
+          curl -fsSL "${mlflow_url}/" | grep -qi "mlflow" || echo "⚠️ MLflow UI non détectée (warning)"
 
       - name: 🐍 Setup Python (for integration tests)
         uses: actions/setup-python@v5
@@ -299,6 +299,7 @@ jobs:
           API_BASE_URL: ${{ needs.deploy-infrastructure.outputs.api_url }}
         run: |
           python scripts/test_integration.py
+
 
 
 

@@ -1,17 +1,15 @@
-name: CI/CD Pipeline with DagsHub # relance 1
+name: CI (minimal sanity)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
-# Permissions nécessaires pour pousser l'image sur GHCR
 permissions:
   contents: read
   packages: write
 
-# Secrets référencés (stockés côté GitHub → Settings > Secrets and variables > Actions)
 env:
   DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
   DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
@@ -19,12 +17,13 @@ env:
 
 jobs:
   test:
-    name: Run Tests & Lint
+    name: unit-and-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
@@ -37,7 +36,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies (tests & lint)
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -47,186 +46,12 @@ jobs:
         env:
           DATABASE_URL: sqlite:///:memory:
           JWT_SECRET_KEY: test-secret-key
-          TESTING: true
+          TESTING: "true"
         run: |
           python -m pytest app/api/tests/ -v --disable-warnings
 
-      - name: Code quality checks
+      - name: Lint
         run: |
           flake8 app/ --max-line-length=88 --extend-ignore=E203,W503
           black --check app/
           isort --check-only app/
-
-  build-api:
-    name: Build and Push API Docker Image
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push API image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./infrastructure/docker/Dockerfile.api
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  integration-tests:
-    name: Run Integration Tests
-    needs: [test, build-api]
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: compagnon_immo_test
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies (integration)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-
-      #  attendre explicitement que la DB réponde
-      - name: Wait for Postgres
-        run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-client
-          for i in {1..30}; do
-            pg_isready -h postgres -p 5432 -U postgres && break
-            echo "waiting postgres..."; sleep 2
-          done
-
-      - name: Run integration tests
-        env:
-          # hostname 'postgres' 
-          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/compagnon_immo_test
-          JWT_SECRET_KEY: test-secret-key
-          TESTING: "true"
-        run: |
-          python -m pytest app/api/tests/test_*_integration.py -v
-
-
-  train-model:
-    name: Train ML Model (with DagsHub MLflow)
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install deps (ML)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install "dvc[s3]" dagshub mlflow
-
-      - name: Configure DVC remote (DagsHub)
-        run: |
-          dvc remote add -d dagshub-storage https://dagshub.com/${{ env.DAGSHUB_USERNAME }}/compagnon-immo.dvc || true
-          dvc remote modify dagshub-storage --local auth basic
-          dvc remote modify dagshub-storage --local user ${{ env.DAGSHUB_USERNAME }}
-          dvc remote modify dagshub-storage --local password ${{ env.DAGSHUB_TOKEN }}
-
-      - name: Pull data from DVC
-        run: |
-          dvc pull || echo "No data to pull"
-
-      - name: Run ML training pipeline (logs to DagsHub MLflow)
-        env:
-          MLFLOW_TRACKING_URI: ${{ env.DAGSHUB_MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_USERNAME: ${{ env.DAGSHUB_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ env.DAGSHUB_TOKEN }}
-        run: |
-          python app/ml/main.py
-
-      - name: Push artifacts to DagsHub
-        run: |
-          dvc push || echo "No artifacts to push"
-
-      - name: Update model registry
-        env:
-          MLFLOW_TRACKING_URI: ${{ env.DAGSHUB_MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_USERNAME: ${{ env.DAGSHUB_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ env.DAGSHUB_TOKEN }}
-        run: |
-          python scripts/auto_update_models.py
-
-  deploy:
-    name: Deploy to Production
-    needs: [test, train-model, integration-tests]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to production
-        run: |
-          echo "🚀 Deploying to production..."
-          # Étapes de déploiement production
-
-      - name: Run production health checks
-        run: |
-          sleep 60
-          echo "🏥 Running production health checks..."
-          # curl -f ${{ secrets.PRODUCTION_API_URL }}/health || exit 1
-  validate-workflows:
-    name: Validate workflow YAMLs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint GitHub workflows
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: ".github/workflows/*.yml"

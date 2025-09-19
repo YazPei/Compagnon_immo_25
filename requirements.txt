@@ -1,105 +1,29 @@
-# Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
-
-# Core Scientific & Data Manipulation
-numpy==1.26.4                    # Calcul scientifique
-pandas>=2.2.0                   # Manipulation de données
-scipy==1.15.2                   # Outils mathématiques complémentaires
-scikit-learn>=1.4.0             # Machine learning généraliste
-
-# Visualisation
-matplotlib>=3.8.0               # Tracé de graphes classiques
-seaborn>=0.13.0                 # Visualisation statistique
-plotly>=5.20.0                  # Visualisation interactive
-
-
-# Géospatial
-geopandas>=0.14.0               # Données géographiques
-shapely>=2.0.0                  # Géométrie vectorielle
-
-# Modélisation
-lightgbm>=4.6.0                 # Modèle boosting utilisé
-
-# Interprétabilité et optimisation de modèles
-shap>=0.44.0                    # SHAP Values
-optuna>=3.5.0                   # Optimisation d’hyperparamètres (LightGBM)
-
-
-# Outils enregistrement et sauvegarde de modèles
-joblib>=1.3.0                   # Sauvegarde de modèles
-#polars-lts-cpu>=0.20.0 
-
-# API + Frontend
-fastapi==0.111.0                # API REST
-uvloop
-uvicorn[standard]==0.29.0       # Serveur ASGI pour FastAPI
-python-multipart==0.0.9         # Pour gérer les fichiers FastAPI
-pydantic==2.7.1                 # Validation de données (FastAPI, modèles)
-streamlit==1.35.0               # Interface utilisateur web interactive
-httptools==0.5.0
-
-# MLOps
-mlflow==2.13.0                  # Tracking d’expériences ML
-dvc[all]==3.44.0
-openpyxl==3.1.2 
-
-# Monitoring et observabilité
-prometheus-client==0.20.0       # Monitoring de métriques (Prometheus)
+fastapi
+uvicorn
+hydra-core
+anyio
+httpx
+pytest
+pytest-cov
 prometheus-fastapi-instrumentator
+pydantic>=2.4
+pydantic-settings>=2.1
 
-# Dev & Jupyter
-ipykernel==6.29.5               # Jupyter Kernel Python
-ipython==8.18.1                  # Shell interactif
-jupyter_client==8.6.3           # Client Jupyter
-jupyter_core==5.7.2             # Core du Jupyter Kernel
-debugpy==1.8.14                 # Débogage Jupyter
-pyzmq==26.4.0                   # Communication ZMQ pour Jupyter
-nest-asyncio==1.6.0             # Asyncio patch pour notebooks
-matplotlib-inline==0.1.7        # Inline plots dans notebooks
-
-# Autres dépendances nécessaires (internes/compatibilité)
-setuptools==80.3.1              # Packaging
-wheel==0.45.1                   # Build de wheels
-six==1.17.0                     # Compatibilité Python 2/3
-typing_extensions==4.13.2       # Typage dynamique
-pytz==2023.3                    # Fuseaux horaires
-tzdata==2025.2                  # Données de fuseaux
-urllib3==2.4.0                  # Requêtes HTTP
-requests==2.32.3                # Requêtes API
-packaging==24.0                 # Parsing versions
-
-# Accélération, GPU, etc.
-numba>=0.59.0                   # Compilation JIT (accélération)
-psutil==7.0.0                   # Infos système (RAM, CPU)
-
-# API Framework
-python-dotenv==1.1.0
-
-# Database
-sqlalchemy==2.0.41
-psycopg2-binary==2.9.10
-redis==6.1.0
-
-# ML Stack
-numpy>=1.26.0,<2.0.0
-pandas==2.2.1
-scikit-learn==1.6.1
-lightgbm==4.6.0
-statsmodels==0.14.1
-joblib==1.5.1
-
-# Testing
-pytest==7.4.4
-httpx==0.28.1
-
-# Monitoring & Logging
-structlog==24.1.0
-prometheus-client==0.20.0
-opentelemetry-api==1.23.0
-opentelemetry-sdk==1.23.0
-opentelemetry-instrumentation-fastapi==0.44b0
-
-# Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-
+uvicorn[standard]
+hydra-core
+anyio
+sqlalchemy
+pandas
+psutil
+python-jose[cryptography]
+requests
+PyJWT
+joblib
+passlib[bcrypt]
+sqlalchemy
+pandas
+psutil
+python-jose[cryptography]
+requests
+PyJWT
 

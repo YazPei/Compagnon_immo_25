@@ -154,6 +154,22 @@ class DVCConnector:
                 "message": str(e),
                 "models": self.get_model_files()
             }
+    # app/api/services/dvc_connector.py
+"""
+Connecteur DVC minimal pour les tests.
+Expose dvc_service() qui retourne un objet avec les méthodes attendues (no-op).
+"""
+
+class _NoopDVC:
+    def __init__(self): ...
+    def ensure_data(self): ...
+    def pull(self, *args, **kwargs): ...
+    def status(self, *args, **kwargs): return {}
+
+def dvc_service():
+    return _NoopDVC()
+            
+       
 
 
 # Instance globale du connecteur DVC

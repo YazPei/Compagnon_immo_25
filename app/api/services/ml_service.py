@@ -116,6 +116,13 @@ class MLService:
         except Exception as e:
             logger.error(f"Erreur chargement {file_path}: {e}")
             raise
+    def get_model(self, name: str) -> Any:
+        """Retourne le modèle par nom, ou None."""
+        return self.models.get(name)
+
+    def get_model_metadata(self, name: str) -> Dict[str, Any]:
+        """Retourne les métadonnées du modèle par nom, ou vide."""
+        return self.metadata.get(name, {})
     
     def _is_preprocessor(self, model_key: str, model_path: Path) -> bool:
         """Déterminer si c'est un préprocesseur."""
@@ -396,3 +403,4 @@ class MLService:
 
 # Instance globale du service ML
 ml_service = MLService()
+

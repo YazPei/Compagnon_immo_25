@@ -8,7 +8,7 @@ scikit-learn>=1.4.0             # Machine learning généraliste ok
 # Visualisation
 matplotlib>=3.8.0               # Tracé de graphes classiques ok
 seaborn>=0.13.0                 # Visualisation statistique ok
-
+prometheus-fastapi-instrumentator==6.1.0
 
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML ok

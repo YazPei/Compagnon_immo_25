@@ -44,6 +44,7 @@ openpyxl==3.1.2
 
 # Monitoring et observabilité
 prometheus-client==0.20.0       # Monitoring de métriques (Prometheus)
+prometheus-fastapi-instrumentator
 
 # Dev & Jupyter
 ipykernel==6.29.5               # Jupyter Kernel Python

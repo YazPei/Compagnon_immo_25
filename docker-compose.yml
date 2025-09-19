@@ -244,24 +244,28 @@ services:
 
 
   #------------mlflow---------
+
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.15.1
-    working_dir: /mlflow
-    command: ["mlflow","server",
-              "--backend-store-uri","sqlite:///mlflow.db",
-              "--default-artifact-root","file:///mlartifacts",
-              "--host","0.0.0.0","--port","5050"]
-    volumes:
-      - ./mlflow-data:/mlflow           # DB sqlite + state
-      - ./mlflow-artifacts:/mlartifacts # artefacts
-    ports: ["5050:5050"]
-    networks: ["ml_net"]
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
+      --default-artifact-root ${MLFLOW_ARTIFACT_URI}
+    ports:
+      - "5050:5050"
     healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request; req=urllib.request.Request('http://localhost:5050/api/2.0/mlflow/experiments/list', data=b'{}', headers={'Content-Type':'application/json'}); urllib.request.urlopen(req, timeout=3); print('ok')\nPY"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5050/ | grep -qi mlflow"]
       interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 20s
+      timeout: 3s
+      retries: 40
+      start_period: 60s
+    environment:
+      MLFLOW_BACKEND_STORE_URI: "${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}"
+      MLFLOW_ARTIFACT_URI: "${MLFLOW_ARTIFACT_URI:-file:/mlflow_artifacts}"
+
+
 
 
 

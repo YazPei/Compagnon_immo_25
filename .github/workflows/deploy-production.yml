@@ -195,11 +195,18 @@ jobs:
         echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
         echo "mlflow_url=$(terraform output -raw mlflow_url)" >> $GITHUB_OUTPUT
 
+  ##########
+  
   deploy-kubernetes:
     needs: [deploy-infrastructure]
     runs-on: ubuntu-latest
     
     steps:
+    - name: 🔧 Install kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: "v1.30.0"
+
     - name: 📥 Checkout
       uses: actions/checkout@v4
 
@@ -249,45 +256,59 @@ jobs:
   health-check:
     needs: [deploy-kubernetes, deploy-infrastructure]
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: 📥 Checkout
-      uses: actions/checkout@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-    - name: ⚙️ Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: ⚙️ Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: 🏥 API Health check
-      run: |
-        sleep 60  # Attendre que les services démarrent
-        api_url="${{ needs.deploy-infrastructure.outputs.api_url }}"
-        curl -f "${api_url}/health" || exit 1
-        curl -f "${api_url}/api/v1/health" || exit 1
+      - name: 🏥 API Health check
+        run: |
+          sleep 60
+          api_url="${{ needs.deploy-infrastructure.outputs.api_url }}"
+          curl -f "${api_url}/health"
+          curl -f "${api_url}/api/v1/health"
 
-    - name: 🔬 MLflow Health check
-      run: |
-        mlflow_url="${{ needs.deploy-infrastructure.outputs.mlflow_url }}"
-        curl -f "${mlflow_url}/health" || echo "MLflow health check failed but continuing..."
+      - name: 🔬 MLflow Health check
+        run: |
+          mlflow_url="${{ needs.deploy-infrastructure.outputs.mlflow_url }}"
+          # MLflow n’expose pas /health → on teste la racine pour le mot “MLflow”
+          curl -fsSL "${mlflow_url}/" | grep -qi "mlflow" || echo "⚠️ MLflow UI non détectée (warning)"
 
-    - name: 🧪 Integration tests
-      run: |
-        python -m pytest app/api/tests/test_*_integration.py -v
-      env:
-        API_BASE_URL: ${{ needs.deploy-infrastructure.outputs.api_url }}
-        MLFLOW_URL: ${{ needs.deploy-infrastructure.outputs.mlflow_url }}
-        DATABASE_URL: sqlite:///:memory:
-        JWT_SECRET_KEY: test-secret-key
-        TESTING: true
+      - name: 🐍 Setup Python (for integration tests)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: 📊 Run performance tests
-      run: |
-        python scripts/test_integration.py
-      env:
-        API_BASE_URL: ${{ needs.deploy-infrastructure.outputs.api_url }}
+      - name: 📦 Install pytest (for integration tests)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: 🧪 Integration tests
+        env:
+          API_BASE_URL: ${{ needs.deploy-infrastructure.outputs.api_url }}
+          MLFLOW_URL: ${{ needs.deploy-infrastructure.outputs.mlflow_url }}
+          DATABASE_URL: sqlite:///:memory:
+          JWT_SECRET_KEY: test-secret-key
+          TESTING: "true"
+        run: |
+          python -m pytest app/api/tests/test_*_integration.py -v
+
+      - name: 📊 Run performance tests
+        env:
+          API_BASE_URL: ${{ needs.deploy-infrastructure.outputs.api_url }}
+        run: |
+          python scripts/test_integration.py
+
+
+
 
   streamlit-deploy:
     needs: [health-check]

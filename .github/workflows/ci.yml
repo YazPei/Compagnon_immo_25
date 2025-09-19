@@ -209,3 +209,12 @@ jobs:
           sleep 60
           echo "🏥 Running production health checks..."
           # curl -f ${{ secrets.PRODUCTION_API_URL }}/health || exit 1
+  validate-workflows:
+    name: Validate workflow YAMLs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint GitHub workflows
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: ".github/workflows/*.yml"

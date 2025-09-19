@@ -11,14 +11,12 @@ permissions:
   contents: read
   packages: write
 
-# Secrets référencés (valeurs stockées côté GitHub → Settings > Secrets and variables > Actions)
+# Secrets référencés (stockés côté GitHub → Settings > Secrets and variables > Actions)
 env:
   DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
   DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
   DAGSHUB_MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }}
 
-# Petite fonction "Setup Python + cache + deps" à répéter
-# (GitHub Actions n'a pas de "macro", donc on duplique minimalement)
 jobs:
   test:
     name: Run Tests & Lint
@@ -42,8 +40,6 @@ jobs:
       - name: Install dependencies (tests & lint)
         run: |
           python -m pip install --upgrade pip
-          # Si tu as un requirements-dev.txt c'est mieux :
-          # pip install -r requirements.txt -r requirements-dev.txt
           pip install -r requirements.txt
           pip install pytest flake8 black isort
 
@@ -162,11 +158,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # DVC + S3 + DagsHub + MLflow côté job
           pip install "dvc[s3]" dagshub mlflow
 
       - name: Configure DVC remote (DagsHub)
-        # Les secrets sont masqués automatiquement dans les logs
         run: |
           dvc remote add -d dagshub-storage https://dagshub.com/${{ env.DAGSHUB_USERNAME }}/compagnon-immo.dvc || true
           dvc remote modify dagshub-storage --local auth basic
@@ -215,4 +209,3 @@ jobs:
           sleep 60
           echo "🏥 Running production health checks..."
           # curl -f ${{ secrets.PRODUCTION_API_URL }}/health || exit 1
-

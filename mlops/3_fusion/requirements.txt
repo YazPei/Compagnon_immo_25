@@ -9,6 +9,7 @@ scikit-learn>=1.4.0             # Machine learning généraliste ok
 
 # Outils enregistrement et sauvegarde de modèles
 #polars-lts-cpu>=0.20.0 
+prometheus-fastapi-instrumentator==6.1.0
 
 
 

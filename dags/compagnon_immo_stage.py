@@ -39,7 +39,7 @@ def bash_task(task_id, cmd, timeout_min=None, env_extra=None, cwd=REPO):
 with DAG(
     dag_id="immo_stage_by_stage",
     start_date=pendulum.datetime(2025, 9, 1, tz=PARIS),
-    schedule="0 3 * * *",
+    schedule="0 3 * * 1",
     catchup=False,
     default_args=default_args,
     tags=["immo", "stages", "mlflow"],

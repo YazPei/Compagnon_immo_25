@@ -1,4 +1,4 @@
-name: COMPAGNON_SECRET
+name: COMPAGNON_SECRET_YAZ
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
 
       - name: Use PAT to call GitHub API
         run: |
-          curl -H "Authorization: token ${{ secrets.COMPAGNON_SECRET }}" \
+          curl -H "Authorization: token ${{ secrets.COMPAGNON_SECRET_YAZ }}" \
                https://api.github.com/user
 
 

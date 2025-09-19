@@ -1,0 +1,17 @@
+import os, mlflow
+from dotenv import load_dotenv
+
+load_dotenv()
+
+os.environ["MLFLOW_TRACKING_USERNAME"] = os.getenv("DAGSHUB_USER")
+os.environ["MLFLOW_TRACKING_PASSWORD"] = os.getenv("DAGSHUB_TOKEN")
+
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+mlflow.set_registry_uri(os.getenv("MLFLOW_TRACKING_URI"))
+
+mlflow.set_experiment("tl-scalability")
+
+with mlflow.start_run(run_name="connectivity-smoke-test"):
+    mlflow.log_param("hello", "world")
+    mlflow.log_metric("ping", 1.0)
+

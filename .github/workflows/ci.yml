@@ -44,8 +44,8 @@ jobs:
 
       - name: Run unit tests
         env:
-          DATABASE_URL: sqlite:///:memory:
-          JWT_SECRET_KEY: test-secret-key
+          DATABASE_URL: "sqlite:///:memory:"
+          JWT_SECRET_KEY: "test-secret-key"
           TESTING: "true"
         run: |
           python -m pytest app/api/tests/ -v --disable-warnings

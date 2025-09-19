@@ -195,11 +195,18 @@ jobs:
         echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
         echo "mlflow_url=$(terraform output -raw mlflow_url)" >> $GITHUB_OUTPUT
 
+  ##########
+  
   deploy-kubernetes:
     needs: [deploy-infrastructure]
     runs-on: ubuntu-latest
     
     steps:
+    - name: 🔧 Install kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: "v1.30.0"
+
     - name: 📥 Checkout
       uses: actions/checkout@v4
 

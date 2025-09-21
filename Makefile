@@ -2,13 +2,28 @@
 # Pipelines Régression + Séries temporelles
 # Outils : DVC, MLflow, Docker, bash scripts, Airflow
 
-.DEFAULT_GOAL := help
+# permission .env
+
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+# Auto-load .env
+ENV_FILE ?= .env
+ifneq ("$(wildcard $(ENV_FILE))","")
+include $(ENV_FILE)
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
+endif
+
+
 
 # ===== Variables =====
 SHELL := /usr/bin/env bash
 IMAGE_PREFIX   := compagnon_immo
 NETWORK        := ml_net
-PYTHON_BIN     := .venv/bin/python
+VENV       := .venv
+PYTHON_BIN := $(VENV)/bin/python
+PIP        := $(VENV)/bin/pip
+TEST_DIR   := app/api/tests
 DVC_TOKEN     ?= default_token_securise_ou_vide
 
 MLFLOW_IMAGE   := $(IMAGE_PREFIX)-mlflow
@@ -23,9 +38,10 @@ MLFLOW_URI_DCK := http://$(MLFLOW_HOST):$(MLFLOW_PORT)
 DOCKER_COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 .PHONY: \
+  setup_dags \
   prepare-dirs install help lint \
   quick-start quick-start-pipeline quick-start-test \
-  api-dev api-test api-stop \
+  api-dev venv install api-test clean api-stop \
   mlflow-ui mlflow-clean mlflow-status mlflow-dockerized create-network build-mlflow mlflow-up mlflow-down \
   docker-build docker-api-build docker-api-run docker-api-stop docker-stack-up docker-stack-down docker-logs \
   build-all run-all-docker run_full \
@@ -59,6 +75,26 @@ quick-start: setup_dags build-all ## Build + run docker
 
 quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 
+# ===============================
+# ☁️ DagsHub Setup
+# ===============================
+
+# --- DagsHub non-interactive setup ---
+setup_dags:
+	@set -eu
+	@ : "$${DAGSHUB_USER:?Missing DAGSHUB_USER in .env}"
+	@ : "$${DAGSHUB_TOKEN:?Missing DAGSHUB_TOKEN in .env}"
+	@ : "$${DAGSHUB_REPO:?Missing DAGSHUB_REPO in .env}"
+	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
+	@mkdir -p infra/config
+	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \
+		"$${DAGSHUB_USER}" \
+		"$${DAGSHUB_REPO}" \
+		"$${MLFLOW_TRACKING_URI}" \
+		> infra/config/dagshub.yaml
+	@echo "✅ DagsHub config written to infra/config/dagshub.yaml"
+
+
 
 
 # ===============================
@@ -70,9 +106,27 @@ api-dev: ## Démarre l'API en mode développement
 	@echo "📚 Docs : http://localhost:8000/docs"
 	@PYTHONPATH=api nohup uvicorn app.routes.main:app --reload --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
 
-api-test: ## Lance les tests de l'API
+TEST_DIR   := app/api/tests/
+
+venv:
+	@test -d $(VENV) || python3 -m venv $(VENV)
+
+install: venv
+	@$(PIP) install --upgrade pip
+	@$(PIP) install -r requirements.txt
+	@touch app/__init__.py
+	@touch app/api/__init__.py
+	@touch app/api/utils/__init__.py
+
+
+api-test:
 	@echo "🧪 Tests de l'API…"
-	@cd api && ../$(PYTHON_BIN) -m pytest app/tests/ -v
+	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
+	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
+
+clean:
+	@rm -rf .pytest_cache .coverage
+
 
 api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan)
 	@pkill -f "uvicorn app.routes.main:app" || echo "Aucun uvicorn à stopper"
@@ -144,11 +198,8 @@ docker-api-run: docker-api-build ## Run image API
 docker-api-stop: ## Stop & rm API container
 	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
 
-# ===============================
-# ☁️ DagsHub Setup
-# ===============================
-setup_dags: ## Exécute le script d'init DagsHub
-	@chmod +x ./setup_env_dagshub.sh && ./setup_env_dagshub.sh
+
+
 
 # ===============================
 # 📈️ Build images "étapes" pipeline

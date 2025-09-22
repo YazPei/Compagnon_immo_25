@@ -80,19 +80,54 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 # ===============================
 
 # --- DagsHub non-interactive setup ---
+# Utilisation:
+#   make import_env_secrets              # repo courant
+#   make import_env_secrets REPO=owner/name
+
+REPO ?=
+
+import_env_secrets:
+	@set -eu
+	@if ! command -v gh >/dev/null; then \
+		echo "❌ GitHub CLI (gh) n'est pas installé."; \
+		echo "  Linux: sudo apt install gh | macOS: brew install gh | Windows: winget install GitHub.cli"; \
+		exit 1; \
+	fi
+	@[ -f .env ] || (echo "❌ Fichier .env introuvable"; exit 1)
+	@echo "🚀 Import des variables de .env vers GitHub Secrets $(if $(REPO),pour $(REPO),du repo courant)..."
+	@while IFS='=' read -r k v; do \
+		case "$$k" in ''|\#*) continue ;; esac; \
+		echo "➕ $$k"; \
+		if [ -n "$(REPO)" ]; then \
+			gh secret set "$$k" --repo "$(REPO)" -b"$$v"; \
+		else \
+			gh secret set "$$k" -b"$$v"; \
+		fi; \
+	done < .env
+	@echo "✅ Secrets importés."
+
 setup_dags:
 	@set -eu
+	# Charge .env si présent, et exporte toutes les variables
+	@set -a; [ -f .env ] && . ./.env; set +a
+
 	@ : "$${DAGSHUB_USER:?Missing DAGSHUB_USER in .env}"
 	@ : "$${DAGSHUB_TOKEN:?Missing DAGSHUB_TOKEN in .env}"
 	@ : "$${DAGSHUB_REPO:?Missing DAGSHUB_REPO in .env}"
 	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
+	@ : "$${MLFLOW_TRACKING_USERNAME:?Missing MLFLOW_TRACKING_USERNAME in .env}"
+	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
+
 	@mkdir -p infra/config
 	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \
 		"$${DAGSHUB_USER}" \
 		"$${DAGSHUB_REPO}" \
 		"$${MLFLOW_TRACKING_URI}" \
+		"$${MLFLOW_TRACKING_USERNAME}" \
+		"$${MLFLOW_TRACKING_PASSWORD}" \
 		> infra/config/dagshub.yaml
-	@echo "✅ DagsHub config written to infra/config/dagshub.yaml"
+	@echo "DagsHub config written to infra/config/dagshub.yaml"
+
 
 
 

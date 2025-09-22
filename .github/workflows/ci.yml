@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Map selon tes secrets réels
+      DAGSHUB_USER: ${{ secrets.DAGSHUB_USERNAME }}   # ou secrets.DAGSHUB_USER si même nom
+      DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+      DAGSHUB_REPO: ${{ secrets.DAGSHUB_REPO_NAME }}   # ou secrets.DAGSHUB_REPO
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Générer config DagsHub
+        run: make setup_dags
+
+      - name: (exemple) Lancer la suite
+        run: |
+          echo "Owner/Repo/URI:"
+          cat infra/config/dagshub.yaml
+

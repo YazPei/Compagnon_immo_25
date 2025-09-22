@@ -99,8 +99,8 @@ setup_dags:
 	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
 	@ : "$${MLFLOW_TRACKING_USERNAME:?Missing MLFLOW_TRACKING_USERNAME in .env}"
 	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
-	@ : "$${{COMPAGNON_SECRET_KETSIA:?Missing secrets.COMPAGNON_SECRET_KETSIA in .env}"
-	@ : "$${{COMPAGNON_SECRET_YAZ:?Missing secrets.COMPAGNON_SECRET_YAZ in .env}"
+	@ : "$${COMPAGNON_SECRET_KETSIA:?Missing secrets.COMPAGNON_SECRET_KETSIA in .env}"
+	@ : "$${COMPAGNON_SECRET_YAZ:?Missing secrets.COMPAGNON_SECRET_YAZ in .env}"
 
 	@mkdir -p infra/config
 	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \

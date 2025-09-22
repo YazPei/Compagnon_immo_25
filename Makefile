@@ -86,14 +86,17 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 
 REPO ?=
 
-setup_dags: trigger-permission setup_dagshub 
+setup_dags: trigger-permission check-permissions setup_dagshub 
 trigger-permission:
+	@ : "$${GH_TOKEN:?Set GH_TOKEN (e.g. in GitHub Actions use \$$\{\{ github.token \}\})}"
 	@gh workflow run permissions
+
+check-permissions:
+	@gh run list --workflow=permissions --limit 1
 setup_dagshub:
 	@set -eu
 	# Charge .env si présent, et exporte toutes les variables
 	@set -a; [ -f .env ] && . ./.env; set +a
-
 	@ : "$${DAGSHUB_USER:?Missing DAGSHUB_USER in .env}"
 	@ : "$${DAGSHUB_TOKEN:?Missing DAGSHUB_TOKEN in .env}"
 	@ : "$${DAGSHUB_REPO:?Missing DAGSHUB_REPO in .env}"
@@ -102,6 +105,7 @@ setup_dagshub:
 	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
 	@ : "$${COMPAGNON_SECRET_KETSIA:?Missing secrets.COMPAGNON_SECRET_KETSIA in .env}"
 	@ : "$${COMPAGNON_SECRET_YAZ:?Missing secrets.COMPAGNON_SECRET_YAZ in .env}"
+
 
 	@mkdir -p infra/config
 	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \

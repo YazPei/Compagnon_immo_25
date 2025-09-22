@@ -1,0 +1,18 @@
+name: trigger-permissions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write    # indispensable pour dispatch un autre workflow
+  contents: read
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger 'permissions'
+        run: gh workflow run permissions
+        env:
+          GH_TOKEN: ${{ github.token }}   # requis par la CLI gh en Actions
+

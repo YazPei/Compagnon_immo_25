@@ -1,20 +1,20 @@
 name: permissions
 
 on:
-  workflow_dispatch:        
+  workflow_dispatch:        # déclenchable à la demande
   push:
-    branches: 
+    branches: [ main, Auto_github ]
   pull_request:
 
-
 permissions:
-  contents: read   # suffisant pour checkout; pas de création de secrets ici
+  contents: read            # suffisant ici
+  actions: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Secrets PRÉEXISTANTS dans le repo (Settings > Secrets and variables > Actions)
+      # DOIVENT exister dans Settings > Secrets and variables > Actions
       COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
       COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
       DAGSHUB_USER:            ${{ secrets.DAGSHUB_USERNAME }}      # ou DAGSHUB_USER
@@ -33,8 +33,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Générer config
-        run: make setup_dags
+      - name: Générer config DagsHub/MLflow
+        run: make setup_dagshub
 
       - name: Sanity check MLflow (ping API)
         run: |
@@ -42,7 +42,4 @@ jobs:
             "$MLFLOW_TRACKING_URI/api/2.0/mlflow/experiments/list" | head -n 20
 
       - name: Afficher config (sans secrets)
-        run: |
-          echo "Owner/Repo/URI:"
-          cat infra/config/dagshub.yaml
-
+        run: cat infra/config/dagshub.yaml

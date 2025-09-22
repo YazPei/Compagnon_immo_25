@@ -70,7 +70,7 @@ lint: ## Vérifie quelques pièges courants
 # ===============================
 # 📦 Quick start
 # ===============================
-quick-start: SETUPS_DAGSHUB mlflow-dockerized build-all ## Build + run docker
+quick-start: setup_dags build-all ## Build + run docker
 
 
 quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
@@ -85,8 +85,6 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 #   make import_env_secrets REPO=owner/name
 
 REPO ?=
-SETUPS_DAGSHUB: import_env_secrets setup_dags
-
 
 import_env_secrets:
 	@set -eu
@@ -119,8 +117,6 @@ setup_dags:
 	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
 	@ : "$${MLFLOW_TRACKING_USERNAME:?Missing MLFLOW_TRACKING_USERNAME in .env}"
 	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
-	@ : "$${{COMPAGNON_SECRET_KETSIA:?Missing secrets.COMPAGNON_SECRET_KETSIA in .env}"
-	@ : "$${{COMPAGNON_SECRET_YAZ:?Missing secrets.COMPAGNON_SECRET_YAZ in .env}"
 
 	@mkdir -p infra/config
 	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \

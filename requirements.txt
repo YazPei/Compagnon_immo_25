@@ -8,6 +8,9 @@ pytest-cov
 prometheus-fastapi-instrumentator
 pydantic>=2.4
 pydantic-settings>=2.1
+mlflow>=2.9
+dagshub
+python-dotenv
 
 uvicorn[standard]
 hydra-core

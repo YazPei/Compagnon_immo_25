@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Map selon tes secrets réels
+      COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
+      COMPAGNON_SECRET_YAZ: ${{ secrets.COMPAGNON_SECRET_YAZ }}      
       DAGSHUB_USER: ${{ secrets.DAGSHUB_USERNAME }}   # ou secrets.DAGSHUB_USER si même nom
       DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
       DAGSHUB_REPO: ${{ secrets.DAGSHUB_REPO_NAME }}   # ou secrets.DAGSHUB_REPO
@@ -22,8 +24,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      
+      - name: Générer config Github
+        run: make import_env_secrets
 
-      - name: Générer config DagsHub
+      - name: Générer config Github DagsHub et MLFlow
         run: make setup_dags
 
       - name: (exemple) Lancer la suite

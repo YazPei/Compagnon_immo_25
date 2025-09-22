@@ -6,14 +6,13 @@ on:
   pull_request:
 
 permissions:
-  contents: read            # suffisant ici
+  contents: read            
   actions: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # DOIVENT exister dans Settings > Secrets and variables > Actions
       COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
       COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
       DAGSHUB_USER:            ${{ secrets.DAGSHUB_USERNAME }}      # ou DAGSHUB_USER

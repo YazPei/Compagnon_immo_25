@@ -2,16 +2,6 @@
 
 services:
   # --------- Pipeline de lancement ----------   
-  app:
-    build:
-      context: .
-      dockerfile: mlops/0_config/Dockerfile.config
-    env_file:
-      - .env            # <- tes secrets locaux (non commit)
-    command: python train_example.py
-    # volumes:
-    #   - .:/app        # utile en dev pour hot-reload
-    
   base:
     build:
       context: .

@@ -70,7 +70,7 @@ lint: ## Vérifie quelques pièges courants
 # ===============================
 # 📦 Quick start
 # ===============================
-quick-start: SETUPS_DAGSHUB mlflow-dockerized build-all ## Build + run docker
+quick-start: setup_dags mlflow-dockerized build-all ## Build + run docker
 
 
 quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
@@ -85,10 +85,11 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 #   make import_env_secrets REPO=owner/name
 
 REPO ?=
-SETUPS_DAGSHUB: import_env_secrets setup_dags
 
-
-setup_dags:
+setup_dags: trigger-permission setup_dagshub 
+trigger-permission:
+	@gh workflow run permissions
+setup_dagshub:
 	@set -eu
 	# Charge .env si présent, et exporte toutes les variables
 	@set -a; [ -f .env ] && . ./.env; set +a

@@ -1,9 +1,12 @@
 name: permissions
+name: permissions
 
 on:
+  workflow_dispatch:        
   push:
+    branches: 
   pull_request:
-  workflow_dispatch:
+
 
 permissions:
   contents: read   # suffisant pour checkout; pas de création de secrets ici

@@ -88,26 +88,6 @@ REPO ?=
 SETUPS_DAGSHUB: import_env_secrets setup_dags
 
 
-import_env_secrets:
-	@set -eu
-	@if ! command -v gh >/dev/null; then \
-		echo "❌ GitHub CLI (gh) n'est pas installé."; \
-		echo "  Linux: sudo apt install gh | macOS: brew install gh | Windows: winget install GitHub.cli"; \
-		exit 1; \
-	fi
-	@[ -f .env ] || (echo "❌ Fichier .env introuvable"; exit 1)
-	@echo "🚀 Import des variables de .env vers GitHub Secrets $(if $(REPO),pour $(REPO),du repo courant)..."
-	@while IFS='=' read -r k v; do \
-		case "$$k" in ''|\#*) continue ;; esac; \
-		echo "➕ $$k"; \
-		if [ -n "$(REPO)" ]; then \
-			gh secret set "$$k" --repo "$(REPO)" -b"$$v"; \
-		else \
-			gh secret set "$$k" -b"$$v"; \
-		fi; \
-	done < .env
-	@echo "✅ Secrets importés."
-
 setup_dags:
 	@set -eu
 	# Charge .env si présent, et exporte toutes les variables

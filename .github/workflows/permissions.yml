@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Générer config DagsHub/MLflow
+      - name: Générer config
         run: make setup_dags
 
       - name: Sanity check MLflow (ping API)

@@ -1,5 +1,4 @@
 name: permissions
-name: permissions
 
 on:
   workflow_dispatch:        

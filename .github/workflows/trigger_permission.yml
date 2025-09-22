@@ -1,18 +1,11 @@
 name: trigger-permissions
-
+run: make trigger-permission
+env:
+  GH_TOKEN: ${{ github.token }}   # requis par la CLI gh en Actions
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # déclenchable à la demande
+  push:
+    branches: [ main, Auto_github ]
+  pull_request:
 
-permissions:
-  actions: write    # indispensable pour dispatch un autre workflow
-  contents: read
-
-jobs:
-  trigger:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger 'permissions'
-        run: gh workflow run permissions
-        env:
-          GH_TOKEN: ${{ github.token }}   # requis par la CLI gh en Actions
 

@@ -88,8 +88,14 @@ REPO ?=
 
 setup_dags: trigger-permission check-permissions setup_dagshub 
 trigger-permission:
-	@ : "$${GH_TOKEN:?Set GH_TOKEN (e.g. in GitHub Actions use \$$\{\{ github.token \}\})}"
-	@gh workflow run permissions
+	@set -eu
+	@if gh auth status >/dev/null 2>&1; then \
+	  echo "using existing gh auth context"; \
+	  gh workflow run permissions; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo scopes> | in CI : \$$\{\{ github.token \}\})}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions; \
+	fi
 
 check-permissions:
 	@gh run list --workflow=permissions --limit 1

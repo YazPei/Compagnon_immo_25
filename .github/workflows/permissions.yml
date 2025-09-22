@@ -3,7 +3,6 @@ name: permissions
 on:
   workflow_dispatch:        # déclenchable à la demande
   push:
-    branches: [ main, Auto_github ]
   pull_request:
 
 permissions:

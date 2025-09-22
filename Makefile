@@ -85,16 +85,17 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 #   make import_env_secrets REPO=owner/name
 
 REPO ?=
+# Branche à viser (par défaut: branche courante)
+REF ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-setup_dags: trigger-permission check-permissions setup_dagshub 
 trigger-permission:
 	@set -eu
 	@if gh auth status >/dev/null 2>&1; then \
-	  echo "using existing gh auth context"; \
-	  gh workflow run permissions; \
+	  echo "▶ using existing gh auth context"; \
+	  gh workflow run permissions --ref "$(REF)"; \
 	else \
-	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo scopes> | in CI : \$$\{\{ github.token \}\})}"; \
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions; \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo> | in CI: \$$\{\{ github.token \}\})}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
 	fi
 
 check-permissions:

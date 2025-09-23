@@ -1,7 +1,7 @@
-name: env_artifact
-
+name: permissions
 on:
-  workflow_dispatch: {}     # déclenchable à la demande
+  workflow_dispatch: {}
+  push:
 
 permissions:
   contents: read
@@ -10,37 +10,70 @@ permissions:
 defaults:
   run:
     shell: bash
-    working-directory: ${{ github.workspace }}
+    working-directory: .
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+
+    env:
+      COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
+      COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
+      DAGSHUB_USER:            ${{ secrets.DAGSHUB_USERNAME }}
+      DAGSHUB_TOKEN:           ${{ secrets.DAGSHUB_TOKEN }}
+      DAGSHUB_REPO:            ${{ secrets.DAGSHUB_REPO_NAME }}
+      MLFLOW_TRACKING_URI:     ${{ secrets.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Crée .env dans le RUNNER (POC)
-      - name: Generate .env
+
+      - name: Générer config DagsHub/MLflow
+        run: make setup_dagshub
+
+      - name: Sanity check MLflow (ping API)
         run: |
-          set -euo pipefail
-          echo "HELLO=world" > .env
-          echo "[debug] wrote $(pwd)/.env"
+          curl -s -u "$MLFLOW_TRACKING_USERNAME:$MLFLOW_TRACKING_PASSWORD" \
+            "$MLFLOW_TRACKING_URI/api/2.0/mlflow/experiments/list" | head -n 5
+
+      - name: Afficher config (sans secrets)
+        run: cat infra/config/dagshub.yaml
+
+      - name: Générer .env depuis les secrets
+        shell: bash
+        run: |
+          set -eu
+          
+          echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
+          echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
+          echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
+          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+          echo "MLFLOW_BACKEND_STORE_URI=${{ secrets.MLFLOW_BACKEND_STORE_URI }}"
+          echo "MLFLOW_ARTIFACT_URI=${{ secrets.MLFLOW_ARTIFACT_URI }}"
+          echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
+          echo "DAGSHUB_USER=${{ secrets.DAGSHUB_USERNAME }}"
+          echo "DAGSHUB_TOKEN=${{ secrets.DAGSHUB_TOKEN }}"
+          echo "DAGSHUB_REPO_OWNER=${{ secrets.DAGSHUB_REPO_OWNER }}"
+          echo "DAGSHUB_REPO_NAME=${{ secrets.DAGSHUB_REPO_NAME }}"
+          echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
+          echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
+          echo "[debug] wrote $(pwd)/artifacts/env.txt"
           ls -la .
-          wc -c .env
-          head -n1 .env
+          ls -la artifacts
+          wc -c artifacts/env.txt
+          head -n1 artifacts/env.txt
 
-      # 2) Sanity: échoue si .env n'existe pas
-      - name: Sanity .env
-        run: |
-          set -euo pipefail
-          test -s .env || (echo "ERROR: .env missing" && exit 1)
-
-      # 3) Upload l'ARTEFACT (fichier, chemin ABSOLU)
-      - name: Upload .env
+      - name: Upload env artifact
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: ${{ github.workspace }}/.env
+          path: artifacts          # ← on uploade le dossier (non caché)
           if-no-files-found: error
           retention-days: 1
 

@@ -84,9 +84,50 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 #   make import_env_secrets              # repo courant
 #   make import_env_secrets REPO=owner/name
 
-REPO ?=
-# Branche à viser (par défaut: branche courante)
-REF ?= $(shell git rev-parse --abbrev-ref HEAD)
+# --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
+BRANCH   ?= Auto_github           # branche sur laquelle tu veux déclencher
+WF_NAME  ?= permissions           # nom du workflow (pas le chemin)
+ART_NAME ?= env-artifact          # nom de l'artefact uploadé par le workflow
+ART_FILE ?= artifacts/env.txt     # chemin du fichier *dans* l'artefact
+ENV_DST  ?= .env                  # où installer le fichier localement
+
+check-permissions:
+	@gh run list --workflow=permissions --limit 1
+	
+env-from-gh:
+	@set -euo pipefail; \
+	echo "🚀 Déclenche $(WF_NAME) sur $(BRANCH)"; \
+	gh workflow run $(WF_NAME) --ref $(BRANCH); \
+	\
+	echo "⏳ Récupération du dernier run..."; \
+	RUN_ID=$$(gh run list --limit 50 --json databaseId,name,headBranch \
+		-q '.[] | select(.headBranch=="'$(BRANCH)'" and .name=="'$(WF_NAME)'") | .databaseId' \
+		| head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour $(WF_NAME) sur $(BRANCH)"; exit 1; }; \
+	echo "RUN_ID=$$RUN_ID"; \
+	\
+	gh run watch "$$RUN_ID" || true; \
+	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
+	if [ "$$CONC" != "success" ]; then \
+		echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web; exit 1; \
+	fi; \
+	\
+	echo "📦 Téléchargement de l'artefact $(ART_NAME)"; \
+	rm -rf tmp-$(ART_NAME); \
+	gh run download "$$RUN_ID" -n $(ART_NAME) -D tmp-$(ART_NAME); \
+	\
+	SRC=$$(find tmp-$(ART_NAME) -type f -path "*/$(ART_FILE)" -print -quit); \
+	if [ -z "$$SRC" ]; then \
+		echo "❌ Fichier '$(ART_FILE)' introuvable dans l'artefact. Contenu trouvé:"; \
+		find tmp-$(ART_NAME) -maxdepth 3 -type f -print; \
+		exit 1; \
+	fi; \
+	[ -f $(ENV_DST) ] && mv $(ENV_DST) $(ENV_DST).bak || true; \
+	mv "$$SRC" $(ENV_DST); \
+	rm -rf tmp-$(ART_NAME); \
+	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
+	head -n 8 $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
+
 
 trigger-permission:
 	@set -eu
@@ -98,65 +139,8 @@ trigger-permission:
 	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
 	fi
 
-check-permissions:
-	@gh run list --workflow=permissions --limit 1
-
-# Déclenche l’export des secrets en .env (via GH Actions) et télécharge l’artefact
-env-from-gh:
-	@set -eu; \
-	ref=Auto_github; \
-	echo "🚀 Déclenche permissions.yml sur $$ref"; \
-	gh workflow run permissions.yml --ref "$$ref" >/dev/null; \
-	sleep 2; \
-	run_id=$$(gh run list --workflow=permissions.yml --limit 30 --json databaseId,headBranch \
-	        -q '.[] | select(.headBranch=="'$$ref'") | .databaseId' | head -n1); \
-	[ -n "$$run_id" ] || (echo "Aucun run trouvé pour $$ref"; exit 1); \
-	echo "⏳ Run $$run_id"; gh run watch "$$run_id" || true; \
-	art_id=$$(gh api repos/:owner/:repo/actions/runs/$$run_id/artifacts \
-	         --jq '.artifacts[] | select(.name=="env-artifact") | .id'); \
-	if [ -z "$$art_id" ] || [ "$$art_id" = "null" ]; then \
-	  echo "⚠️  Pas d'artefact env-artifact. Tentative download-all..."; \
-	  gh run download "$$run_id" -D artifacts_all || true; \
-	  env_found=$$(find artifacts_all -type f -name ".env" | head -n1); \
-	  [ -n "$$env_found" ] || (echo "Aucun .env dans les artefacts"; exit 1); \
-	  [ -f .env ] && mv .env .env.bak || true; \
-	  mv "$$env_found" .env; rm -rf artifacts_all; \
-	else \
-	  echo "⬇️  Téléchargement artefact $$art_id..."; \
-	  gh api -H "Accept: application/vnd.github+json" repos/:owner/:repo/actions/artifacts/$$art_id/zip > env-artifact.zip; \
-	  unzip -o env-artifact.zip -d env-artifact >/dev/null; rm env-artifact.zip; \
-	  [ -f env-artifact/.env ] || (echo ".env absent dans l’artefact"; exit 1); \
-	  [ -f .env ] && mv .env .env.bak || true; \
-	  mv env-artifact/.env .env; rm -rf env-artifact; \
-	fi; \
-	echo "✅ .env récupéré. (NE PAS COMMIT !)"; head -n 8 .env || true
 
 
-
-
-
-	
-setup_dagshub:
-	@set -eu
-	# Charge .env si présent, et exporte toutes les variables
-	@set -a; [ -f .env ] && . ./.env; set +a
-	@ : "$${DAGSHUB_USER:?Missing DAGSHUB_USER in .env}"
-	@ : "$${DAGSHUB_TOKEN:?Missing DAGSHUB_TOKEN in .env}"
-	@ : "$${DAGSHUB_REPO:?Missing DAGSHUB_REPO in .env}"
-	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
-	@ : "$${MLFLOW_TRACKING_USERNAME:?Missing MLFLOW_TRACKING_USERNAME in .env}"
-	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
-	@ : "$${COMPAGNON_SECRET_KETSIA:?Missing secrets.COMPAGNON_SECRET_KETSIA in .env}"
-	@ : "$${COMPAGNON_SECRET_YAZ:?Missing secrets.COMPAGNON_SECRET_YAZ in .env}"
-	@mkdir -p infra/config
-	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \
-		"$${DAGSHUB_USER}" \
-		"$${DAGSHUB_REPO}" \
-		"$${MLFLOW_TRACKING_URI}" \
-		"$${MLFLOW_TRACKING_USERNAME}" \
-		"$${MLFLOW_TRACKING_PASSWORD}" \
-		> infra/config/dagshub.yaml
-	@echo "DagsHub config written to infra/config/dagshub.yaml"
 
 
 

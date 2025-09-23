@@ -90,6 +90,13 @@ WF_NAME  ?= permissions           # nom du workflow (pas le chemin)
 ART_NAME ?= env-artifact          # nom de l'artefact uploadé par le workflow
 ART_FILE ?= artifacts/env.txt     # chemin du fichier *dans* l'artefact
 ENV_DST  ?= .env                  # où installer le fichier localement
+ENV_FILE  ?= $(ENV_DST)       # auto-load pointera dessus
+
+# Auto-load .env / env.txt
+ifneq ("$(wildcard $(ENV_FILE))","")
+include $(ENV_FILE)
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
+endif
 
 check-permissions:
 	@gh run list --workflow=permissions --limit 1

@@ -3,20 +3,19 @@
 import pytest
 import requests
 import os
-import subprocess
-import time
 from unittest.mock import patch, MagicMock
+from typing import Any
 
 
 class TestDeploymentIntegration:
     """Tests d'intégration pour vérifier le déploiement et les performances."""
 
     @pytest.fixture
-    def api_base_url(self):
+    def api_base_url(self) -> str:
         """URL de base pour les tests."""
         return os.getenv("API_BASE_URL", "http://localhost:8000")
 
-    def test_deployment_health_endpoint(self, api_base_url):
+    def test_deployment_health_endpoint(self, api_base_url: str):
         """Test de l'endpoint de santé du déploiement."""
         try:
             response = requests.get(f"{api_base_url}/health", timeout=10)
@@ -27,7 +26,7 @@ class TestDeploymentIntegration:
             pytest.skip("API non disponible pour les tests")
 
     @patch("subprocess.run")
-    def test_deployment_script_execution(self, mock_subprocess):
+    def test_deployment_script_execution(self, mock_subprocess: Any):
         """Test d'exécution du script de déploiement."""
         mock_subprocess.return_value = MagicMock(
             returncode=0,

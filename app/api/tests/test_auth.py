@@ -1,11 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 from datetime import timedelta
-import jwt
 
 from app.api.main import app
 from app.api.security.auth import auth_manager
-from app.api.config.settings import settings
 
 client = TestClient(app)
 
@@ -21,10 +19,8 @@ class TestAuthentication:
         assert isinstance(token, str)
         assert len(token) > 0
 
-        # Vérifier que le token peut être décodé
-        payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-        )
+        # Vérifier via le même gestionnaire
+        payload = auth_manager.verify_token(token)
         assert payload["sub"] == "test_user"
         assert "exp" in payload
 

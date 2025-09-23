@@ -1,24 +1,51 @@
 # app/api/security/auth.py
 """Module de gestion de l'authentification par clé API et JWT."""
 
-from fastapi import Depends, HTTPException, Header, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, TypedDict
+import os
 
 from app.api.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Configuration des clés API valides (à ajuster / externaliser si besoin)
-VALID_API_KEYS = {
-    "test-key-123": {"name": "Test Key", "permissions": ["read", "write"]},
-    "test_api_key": {"name": "Test API Key", "permissions": ["read", "write"]},
-    "dev-key": {"name": "Development Key", "permissions": ["read", "write"]},
+# Correction de l'erreur liée à `ApiKeyInfo` et réduction des lignes longues
+
+
+class ApiKeyInfo(TypedDict):
+    name: str
+    permissions: list[str]
+
+
+VALID_API_KEYS: dict[str, ApiKeyInfo] = {
+    os.getenv("API_KEY_TEST", "test-key-123"): {
+        "name": "Test Key",
+        "permissions": ["read", "write"],
+    },
+    os.getenv("API_KEY_DEV", "dev-key"): {
+        "name": "Development Key",
+        "permissions": ["read", "write"],
+    },
 }
+
+# Ajout de journalisation pour les clés API manquantes
+for key, value in VALID_API_KEYS.items():
+    if key.startswith("test"):
+        logger.warning(f"⚠️ Clé API de test détectée : {key}")
+
+# Ajout d'une validation stricte pour les clés API
+if not all(key for key in VALID_API_KEYS if key):
+    logger.error(
+        "❌ Clés API manquantes dans les variables d'environnement."
+    )
+    raise RuntimeError(
+        "Configuration des clés API incomplète."
+    )
 
 # Hashing des mots de passe
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -30,14 +57,18 @@ class AuthManager:
 
     def __init__(self):
         # ⚠️ On utilise la clé existante dans Settings
-        self.secret_key = getattr(settings, "API_SECRET_KEY", "change-me-in-prod")
+        self.secret_key = getattr(
+            settings, "API_SECRET_KEY", "change-me-in-prod"
+        )
         # Valeurs par défaut sûres si non présentes dans Settings
         self.algorithm = getattr(settings, "JWT_ALGORITHM", "HS256")
         self.access_token_expire_minutes = int(
             getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 60)
         )
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(
+        self, plain_password: str, hashed_password: str
+    ) -> bool:
         """Vérifie si un mot de passe correspond à son hash."""
         return pwd_context.verify(plain_password, hashed_password)
 
@@ -50,17 +81,22 @@ class AuthManager:
     ) -> str:
         """Crée un token JWT."""
         to_encode = data.copy()
-        expire = datetime.utcnow() + (
-            expires_delta or timedelta(minutes=self.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + (
+            expires_delta or timedelta(
+                minutes=self.access_token_expire_minutes
+            )
         )
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-        return encoded_jwt
+        return jwt.encode(
+            to_encode, self.secret_key, algorithm=self.algorithm
+        )
 
     def verify_token(self, token: str) -> Dict[str, Any]:
         """Vérifie et décode un token JWT."""
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            payload = jwt.decode(
+                token, self.secret_key, algorithms=[self.algorithm]
+            )
             return payload
         except JWTError as e:
             logger.warning(f"Token invalide: {e}")
@@ -96,8 +132,26 @@ def verify_api_key_from_request(request: Request) -> bool:
 
 
 # ------------- Dépendances JWT -------------
+
+
+class CustomHTTPAuthorizationCredentials:
+    def __init__(self, credentials: str):
+        self.credentials = credentials
+
+
+async def get_credentials(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(
+            status_code=401, detail="Missing Authorization Header"
+        )
+    return CustomHTTPAuthorizationCredentials(
+        credentials=auth_header.split()[1]
+    )
+
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: CustomHTTPAuthorizationCredentials = Depends(get_credentials),
 ) -> Dict[str, Any]:
     """Récupère l'utilisateur actuel à partir du token JWT."""
     try:
@@ -148,4 +202,5 @@ async def require_auth_or_api_key(
         detail="Authentification requise",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
 

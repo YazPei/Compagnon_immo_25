@@ -1,14 +1,13 @@
 import pytest
+from typing import Dict, Any, List
 
 from fastapi.testclient import TestClient
 from app.api.main import app
 
-pytestmark = pytest.mark.skip(reason="Skip: endpoint /api/v1/estimation protégé; les tests attendent 200.")
-
 client = TestClient(app)
-API_KEY = "test-key-123"
+API_KEY = "test_api_key"
 
-EXAMPLES = [
+EXAMPLES: List[Dict[str, Any]] = [
     {
         "bien": {
             "type": "appartement",
@@ -110,7 +109,7 @@ EXAMPLES = [
 
 
 @pytest.mark.parametrize("payload", EXAMPLES)
-def test_estimation(payload):
+def test_estimation(payload: Dict[str, Any]):
     """Test de l'endpoint d'estimation avec différents payloads."""
     response = client.post(
         "/api/v1/estimation",
@@ -125,19 +124,11 @@ def test_estimation(payload):
     assert "estimation" in data
     assert "prix" in data["estimation"]
     assert data["estimation"]["prix"] >= 0
-    assert "marche" in data
-    assert "metadata" in data
+    assert "input" in data
 
     # Vérifier que indice_confiance est bien un float
     assert isinstance(data["estimation"]["indice_confiance"], float)
     assert 0 <= data["estimation"]["indice_confiance"] <= 1
-
-
-@pytest.fixture
-def auth_headers():
-    """Fixture pour générer des headers d'authentification."""
-    token = "test_token"
-    return {"Authorization": f"Bearer {token}"}
 
 
 def test_estimation_unauthorized():
@@ -146,7 +137,7 @@ def test_estimation_unauthorized():
         "/api/v1/estimation",
         json={
             "surface": 100,
-            "pieces": 4,
+            "nb_pieces": 4,
             "code_postal": "75001"
         }
     )

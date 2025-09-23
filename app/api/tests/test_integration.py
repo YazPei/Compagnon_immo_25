@@ -8,7 +8,9 @@ from app.api.main import app
 
 client = TestClient(app)
 
-pytestmark = pytest.mark.skip(reason="Skip: scénario d'estimation non aligné avec l'auth de l'API.")
+pytestmark = pytest.mark.skip(
+    reason="Skip: scénario d'estimation non aligné avec l'auth de l'API."
+)
 
 
 @pytest.mark.integration

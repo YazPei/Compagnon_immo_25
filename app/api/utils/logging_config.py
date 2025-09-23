@@ -5,13 +5,16 @@ Configuration centralisée des logs pour le projet.
 import logging
 import logging.config
 import os
+from loguru import logger
+import sys
+from typing import Dict, Any
 
 # Définir les niveaux de log par environnement
 ENV = os.getenv("ENV", "development")
 LOG_LEVEL = "DEBUG" if ENV == "development" else "INFO"
 
 # Configuration des logs
-LOGGING_CONFIG = {
+LOGGING_CONFIG: Dict[str, Any] = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
@@ -58,3 +61,17 @@ LOGGING_CONFIG = {
 
 # Appliquer la configuration des logs
 logging.config.dictConfig(LOGGING_CONFIG)
+
+# Supprimer les gestionnaires par défaut de Loguru pour éviter les doublons
+logger.remove()
+
+# Ajouter un gestionnaire pour les logs structurés
+logger.add(
+    sys.stdout,
+    format="{{'time': '{time}', 'level': '{level}', 'message': '{message}'}}",
+    level=LOG_LEVEL,
+    serialize=True
+)
+
+# Exemple d'utilisation :
+logger.info("Loguru est configuré pour des logs structurés.")

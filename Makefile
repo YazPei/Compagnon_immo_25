@@ -7,12 +7,23 @@
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-# Auto-load .env
-ENV_FILE ?= .env
+# ========== Makefile MLOps - Compagnon immo ==========
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
+
+# --- Choix du fichier d'env local ---
+# Si tu veux garder env.txt en local, mets: ENV_DST ?= env.txt
+ENV_DST  ?= .env
+ENV_FILE ?= $(ENV_DST)
+
+# Auto-load variables d'environnement (si fichier présent)
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
 export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
+
+# Branche courante (utilisée par trigger-permission si non passée)
+REF ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 
 
@@ -80,17 +91,17 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 # ===============================
 
 # --- DagsHub non-interactive setup ---
-# Utilisation:
-#   make import_env_secrets              # repo courant
-#   make import_env_secrets REPO=owner/name
+
 
 # --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
-BRANCH   ?= Auto_github           # branche sur laquelle tu veux déclencher
-WF_NAME  ?= permissions           # nom du workflow (pas le chemin)
-ART_NAME ?= env-artifact          # nom de l'artefact uploadé par le workflow
-ART_FILE ?= artifacts/env.txt     # chemin du fichier *dans* l'artefact
-ENV_DST  ?= .env                  # où installer le fichier localement
-ENV_FILE  ?= $(ENV_DST)       # auto-load pointera dessus
+# --- Pull .env depuis un artefact GitHub Actions ---
+BRANCH   ?= Auto_github           # branche à déclencher
+WF_NAME  ?= permissions.yml           # nom du workflow (pas le chemin)
+ART_NAME ?= env-artifact          # nom de l'artefact produit par le workflow
+ART_FILE ?= artifacts/env.txt     # chemin du fichier dans l'artefact
+ENV_DST  ?= .env                  # destination locale (ou env.txt si tu préfères)
+ENV_FILE ?= $(ENV_DST)            # auto-load pointera dessus
+
 
 # Auto-load .env / env.txt
 ifneq ("$(wildcard $(ENV_FILE))","")
@@ -109,8 +120,7 @@ trigger-permission:
 	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
 	fi
 
-check-permissions:
-	@gh run list --workflow=permissions --limit 1
+
 	
 env-from-gh:
 	@set -euo pipefail; \
@@ -146,7 +156,8 @@ env-from-gh:
 	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
 	head -n 8 $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
 
-
+check-permissions:
+	@gh run list --workflow=permissions --limit 1
 
 
 
@@ -615,6 +626,13 @@ ports-check: ## Vérifie les ports locaux
 airflow: airflow-up airflow-run ## Raccourci
 
 
+airflow-up: create-network ## Lance uniquement le service airflow
+	@$(DOCKER_COMPOSE) up -d airflow
+
+airflow-down: ## Stop + rm du service airflow
+	@$(DOCKER_COMPOSE) stop airflow || true
+	@$(DOCKER_COMPOSE) rm -f airflow || true
+	
 airflow-logs: ## Logs du service Airflow
 	@docker logs -f airflow
 

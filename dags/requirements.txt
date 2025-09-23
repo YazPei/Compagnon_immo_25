@@ -1,3 +1,12 @@
-os
-pendulum
-airflow
+# dags/requirements.txt
+requests==2.*
+pendulum==3.*
+PyYAML==6.*
+python-dotenv==1.*
+psycopg2-binary==2.9.*
+
+# seulement si tu les importes dans tes DAGs :
+# mlflow==2.15.1
+# dagshub==0.3.27
+# apache-airflow-providers-postgres==5.*
+

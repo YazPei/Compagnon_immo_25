@@ -1,16 +1,12 @@
 FROM apache/airflow:2.9.0
 
-USER root
-# Installe ici tes libs système si besoin
-# RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
-
 USER airflow
+# Dockerfile.airflow (relevant lines)
 WORKDIR /opt/airflow
+COPY dags/requirements.txt /opt/airflow/dags/requirements.txt
+RUN pip install --no-cache-dir -r /opt/airflow/dags/requirements.txt
 
-# Dépendances Python de tes DAGs (providers, lib ML, etc.)
-COPY dags/requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
 
-# Copie des DAGs
 COPY dags/ /opt/airflow/dags/
+
 

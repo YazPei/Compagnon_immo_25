@@ -4,6 +4,9 @@
 .env/*
 *.env
 env/
+.env.bak
+infra/config/dagshub.yaml
+
 
 # Environnements virtuels
 .venv/
@@ -52,3 +55,5 @@ archives/
 .dvc/cache
 
 mlflow_outputs/
+.env
+.env.bak

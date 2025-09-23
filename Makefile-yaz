@@ -3,29 +3,21 @@
 # Outils : DVC, MLflow, Docker, bash scripts, Airflow
 
 # permission .env
-# utilise /usr/bin/env pour résoudre bash (comme tu voulais)
-SHELL := /usr/bin/env
-.SHELLFLAGS := bash -euo pipefail -c
 
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
 
-# --- Choix du fichier d'env local ---
-# Si tu veux garder env.txt en local, mets: ENV_DST ?= env.txt
-ENV_DST  ?= .env
-ENV_FILE ?= $(ENV_DST)
-
-# Auto-load variables d'environnement (si fichier présent)
+# Auto-load .env
+ENV_FILE ?= .env
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
 export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
-# Branche courante (utilisée par trigger-permission si non passée)
-REF ?= $(shell git rev-parse --abbrev-ref HEAD)
-
 
 
 # ===== Variables =====
-
+SHELL := /usr/bin/env bash
 IMAGE_PREFIX   := compagnon_immo
 NETWORK        := ml_net
 VENV       := .venv
@@ -78,7 +70,7 @@ lint: ## Vérifie quelques pièges courants
 # ===============================
 # 📦 Quick start
 # ===============================
-quick-start: setup_dags mlflow-dockerized build-all ## Build + run docker
+quick-start: setup_dags build-all ## Build + run docker
 
 
 quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
@@ -88,56 +80,53 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 # ===============================
 
 # --- DagsHub non-interactive setup ---
+# Utilisation:
+#   make import_env_secrets              # repo courant
+#   make import_env_secrets REPO=owner/name
 
+REPO ?=
 
-# --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
-# --- Pull .env depuis un artefact GitHub Actions ---
-# Config overridable : make env-from-gh BRANCH=Auto_github ART_NAME=env-artifact
-# --- Paramètres overridables : make env-from-gh BRANCH=Auto_github WF_REF=permissions ART_NAME=env-artifact ENV_DST=.env
-BRANCH?= Auto_github
-WF?= permissions
-ART_NAME?= env-artifact
-ENV_DST?= .env
-
-.PHONY: env-from-gh
-env-from-gh:
-	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
-	@echo "🚀 Déclenche '$(WF)' sur branche '$(BRANCH)'"
-	@if gh auth status >/dev/null 2>&1; then \
-	  gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
-	else \
-	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
+import_env_secrets:
+	@set -eu
+	@if ! command -v gh >/dev/null; then \
+		echo "❌ GitHub CLI (gh) n'est pas installé."; \
+		echo "  Linux: sudo apt install gh | macOS: brew install gh | Windows: winget install GitHub.cli"; \
+		exit 1; \
 	fi
-	@sleep 2
-	@echo "⏳ Récupération du dernier run…"
-	@RUN_ID=$$(gh run list --workflow="$(WF)" --limit 30 --json databaseId,headBranch \
-	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur '$(BRANCH)'"; exit 1; }; \
-	echo "▶ RUN_ID=$$RUN_ID"; \
-	gh run watch "$$RUN_ID" || true; \
-	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
-	if [ "$$CONC" != "success" ]; then \
-	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
-	fi; \
-	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
-	rm -rf tmp-$(ART_NAME); \
-	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
-	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
-	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
-	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
-	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true; \
-	mv "$$SRC" "$(ENV_DST)"; \
-	rm -rf tmp-$(ART_NAME); \
-	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
-	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
+	@[ -f .env ] || (echo "❌ Fichier .env introuvable"; exit 1)
+	@echo "🚀 Import des variables de .env vers GitHub Secrets $(if $(REPO),pour $(REPO),du repo courant)..."
+	@while IFS='=' read -r k v; do \
+		case "$$k" in ''|\#*) continue ;; esac; \
+		echo "➕ $$k"; \
+		if [ -n "$(REPO)" ]; then \
+			gh secret set "$$k" --repo "$(REPO)" -b"$$v"; \
+		else \
+			gh secret set "$$k" -b"$$v"; \
+		fi; \
+	done < .env
+	@echo "✅ Secrets importés."
 
+setup_dags:
+	@set -eu
+	# Charge .env si présent, et exporte toutes les variables
+	@set -a; [ -f .env ] && . ./.env; set +a
 
-check-permissions:
-	@gh run list --workflow=permissions --limit 1
+	@ : "$${DAGSHUB_USER:?Missing DAGSHUB_USER in .env}"
+	@ : "$${DAGSHUB_TOKEN:?Missing DAGSHUB_TOKEN in .env}"
+	@ : "$${DAGSHUB_REPO:?Missing DAGSHUB_REPO in .env}"
+	@ : "$${MLFLOW_TRACKING_URI:?Missing MLFLOW_TRACKING_URI in .env}"
+	@ : "$${MLFLOW_TRACKING_USERNAME:?Missing MLFLOW_TRACKING_USERNAME in .env}"
+	@ : "$${MLFLOW_TRACKING_PASSWORD:?Missing MLFLOW_TRACKING_PASSWORD in .env}"
 
-
-
+	@mkdir -p infra/config
+	@printf 'owner: "%s"\nrepo: "%s"\nmlflow_tracking_uri: "%s"\n' \
+		"$${DAGSHUB_USER}" \
+		"$${DAGSHUB_REPO}" \
+		"$${MLFLOW_TRACKING_URI}" \
+		"$${MLFLOW_TRACKING_USERNAME}" \
+		"$${MLFLOW_TRACKING_PASSWORD}" \
+		> infra/config/dagshub.yaml
+	@echo "DagsHub config written to infra/config/dagshub.yaml"
 
 
 
@@ -603,13 +592,6 @@ ports-check: ## Vérifie les ports locaux
 airflow: airflow-up airflow-run ## Raccourci
 
 
-airflow-up: create-network ## Lance uniquement le service airflow
-	@$(DOCKER_COMPOSE) up -d airflow
-
-airflow-down: ## Stop + rm du service airflow
-	@$(DOCKER_COMPOSE) stop airflow || true
-	@$(DOCKER_COMPOSE) rm -f airflow || true
-	
 airflow-logs: ## Logs du service Airflow
 	@docker logs -f airflow
 

@@ -1,0 +1,30 @@
+name: trigger-permissions (same branch)
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - ".github/workflows/permissions.yml"
+      - ".github/workflows/trigger_permissions.yml"
+      - "Makefile"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Option A — appeler direct 'gh'
+      - name: Trigger permissions on current branch
+        env:
+          GH_TOKEN: ${{ github.token }}     # gh CLI lit GH_TOKEN
+          REF: ${{ github.ref_name }}       # ex: Auto_github
+        run: |
+          set -euo pipefail
+          gh workflow run .github/workflows/permissions.yml --ref "$REF"
+          echo "Triggered permissions.yml on $REF"

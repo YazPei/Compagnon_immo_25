@@ -1,11 +1,11 @@
 # docker-compose.yml — Compagnon Immo (version corrigée)
 
 services:
-  # --------- Pipeline de lancement ----------
+  # --------- Pipeline de lancement ----------   
   base:
     build:
       context: .
-      dockerfile: mlops/Dockerfile.base
+      dockerfile: c
     image: compagnon_immo-base:latest
 
   run_full:
@@ -295,17 +295,17 @@ services:
       AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
-
+      environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
       # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
       # (Les 3 variables viennent du .env et suffisent au client mlflow)
       # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:
       AIRFLOW_CONN_DAGSHUB_MLFLOW: "https://${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}@dagshub.com/${DAGSHUB_REPO_OWNER}/${DAGSHUB_REPO_NAME}.mlflow"
-
-      # Optionnel : accessibles dans les DAGs
       DAGSHUB_USER: "${DAGSHUB_USER}"
       DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
       DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
       DAGSHUB_REPO_NAME: "${DAGSHUB_REPO_NAME}"
+      AIRFLOW__WEBSERVER__SECRET_KEY: "${AIRFLOW__WEBSERVER__SECRET_KEY}"
 
     command: >
       bash -c "
@@ -318,6 +318,7 @@ services:
     volumes:
       - ./:/opt/airflow/repo
       - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
     working_dir: /opt/airflow
     networks:
       - ml_net

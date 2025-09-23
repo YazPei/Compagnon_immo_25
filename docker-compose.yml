@@ -286,6 +286,10 @@ services:
     image: apache/airflow:2.9.0
     depends_on:
       - postgres-airflow
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+
     env_file:
       - .env
     environment:

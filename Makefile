@@ -606,7 +606,13 @@ AIRFLOW_URL ?= http://localhost:8081
 
 .PHONY: airflow-start airflow-up airflow-init airflow-wait airflow-open airflow-smoke airflow-logs
 
-airflow-start: airflow-up airflow-init airflow-wait airflow-open ## Up + init + wait + open
+
+airflow-start: airflow-setting airflow-up airflow-init airflow-wait airflow-open ## Up + init + wait + open
+
+airflow-setting: 
+	@mkdir -p logs dags plugins
+	@sudo chown -R 50000:0 logs dags plugins && sudo chmod -R 777 logs dags plugins
+
 
 airflow-up: ## Démarre Postgres + Airflow
 	@test -s .env || { echo "❌ .env manquant"; exit 1; }
@@ -623,14 +629,22 @@ airflow-init: ## Init DB (idempotent) + crée l'admin si absent
 	    --username admin --firstname Admin --lastname User \
 	    --role Admin --email admin@example.com --password admin123'
 
-airflow-wait: ## Attend la dispo du webserver (health OK)
-	@echo "⏳ Attente de la santé Airflow..."
-	@for i in $$(seq 1 60); do \
-	  curl -fsS $(AIRFLOW_URL)/api/v1/health >/dev/null 2>&1 && { echo "✅ Airflow up @ $(AIRFLOW_URL)"; exit 0; }; \
-	  sleep 2; \
+AIRFLOW_URL ?= http://localhost:8081
+
+airflow-wait:
+	@echo "⏳ Attente de la santé Airflow sur $(AIRFLOW_URL)…"
+	@for i in $$(seq 1 90); do \
+	  code1=$$(curl -s -o /dev/null -w "%{http_code}" $(AIRFLOW_URL)/health || true); \
+	  code2=$$(curl -s -o /dev/null -w "%{http_code}" $(AIRFLOW_URL)/api/v1/health || true); \
+	  if [ "$$code1" = "200" ] || [ "$$code2" = "200" ]; then \
+	    echo "✅ Airflow répond (code UI=$$code1, API=$$code2)"; exit 0; \
+	  fi; \
+	  sleep 1; \
 	done; \
-	echo "❌ Airflow ne répond pas sur $(AIRFLOW_URL)"; \
+	echo "❌ Airflow ne répond pas (UI=$$code1, API=$$code2). Derniers logs :"; \
+	docker compose logs --no-color --tail=120 airflow || true; \
 	exit 1
+
 
 airflow-open: ## Ouvre l'UI
 	@{ which xdg-open >/dev/null 2>&1 && xdg-open $(AIRFLOW_URL) || echo "➡️  Ouvre $(AIRFLOW_URL) dans ton navigateur"; }

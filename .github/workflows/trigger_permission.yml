@@ -1,4 +1,13 @@
 name: Trigger permissions (same branch)
+on:
+  workflow_dispatch: {}
+  push:  
+  
+permissions:
+  contents: read
+  actions: write
+
+defaults:
   run: make trigger-permission REF=${{ github.ref_name }}
   env:
     GH_TOKEN: ${{ github.token }}

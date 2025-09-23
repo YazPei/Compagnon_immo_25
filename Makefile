@@ -98,6 +98,17 @@ include $(ENV_FILE)
 export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
+permissions: trigger-permission check-permissions env-from-gh
+trigger-permission:
+	@set -eu
+	@if gh auth status >/dev/null 2>&1; then \
+	  echo "▶ using existing gh auth context"; \
+	  gh workflow run permissions --ref "$(REF)"; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo> | in CI: \$$\{\{ github.token \}\})}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
+	fi
+
 check-permissions:
 	@gh run list --workflow=permissions --limit 1
 	
@@ -136,15 +147,6 @@ env-from-gh:
 	head -n 8 $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
 
 
-trigger-permission:
-	@set -eu
-	@if gh auth status >/dev/null 2>&1; then \
-	  echo "▶ using existing gh auth context"; \
-	  gh workflow run permissions --ref "$(REF)"; \
-	else \
-	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo> | in CI: \$$\{\{ github.token \}\})}"; \
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
-	fi
 
 
 

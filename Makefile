@@ -96,34 +96,69 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 # --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
 # --- Pull .env depuis un artefact GitHub Actions ---
 # Config overridable : make env-from-gh BRANCH=Auto_github ART_NAME=env-artifact
-BRANCH   ?= Auto_github
-ART_NAME ?= env-artifact
-ENV_DST  ?= .env          # ou env.txt si tu veux garder ce nom en local
+# --- Paramètres overridables : make env-from-gh BRANCH=Auto_github WF_REF=permissions ART_NAME=env-artifact ENV_DST=.env
+BRANCH   ?= Auto_github                 # branche où déclencher
+WF_REF   ?= permissions                 # nom du workflow OU chemin .github/workflows/permissions.yml
+ART_NAME ?= env-artifact               # nom de l'artefact créé par le workflow
+ENV_DST  ?= .env                       # où installer le fichier récupéré (env.txt -> .env local)
 
 .PHONY: env-from-gh
 env-from-gh:
 	@set -euo pipefail; \
-	echo "🚀 Déclenche .github/workflows/permissions.yml sur $(BRANCH)"; \
-	gh workflow run permissions --ref "$(BRANCH)"; \
+	# 0) Pré-requis
+	command -v gh >/dev/null || { echo "❌ gh (GitHub CLI) introuvable"; exit 1; }; \
 	\
-	echo "⏳ Récupère le dernier run de CE workflow sur $(BRANCH)…"; \
-	RUN_ID=$$(gh run list --workflow=permissions --limit 50 --json databaseId,headBranch \
-	  -q ".[] | select(.headBranch==\"$(BRANCH)\") | .databaseId" | head -n1); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run trouvé (branch=$(BRANCH))"; exit 1; }; \
-	echo "RUN_ID=$$RUN_ID"; \
+	# 1) Déclenche le workflow
+	echo "🚀 Déclenche '$$WF' sur branche '$(BRANCH)' (WF_REF=$(WF_REF))"; \
+	WF="$(WF_REF)"; \
+	if gh auth status >/dev/null 2>&1; then \
+	  gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (ex: export GH_TOKEN=<PAT>) }"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null; \
+	fi; \
+	sleep 2; \
 	\
+	# 2) Récupère l'ID du dernier run de CE workflow sur CETTE branche
+	echo "⏳ Récupération du dernier run…"; \
+	RUN_ID=$$(gh run list --workflow="$$WF" --limit 30 --json databaseId,headBranch \
+	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$$WF' sur '$(BRANCH)'"; exit 1; }; \
+	echo "▶ RUN_ID=$$RUN_ID"; \
+	\
+	# 3) Attend la fin & vérifie le statut
 	gh run watch "$$RUN_ID" || true; \
 	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
-	if [ "$$CONC" != "success" ]; then echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web; exit 1; fi; \
+	if [ "$$CONC" != "success" ]; then \
+	  echo "❌ Run $$RUN_ID = $$CONC"; \
+	  gh run view "$$RUN_ID" --json status,conclusion,name,headBranch,url; \
+	  gh run view "$$RUN_ID" --web || true; \
+	  exit 1; \
+	fi; \
 	\
-	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
+	# 4) Télécharge l’artefact par NOM
+	echo "📦 Téléchargement de l’artefact '$(ART_NAME)'…"; \
 	rm -rf tmp-$(ART_NAME); \
-	gh run download "$$RUN_ID" -n $(ART_NAME) -D tmp-$(ART_NAME) || { echo "❌ Artefact $(ART_NAME) absent"; exit 1; }; \
-	SRC=$$(find tmp-$(ART_NAME) -type f -path "*/artifacts/env.txt" -print -quit); \
-	[ -n "$$SRC" ] || { echo "❌ 'artifacts/env.txt' introuvable. Contenu:"; find tmp-$(ART_NAME) -maxdepth 3 -type f -print; exit 1; }; \
-	[ -f $(ENV_DST) ] && mv $(ENV_DST) $(ENV_DST).bak || true; \
-	mv "$$SRC" $(ENV_DST); rm -rf tmp-$(ART_NAME); \
-	echo "✅ $(ENV_DST) mis à jour. Aperçu:"; sed -n '1,12p' $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
+	if ! gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME); then \
+	  echo "❌ Artefact '$(ART_NAME)' introuvable. Artefacts disponibles:"; \
+	  gh run view "$$RUN_ID" --json artifacts -q '.artifacts[].name' || true; \
+	  exit 1; \
+	fi; \
+	\
+	# 5) Cherche env.txt (où qu'il soit dans l'artefact) et installe-le
+	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
+	if [ -z "$$SRC" ]; then \
+	  echo "❌ 'env.txt' introuvable dans l’artefact. Contenu listé :"; \
+	  find tmp-$(ART_NAME) -maxdepth 3 -type f -print; \
+	  exit 1; \
+	fi; \
+	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true; \
+	mv "$$SRC" "$(ENV_DST)"; \
+	rm -rf tmp-$(ART_NAME); \
+	\
+	# 6) Aperçu masqué
+	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
+	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
 
 
 check-permissions:

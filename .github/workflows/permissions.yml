@@ -81,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: ${{ github.workspace }}/artifacts
+          path: ${{ github.workspace }}/.env
           if-no-files-found: error
           retention-days: 1
 

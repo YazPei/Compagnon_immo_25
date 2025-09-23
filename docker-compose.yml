@@ -305,7 +305,7 @@ services:
       DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
       DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
       DAGSHUB_REPO_NAME: "${DAGSHUB_REPO_NAME}"
-      
+      AIRFLOW__WEBSERVER__SECRET_KEY: "${AIRFLOW__WEBSERVER__SECRET_KEY}"
 
     command: >
       bash -c "
@@ -318,6 +318,7 @@ services:
     volumes:
       - ./:/opt/airflow/repo
       - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
     working_dir: /opt/airflow
     networks:
       - ml_net

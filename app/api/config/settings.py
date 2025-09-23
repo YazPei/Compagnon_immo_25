@@ -108,10 +108,9 @@ class Settings(BaseSettings):
     AIRFLOW_HOME: Optional[str] = None
     AIRFLOW_CONN_ID: str = "compagnon_immo_api"
 
-    # Ajout d'un modèle pour valider les champs imbriqués si nécessaire
-    class Config:
-        validate_assignment = True
-        extra = "ignore"
+    # Note: Ne pas déclarer de classe Config (pydantic v1) en même temps que
+    # model_config (pydantic v2). Les options nécessaires sont déjà dans
+    # model_config ci-dessus.
 
     # -------- Validators / Hooks --------
     @field_validator("ENVIRONMENT")

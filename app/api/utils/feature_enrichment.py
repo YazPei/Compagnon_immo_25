@@ -2,17 +2,17 @@
 Module pour l'enrichissement des features.
 """
 
-import pandas as pd
-import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pydantic import BaseModel, ValidationError, Field
 
 
 # Modèle Pydantic pour valider les entrées utilisateur
 class FeatureInput(BaseModel):
-    code_postal: str = Field(..., regex=r"^\d{5}$", description="Code postal à 5 chiffres.")
+    code_postal: str = Field(
+        ..., pattern=r"^\d{5}$", description="Code postal à 5 chiffres."
+    )
     ville: str
-    quartier: str = None
+    quartier: Optional[str] = None
 
 
 def validate_input(data: Dict[str, Any]) -> FeatureInput:

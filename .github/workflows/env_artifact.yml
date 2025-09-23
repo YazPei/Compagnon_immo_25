@@ -1,16 +1,11 @@
 name: env_artifact
 
 on:
-  workflow_dispatch: {}     # déclenchable à la demande
+  workflow_dispatch: {}
 
 permissions:
   contents: read
   actions: write
-
-defaults:
-  run:
-    shell: bash
-    working-directory: ${{ github.workspace }}
 
 jobs:
   build:
@@ -19,8 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 1) Crée .env dans le RUNNER (POC)
-      - name: Generate .env
+      - name: Generate .env (POC)
         run: |
           set -euo pipefail
           echo "HELLO=world" > .env
@@ -29,18 +23,14 @@ jobs:
           wc -c .env
           head -n1 .env
 
-      # 2) Sanity: échoue si .env n'existe pas
       - name: Sanity .env
-        run: |
-          set -euo pipefail
-          test -s .env || (echo "ERROR: .env missing" && exit 1)
+        run: test -s .env
 
-      # 3) Upload l'ARTEFACT (fichier, chemin ABSOLU)
       - name: Upload .env
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: ${{ github.workspace }}/.env
+          path: .env                    # ← chemin relatif ok
           if-no-files-found: error
           retention-days: 1
 

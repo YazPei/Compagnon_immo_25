@@ -1,17 +1,22 @@
 name: permissions
-
 on:
-  workflow_dispatch: {}      # déclenchable à la demande
+  workflow_dispatch: {}
   push:
-  pull_request:
 
 permissions:
   contents: read
   actions: write
 
+defaults:
+  run:
+    shell: bash
+    working-directory: ${{ github.workspace }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
+
     env:
       COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
       COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
@@ -26,10 +31,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - name: Générer config DagsHub/MLflow
         run: make setup_dagshub
@@ -46,25 +47,26 @@ jobs:
         shell: bash
         run: |
           set -eu
-          {
-            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
-            echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
-            echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
-            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
-            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
-            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
-            echo "MLFLOW_BACKEND_STORE_URI=${{ secrets.MLFLOW_BACKEND_STORE_URI }}"
-            echo "MLFLOW_ARTIFACT_URI=${{ secrets.MLFLOW_ARTIFACT_URI }}"
-            echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
-            echo "DAGSHUB_USER=${{ secrets.DAGSHUB_USERNAME }}"
-            echo "DAGSHUB_TOKEN=${{ secrets.DAGSHUB_TOKEN }}"
-            echo "DAGSHUB_REPO_OWNER=${{ secrets.DAGSHUB_REPO_OWNER }}"
-            echo "DAGSHUB_REPO_NAME=${{ secrets.DAGSHUB_REPO_NAME }}"
-            echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
-            echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
-          } > "$GITHUB_WORKSPACE/.env"
+          
+          echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
+          echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
+          echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
+          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+          echo "MLFLOW_BACKEND_STORE_URI=${{ secrets.MLFLOW_BACKEND_STORE_URI }}"
+          echo "MLFLOW_ARTIFACT_URI=${{ secrets.MLFLOW_ARTIFACT_URI }}"
+          echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
+          echo "DAGSHUB_USER=${{ secrets.DAGSHUB_USERNAME }}"
+          echo "DAGSHUB_TOKEN=${{ secrets.DAGSHUB_TOKEN }}"
+          echo "DAGSHUB_REPO_OWNER=${{ secrets.DAGSHUB_REPO_OWNER }}"
+          echo "DAGSHUB_REPO_NAME=${{ secrets.DAGSHUB_REPO_NAME }}"
+          echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
+          echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
           echo "[debug] wrote: $GITHUB_WORKSPACE/.env"
-          ls -la "$GITHUB_WORKSPACE" | sed -n '1,120p'
+          ls -la .
+          wc -c .env
+          head -n 5 .env | sed 's/=.*$/=***redacted***/'
 
       - name: Sanity .env
         run: |
@@ -72,16 +74,12 @@ jobs:
           test -s .env || (echo "ERROR: .env vide ou manquant" && exit 1)
           wc -c .env
           
-      - name: Prépare artefact
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          cp "$GITHUB_WORKSPACE/.env" "$GITHUB_WORKSPACE/.env"
-
       - name: Upload .env (artefact temporaire)
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: ${{ github.workspace }}/.env
+          path: ${{ github.workspace }}/.env           # ← FICHIER, chemin absolu
+          # path: ${{ github.workspace }}/artifacts    # ← si tu utilises l'option dossier
           if-no-files-found: error
           retention-days: 1
 

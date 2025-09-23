@@ -103,19 +103,33 @@ check-permissions:
 
 # Déclenche l’export des secrets en .env (via GH Actions) et télécharge l’artefact
 env-from-gh:
-	@echo "🚀 Déclenche le workflow 'permissions.yml' sur 	main..."
-	@gh workflow run permissions.yml --ref Auto_github >/dev/null  # à modifier par main
-	@sleep 2
-	@echo "⏳ Attente du run..."
-	@run_id=$$(gh run list --workflow=permissions.yml --limit 1 --json databaseId -q '.[0].databaseId'); \
-	if [ -z "$$run_id" ]; then echo "Aucun run pour 'permissions.yml'"; exit 1; fi; \
-	echo "Run ID: $$run_id"; \
-	gh run watch $$run_id || true; \
-	echo "⬇️  Téléchargement de l'artefact .env..."; \
-	gh run download $$run_id --name env-artifact -D . ; \
-	if [ -f ".env" ]; then echo "Backup .env → .env.bak"; mv .env .env.bak; fi; \
-	mv env-artifact/.env .env && rm -rf env-artifact; \
+	@set -eu; \
+	ref=Auto_github; \
+	echo "🚀 Déclenche permissions.yml sur $$ref"; \
+	gh workflow run permissions.yml --ref "$$ref" >/dev/null; \
+	sleep 2; \
+	run_id=$$(gh run list --workflow=permissions.yml --branch "$$ref" --limit 1 --json databaseId -q '.[0].databaseId'); \
+	[ -n "$$run_id" ] || (echo "Aucun run trouvé"; exit 1); \
+	echo "⏳ Run $$run_id"; gh run watch "$$run_id" || true; \
+	art_json=$$(gh api repos/:owner/:repo/actions/runs/$$run_id/artifacts); \
+	art_id=$$(echo "$$art_json" | jq -r '.artifacts[] | select(.name=="env-artifact") | .id'); \
+	if [ -z "$$art_id" ] || [ "$$art_id" = "null" ]; then \
+	  echo "⚠️  Pas d'artefact env-artifact. Tentative download-all..."; \
+	  gh run download "$$run_id" -D artifacts_all || true; \
+	  env_found=$$(find artifacts_all -type f -name ".env" | head -n1); \
+	  [ -n "$$env_found" ] || (echo "Aucun .env dans les artefacts"; exit 1); \
+	  [ -f .env ] && mv .env .env.bak || true; \
+	  mv "$$env_found" .env; rm -rf artifacts_all; \
+	else \
+	  echo "⬇️  Téléchargement artefact $$art_id..."; \
+	  gh api -H "Accept: application/vnd.github+json" repos/:owner/:repo/actions/artifacts/$$art_id/zip > env-artifact.zip; \
+	  unzip -o env-artifact.zip -d env-artifact >/dev/null; rm env-artifact.zip; \
+	  [ -f env-artifact/.env ] || (echo ".env absent dans l’artefact"; exit 1); \
+	  [ -f .env ] && mv .env .env.bak || true; \
+	  mv env-artifact/.env .env; rm -rf env-artifact; \
+	fi; \
 	echo "✅ .env récupéré. (NE PAS COMMIT !)"; head -n 8 .env || true
+
 
 
 	

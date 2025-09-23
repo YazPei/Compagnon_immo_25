@@ -295,6 +295,8 @@ services:
       AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
+      environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
       # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
       # (Les 3 variables viennent du .env et suffisent au client mlflow)
       # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:

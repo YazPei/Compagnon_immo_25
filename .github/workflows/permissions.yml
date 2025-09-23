@@ -47,7 +47,7 @@ jobs:
         run: |
           set -eu
           {
-#            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
+            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
             echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
             echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
             echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
@@ -71,6 +71,7 @@ jobs:
           set -eu
           test -s .env || (echo "ERROR: .env vide ou manquant" && exit 1)
           wc -c .env
+          
       - name: Prépare artefact
         run: |
           mkdir -p "$GITHUB_WORKSPACE/artifacts"

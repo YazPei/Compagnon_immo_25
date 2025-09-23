@@ -1,25 +1,41 @@
 name: permissions
-on: { workflow_dispatch: {} }
-permissions: { contents: read, actions: write }
-defaults: { run: { shell: bash, working-directory: ${{ github.workspace }} } }
+
+on:
+  workflow_dispatch: {}
+  # push:   # <-- décommente si tu veux aussi au push
+
+permissions:
+  contents: read
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ${{ github.workspace }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # POC: crée un .env dans la VM du runner (indépendant de ton .env local)
       - name: Générer .env (POC)
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           echo "HELLO=world" > "$GITHUB_WORKSPACE/.env"
           echo "[debug] wrote: $GITHUB_WORKSPACE/.env"
-          pwd; ls -la .; wc -c .env; head -n1 .env
+          pwd
+          ls -la .
+          wc -c .env
+          head -n1 .env
 
       - name: Upload .env (artefact)
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: ${{ github.workspace }}/.env
+          path: ${{ github.workspace }}/.env   # <-- chemin ABSOLU vers le fichier
           if-no-files-found: error
           retention-days: 1
 

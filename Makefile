@@ -601,26 +601,37 @@ ports-check: ## Vérifie les ports locaux
 #  Airflow (via compose)
 # ===============================
 airflow: airflow-up airflow-run ## Raccourci
+# ---- Airflow automation ------------------------------------------------------
+AIRFLOW_URL ?= http://localhost:8081
 
+.PHONY: airflow-start airflow-up airflow-init airflow-wait airflow-open airflow-smoke airflow-logs
 
-airflow-up: create-network ## Lance uniquement le service airflow
-	@$(DOCKER_COMPOSE) up -d airflow
+airflow-start: airflow-build airflow-init airflow-up airflow-logs airflow-smoke
+AIRFLOW_UID ?= 50000
 
-airflow-down: ## Stop + rm du service airflow
-	@$(DOCKER_COMPOSE) stop airflow || true
-	@$(DOCKER_COMPOSE) rm -f airflow || true
-	
-airflow-logs: ## Logs du service Airflow
-	@docker logs -f airflow
+airflow-build:
+	docker compose build airflow-webserver airflow-scheduler
 
-airflow-run: ## Run un service airflow via compose
-	@$(DOCKER_COMPOSE) run --rm airflow
+airflow-init:
+	mkdir -p logs/airflow
+	sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
+	docker compose run --rm airflow-webserver airflow db upgrade
+	docker compose run --rm airflow-webserver \
+	  airflow users create --username admin --password admin \
+	  --firstname Admin --lastname User --role Admin --email admin@example.com || true
 
-airflow-ps: ## ps des services airflow
-	@$(DOCKER_COMPOSE)  ps -a
+airflow-up: 
+	docker compose up -d airflow-webserver airflow-scheduler
 
-airflow-down: ## Down propre
-	@$(DOCKER_COMPOSE) down airflow
+airflow-logs:
+	docker compose logs -f airflow-webserver
 
-airflow-restart: ## Redémarre Airflow
-	@$(DOCKER_COMPOSE) restart airflow
+airflow-down:
+	docker compose stop airflow-webserver airflow-scheduler
+
+airflow-smoke: ## Déploie un DAG 'ping' et le déclenche
+	@python dags/compagnon_immo_stage.py
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list | grep -q ping_dag || sleep 5
+	@$(DOCKER_COMPOSE) exec airflow airflow dags trigger ping_dag
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list-runs -d ping_dag
+

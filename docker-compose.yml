@@ -282,44 +282,43 @@ services:
     networks:
       - ml_net
 
-  airflow:
-    image: apache/airflow:2.9.0
+
+  airflow-webserver:
+    build:
+      context: .                # repo racine
+      dockerfile: dags/Dockerfile.airflow
+    image: compagnon_immo-airflow
     depends_on:
       - postgres-airflow
-    env_file:
-      - .env
     environment:
-      # --- Airflow (DB locale) ---
-      MLFLOW_TRACKING_URI: "http://mlflow:5050"
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
-      AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
-      environment:
-      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
-      # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
-      # (Les 3 variables viennent du .env et suffisent au client mlflow)
-      # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:
-      AIRFLOW_CONN_DAGSHUB_MLFLOW: "https://${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}@dagshub.com/${DAGSHUB_REPO_OWNER}/${DAGSHUB_REPO_NAME}.mlflow"
-      DAGSHUB_USER: "${DAGSHUB_USER}"
-      DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
-      DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
-      DAGSHUB_REPO_NAME: "${DAGSHUB_REPO_NAME}"
-      AIRFLOW__WEBSERVER__SECRET_KEY: "${AIRFLOW__WEBSERVER__SECRET_KEY}"
-
-    command: >
-      bash -c "
-      airflow db init &&
-      airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com &&
-      airflow webserver & airflow scheduler
-      "
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs/airflow:/opt/airflow/logs
+      # Optionnel: si tu veux forcer ton airflow.cfg
+      # - ./dags/airflow.cfg:/opt/airflow/airflow.cfg:ro
     ports:
       - "8081:8080"
+    user: "50000:0"    # UID 'airflow' de l'image officielle
+    command: webserver
+
+  airflow-scheduler:
+    image: compagnon_immo-airflow
+    depends_on:
+      - postgres-airflow
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
     volumes:
-      - ./:/opt/airflow/repo
       - ./dags:/opt/airflow/dags
-      - ./logs:/opt/airflow/logs
-    working_dir: /opt/airflow
+      - ./logs/airflow:/opt/airflow/logs
+    user: "50000:0"
+    command: scheduler
     networks:
       - ml_net
 

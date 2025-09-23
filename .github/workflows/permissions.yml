@@ -70,4 +70,17 @@ jobs:
           name: env-artifact
           path: .env
           retention-days: 1
+          
+      - name: Upload .env (artefact temporaire)
+        uses: actions/upload-artifact@v4
+        with:
+        name: env-artifact
+        path: .env
+        retention-days: 1
+
+     - name: Sanity .env
+       run: |
+         set -eu
+         test -s .env || (echo "ERROR: .env vide ou manquant" && exit 1)
+         wc -c .env
 

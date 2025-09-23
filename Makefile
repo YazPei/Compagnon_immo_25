@@ -3,15 +3,10 @@
 # Outils : DVC, MLflow, Docker, bash scripts, Airflow
 
 # permission .env
+# utilise /usr/bin/env pour résoudre bash (comme tu voulais)
+SHELL := /usr/bin/env
+.SHELLFLAGS := bash -euo pipefail -c
 
-.ONESHELL:
-SHELL := /bin/bash
-.SHELLFLAGS := -euo pipefail -c
-
-
-# ========== Makefile MLOps - Compagnon immo ==========
-SHELL := /usr/bin/env bash
-.SHELLFLAGS := -eu -o pipefail -c
 
 # --- Choix du fichier d'env local ---
 # Si tu veux garder env.txt en local, mets: ENV_DST ?= env.txt
@@ -96,55 +91,45 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 
 
 # --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
-# --- Overridables
-# Branche à déclencher
-BRANCH  ?= Auto_github
-# Nom du workflow (pas le chemin)
-WF_REF  ?= permissions
-ART_NAME ?= env-artifact
-ENV_DST  ?= .env
+# --- Pull .env depuis un artefact GitHub Actions ---
+# Config overridable : make env-from-gh BRANCH=Auto_github ART_NAME=env-artifact
+# --- Paramètres overridables : make env-from-gh BRANCH=Auto_github WF_REF=permissions ART_NAME=env-artifact ENV_DST=.env
+BRANCH?= Auto_github
+WF?= permissions
+ART_NAME?= env-artifact
+ENV_DST?= .env
 
 .PHONY: env-from-gh
 env-from-gh:
-	# 0) Prérequis
-	command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
-
-	# 1) Déclenche le workflow
-	WF="$(WF_REF)"
-	echo "🚀 Déclenche '$$WF' sur branche '$(BRANCH)'"
-	if gh auth status >/dev/null 2>&1; then
-	  gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null
-	else
-	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null
+	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
+	@echo "🚀 Déclenche '$(WF)' sur branche '$(BRANCH)'"
+	@if gh auth status >/dev/null 2>&1; then \
+	  gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
 	fi
-	sleep 2
-
-	# 2) Dernier run de CE workflow sur CETTE branche
-	echo "⏳ Récupération du dernier run…"
-	RUN_ID=$$(gh run list --workflow="$$WF" --limit 30 --json databaseId,headBranch \
-	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1)
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$$WF' sur '$(BRANCH)'"; exit 1; }
-	echo "▶ RUN_ID=$$RUN_ID"
-
-	# 3) Attente + vérif
-	gh run watch "$$RUN_ID" || true
-	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion)
-	if [ "$$CONC" != "success" ]; then
-	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1
-	fi
-
-	# 4) Téléchargement et installation env.txt -> $(ENV_DST)
-	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"
-	rm -rf tmp-$(ART_NAME)
+	@sleep 2
+	@echo "⏳ Récupération du dernier run…"
+	@RUN_ID=$$(gh run list --workflow="$(WF)" --limit 30 --json databaseId,headBranch \
+	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur '$(BRANCH)'"; exit 1; }; \
+	echo "▶ RUN_ID=$$RUN_ID"; \
+	gh run watch "$$RUN_ID" || true; \
+	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
+	if [ "$$CONC" != "success" ]; then \
+	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
+	fi; \
+	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
+	rm -rf tmp-$(ART_NAME); \
 	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
-	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }
-	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit)
-	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }
-	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true
-	mv "$$SRC" "$(ENV_DST)"
-	rm -rf tmp-$(ART_NAME)
-	echo "✅ $(ENV_DST) mis à jour (aperçu) :"
+	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
+	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
+	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
+	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true; \
+	mv "$$SRC" "$(ENV_DST)"; \
+	rm -rf tmp-$(ART_NAME); \
+	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
 	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
 
 

@@ -601,26 +601,43 @@ ports-check: ## Vérifie les ports locaux
 #  Airflow (via compose)
 # ===============================
 airflow: airflow-up airflow-run ## Raccourci
+# ---- Airflow automation ------------------------------------------------------
+AIRFLOW_URL ?= http://localhost:8081
 
+.PHONY: airflow-start airflow-up airflow-init airflow-wait airflow-open airflow-smoke airflow-logs
 
-airflow-up: create-network ## Lance uniquement le service airflow
-	@$(DOCKER_COMPOSE) up -d airflow
+airflow-start: airflow-up airflow-init airflow-wait airflow-open ## Up + init + wait + open
 
-airflow-down: ## Stop + rm du service airflow
-	@$(DOCKER_COMPOSE) stop airflow || true
-	@$(DOCKER_COMPOSE) rm -f airflow || true
-	
-airflow-logs: ## Logs du service Airflow
-	@docker logs -f airflow
+airflow-up: ## Démarre Postgres + Airflow
+	@test -s .env || { echo "❌ .env manquant"; exit 1; }
+	@grep -q '^AIRFLOW__CORE__FERNET_KEY=' .env || { echo "❌ AIRFLOW__CORE__FERNET_KEY manquante"; exit 1; }
+	@grep -q '^AIRFLOW__WEBSERVER__SECRET_KEY=' .env || { echo "❌ AIRFLOW__WEBSERVER__SECRET_KEY manquante"; exit 1; }
+	@$(DOCKER_COMPOSE) up -d postgres-airflow airflow
+	@$(DOCKER_COMPOSE) ps
 
-airflow-run: ## Run un service airflow via compose
-	@$(DOCKER_COMPOSE) run --rm airflow
+airflow-init: ## Init DB (idempotent) + crée l'admin si absent
+	@$(DOCKER_COMPOSE) run --rm airflow bash -lc '\
+	  airflow db upgrade && \
+	  airflow users list | grep -q "^1\s\+admin\b" || \
+	  airflow users create \
+	    --username admin --firstname Admin --lastname User \
+	    --role Admin --email admin@example.com --password admin123'
 
-airflow-ps: ## ps des services airflow
-	@$(DOCKER_COMPOSE)  ps -a
+airflow-wait: ## Attend la dispo du webserver (health OK)
+	@echo "⏳ Attente de la santé Airflow..."
+	@for i in $$(seq 1 60); do \
+	  curl -fsS $(AIRFLOW_URL)/api/v1/health >/dev/null 2>&1 && { echo "✅ Airflow up @ $(AIRFLOW_URL)"; exit 0; }; \
+	  sleep 2; \
+	done; \
+	echo "❌ Airflow ne répond pas sur $(AIRFLOW_URL)"; \
+	exit 1
 
-airflow-down: ## Down propre
-	@$(DOCKER_COMPOSE) down airflow
+airflow-open: ## Ouvre l'UI
+	@{ which xdg-open >/dev/null 2>&1 && xdg-open $(AIRFLOW_URL) || echo "➡️  Ouvre $(AIRFLOW_URL) dans ton navigateur"; }
 
-airflow-restart: ## Redémarre Airflow
-	@$(DOCKER_COMPOSE) restart airflow
+airflow-smoke: ## Déploie un DAG 'ping' et le déclenche
+	@python dags/compagnon_immo_stage.py
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list | grep -q ping_dag || sleep 5
+	@$(DOCKER_COMPOSE) exec airflow airflow dags trigger ping_dag
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list-runs -d ping_dag
+

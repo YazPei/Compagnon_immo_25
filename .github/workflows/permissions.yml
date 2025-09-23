@@ -75,7 +75,7 @@ jobs:
       - name: Prépare artefact
         run: |
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          cp "$GITHUB_WORKSPACE/.env" "$GITHUB_WORKSPACE/artifacts/.env"
+          cp "$GITHUB_WORKSPACE/.env" "$GITHUB_WORKSPACE/.env"
 
       - name: Upload .env (artefact temporaire)
         uses: actions/upload-artifact@v4

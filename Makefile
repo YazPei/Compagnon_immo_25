@@ -103,19 +103,19 @@ check-permissions:
 
 # Déclenche l’export des secrets en .env (via GH Actions) et télécharge l’artefact
 env-from-gh:
-	@echo "Déclenche le workflow 'permissions'..."
-	@gh workflow run permissions >/dev/null
+	@echo "🚀 Déclenche le workflow 'permissions.yml' sur 	main..."
+	@gh workflow run permissions.yml --ref Auto_github >/dev/null  # à modifier par main
 	@sleep 2
-	@echo " Attente du run..."
-	@run_id=$$(gh run list --workflow=permissions --limit 1 --json databaseId -q '.[0].databaseId'); \
-	if [ -z "$$run_id" ]; then echo "Aucun run pour 'permissions'"; exit 1; fi; \
+	@echo "⏳ Attente du run..."
+	@run_id=$$(gh run list --workflow=permissions.yml --limit 1 --json databaseId -q '.[0].databaseId'); \
+	if [ -z "$$run_id" ]; then echo "Aucun run pour 'permissions.yml'"; exit 1; fi; \
 	echo "Run ID: $$run_id"; \
 	gh run watch $$run_id || true; \
-	echo "  Téléchargement de l'artefact .env..."; \
+	echo "⬇️  Téléchargement de l'artefact .env..."; \
 	gh run download $$run_id --name env-artifact -D . ; \
 	if [ -f ".env" ]; then echo "Backup .env → .env.bak"; mv .env .env.bak; fi; \
 	mv env-artifact/.env .env && rm -rf env-artifact; \
-	echo ".env récupéré. (NE PAS COMMIT !)"; head -n 8 .env || true
+	echo "✅ .env récupéré. (NE PAS COMMIT !)"; head -n 8 .env || true
 
 
 	

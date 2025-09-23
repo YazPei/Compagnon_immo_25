@@ -108,11 +108,12 @@ env-from-gh:
 	echo "🚀 Déclenche permissions.yml sur $$ref"; \
 	gh workflow run permissions.yml --ref "$$ref" >/dev/null; \
 	sleep 2; \
-	run_id=$$(gh run list --workflow=permissions.yml --branch "$$ref" --limit 1 --json databaseId -q '.[0].databaseId'); \
-	[ -n "$$run_id" ] || (echo "Aucun run trouvé"; exit 1); \
+	run_id=$$(gh run list --workflow=permissions.yml --limit 30 --json databaseId,headBranch \
+	        -q '.[] | select(.headBranch=="'$$ref'") | .databaseId' | head -n1); \
+	[ -n "$$run_id" ] || (echo "Aucun run trouvé pour $$ref"; exit 1); \
 	echo "⏳ Run $$run_id"; gh run watch "$$run_id" || true; \
-	art_json=$$(gh api repos/:owner/:repo/actions/runs/$$run_id/artifacts); \
-	art_id=$$(echo "$$art_json" | jq -r '.artifacts[] | select(.name=="env-artifact") | .id'); \
+	art_id=$$(gh api repos/:owner/:repo/actions/runs/$$run_id/artifacts \
+	         --jq '.artifacts[] | select(.name=="env-artifact") | .id'); \
 	if [ -z "$$art_id" ] || [ "$$art_id" = "null" ]; then \
 	  echo "⚠️  Pas d'artefact env-artifact. Tentative download-all..."; \
 	  gh run download "$$run_id" -D artifacts_all || true; \
@@ -129,6 +130,8 @@ env-from-gh:
 	  mv env-artifact/.env .env; rm -rf env-artifact; \
 	fi; \
 	echo "✅ .env récupéré. (NE PAS COMMIT !)"; head -n 8 .env || true
+
+
 
 
 

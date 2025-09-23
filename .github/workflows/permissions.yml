@@ -47,7 +47,7 @@ jobs:
         run: |
           set -eu
           {
-            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
+#            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
             echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
             echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
             echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
@@ -62,18 +62,25 @@ jobs:
             echo "DAGSHUB_REPO_NAME=${{ secrets.DAGSHUB_REPO_NAME }}"
             echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
             echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
-          } > .env
+          } > "$GITHUB_WORKSPACE/.env"
+          echo "[debug] wrote: $GITHUB_WORKSPACE/.env"
+          ls -la "$GITHUB_WORKSPACE" | sed -n '1,120p'
 
       - name: Sanity .env
         run: |
           set -eu
           test -s .env || (echo "ERROR: .env vide ou manquant" && exit 1)
           wc -c .env
+      - name: Prépare artefact
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          cp "$GITHUB_WORKSPACE/.env" "$GITHUB_WORKSPACE/artifacts/.env"
 
       - name: Upload .env (artefact temporaire)
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: .env
+          path: ${{ github.workspace }}/artifacts
           if-no-files-found: error
           retention-days: 1
+

@@ -95,66 +95,36 @@ quick-start-test: quick-starts dvc-repro-all ## + DVC repro complet
 
 # --- Configs overridables à l'appel: make env-from-gh BRANCH=... WF_NAME=... ---
 # --- Pull .env depuis un artefact GitHub Actions ---
-BRANCH   ?= Auto_github           # branche à déclencher
-WF_NAME  ?= permissions.yml           # nom du workflow (pas le chemin)
-ART_NAME ?= env-artifact          # nom de l'artefact produit par le workflow
-ART_FILE ?= artifacts/env.txt     # chemin du fichier dans l'artefact
-ENV_DST  ?= .env                  # destination locale (ou env.txt si tu préfères)
-ENV_FILE ?= $(ENV_DST)            # auto-load pointera dessus
+# Config overridable : make env-from-gh BRANCH=Auto_github ART_NAME=env-artifact
+BRANCH   ?= Auto_github
+ART_NAME ?= env-artifact
+ENV_DST  ?= .env          # ou env.txt si tu veux garder ce nom en local
 
-
-# Auto-load .env / env.txt
-ifneq ("$(wildcard $(ENV_FILE))","")
-include $(ENV_FILE)
-export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
-endif
-
-permissions: trigger-permission check-permissions env-from-gh
-trigger-permission:
-	@set -eu
-	@if gh auth status >/dev/null 2>&1; then \
-	  echo "▶ using existing gh auth context"; \
-	  gh workflow run permissions --ref "$(REF)"; \
-	else \
-	  : "$${GH_TOKEN:?Set GH_TOKEN (locally: export GH_TOKEN=<PAT with workflow+repo> | in CI: \$$\{\{ github.token \}\})}"; \
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run permissions --ref "$(REF)"; \
-	fi
-
-
-	
+.PHONY: env-from-gh
 env-from-gh:
 	@set -euo pipefail; \
-	echo "🚀 Déclenche $(WF_NAME) sur $(BRANCH)"; \
-	gh workflow run $(WF_NAME) --ref $(BRANCH); \
+	echo "🚀 Déclenche .github/workflows/permissions.yml sur $(BRANCH)"; \
+	gh workflow run .github/workflows/permissions.yml --ref "$(BRANCH)"; \
 	\
-	echo "⏳ Récupération du dernier run..."; \
-	RUN_ID=$$(gh run list --limit 50 --json databaseId,name,headBranch \
-		-q '.[] | select(.headBranch=="'$(BRANCH)'" and .name=="'$(WF_NAME)'") | .databaseId' \
-		| head -n1); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour $(WF_NAME) sur $(BRANCH)"; exit 1; }; \
+	echo "⏳ Récupère le dernier run de CE workflow sur $(BRANCH)…"; \
+	RUN_ID=$$(gh run list --workflow=.github/workflows/permissions.yml --limit 50 --json databaseId,headBranch \
+	  -q ".[] | select(.headBranch==\"$(BRANCH)\") | .databaseId" | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run trouvé (branch=$(BRANCH))"; exit 1; }; \
 	echo "RUN_ID=$$RUN_ID"; \
 	\
 	gh run watch "$$RUN_ID" || true; \
 	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
-	if [ "$$CONC" != "success" ]; then \
-		echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web; exit 1; \
-	fi; \
+	if [ "$$CONC" != "success" ]; then echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web; exit 1; fi; \
 	\
-	echo "📦 Téléchargement de l'artefact $(ART_NAME)"; \
+	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
 	rm -rf tmp-$(ART_NAME); \
-	gh run download "$$RUN_ID" -n $(ART_NAME) -D tmp-$(ART_NAME); \
-	\
-	SRC=$$(find tmp-$(ART_NAME) -type f -path "*/$(ART_FILE)" -print -quit); \
-	if [ -z "$$SRC" ]; then \
-		echo "❌ Fichier '$(ART_FILE)' introuvable dans l'artefact. Contenu trouvé:"; \
-		find tmp-$(ART_NAME) -maxdepth 3 -type f -print; \
-		exit 1; \
-	fi; \
+	gh run download "$$RUN_ID" -n $(ART_NAME) -D tmp-$(ART_NAME) || { echo "❌ Artefact $(ART_NAME) absent"; exit 1; }; \
+	SRC=$$(find tmp-$(ART_NAME) -type f -path "*/artifacts/env.txt" -print -quit); \
+	[ -n "$$SRC" ] || { echo "❌ 'artifacts/env.txt' introuvable. Contenu:"; find tmp-$(ART_NAME) -maxdepth 3 -type f -print; exit 1; }; \
 	[ -f $(ENV_DST) ] && mv $(ENV_DST) $(ENV_DST).bak || true; \
-	mv "$$SRC" $(ENV_DST); \
-	rm -rf tmp-$(ART_NAME); \
-	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
-	head -n 8 $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
+	mv "$$SRC" $(ENV_DST); rm -rf tmp-$(ART_NAME); \
+	echo "✅ $(ENV_DST) mis à jour. Aperçu:"; sed -n '1,12p' $(ENV_DST) | sed 's/=.*$$/=***redacted***/'
+
 
 check-permissions:
 	@gh run list --workflow=permissions --limit 1

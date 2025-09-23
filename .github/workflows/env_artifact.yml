@@ -11,26 +11,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Generate .env (POC)
+      - name: Generate env file (POC)
         run: |
           set -euo pipefail
-          echo "HELLO=world" > .env
-          echo "[debug] wrote $(pwd)/.env"
+          mkdir -p artifacts
+          # crée le contenu (ici POC; remplace par tes secrets ensuite)
+          printf "HELLO=world\n" > artifacts/env.txt
+          echo "[debug] wrote $(pwd)/artifacts/env.txt"
           ls -la .
-          wc -c .env
-          head -n1 .env
+          ls -la artifacts
+          wc -c artifacts/env.txt
+          head -n1 artifacts/env.txt
 
-      - name: Sanity .env
-        run: test -s .env
-
-      - name: Upload .env
+      - name: Upload env artifact
         uses: actions/upload-artifact@v4
         with:
           name: env-artifact
-          path: .env                    # ← chemin relatif ok
+          path: artifacts          # ← on uploade le dossier (non caché)
           if-no-files-found: error
           retention-days: 1
-

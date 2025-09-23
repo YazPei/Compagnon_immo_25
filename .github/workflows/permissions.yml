@@ -31,10 +31,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-
-      - name: Générer config DagsHub/MLflow
-        run: make setup_dagshub
-
       - name: Sanity check MLflow (ping API)
         run: |
           curl -s -u "$MLFLOW_TRACKING_USERNAME:$MLFLOW_TRACKING_PASSWORD" \

@@ -1,0 +1,36 @@
+name: env_artifact
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate .env (POC)
+        run: |
+          set -euo pipefail
+          echo "HELLO=world" > .env
+          echo "[debug] wrote $(pwd)/.env"
+          ls -la .
+          wc -c .env
+          head -n1 .env
+
+      - name: Sanity .env
+        run: test -s .env
+
+      - name: Upload .env
+        uses: actions/upload-artifact@v4
+        with:
+          name: env-artifact
+          path: .env                    # ← chemin relatif ok
+          if-no-files-found: error
+          retention-days: 1
+

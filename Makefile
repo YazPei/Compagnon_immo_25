@@ -104,10 +104,10 @@ ENV_DST  ?= .env          # ou env.txt si tu veux garder ce nom en local
 env-from-gh:
 	@set -euo pipefail; \
 	echo "🚀 Déclenche .github/workflows/permissions.yml sur $(BRANCH)"; \
-	gh workflow run .github/workflows/permissions.yml --ref "$(BRANCH)"; \
+	gh workflow run permissions --ref "$(BRANCH)"; \
 	\
 	echo "⏳ Récupère le dernier run de CE workflow sur $(BRANCH)…"; \
-	RUN_ID=$$(gh run list --workflow=.github/workflows/permissions.yml --limit 50 --json databaseId,headBranch \
+	RUN_ID=$$(gh run list --workflow=permissions --limit 50 --json databaseId,headBranch \
 	  -q ".[] | select(.headBranch==\"$(BRANCH)\") | .databaseId" | head -n1); \
 	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run trouvé (branch=$(BRANCH))"; exit 1; }; \
 	echo "RUN_ID=$$RUN_ID"; \

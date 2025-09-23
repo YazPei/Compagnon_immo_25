@@ -42,8 +42,8 @@ jobs:
       - name: Générer .env depuis les secrets
         shell: bash
         run: |
-          set -eu
-          
+          set -euo pipefail
+          mkdir -p artifacts
           echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
           echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
           echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"

@@ -2,6 +2,8 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
 
 from app.api.config.settings import settings
 from app.api.middleware.error_handling import ErrorHandlingMiddleware
@@ -22,6 +24,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from typing import Callable, Awaitable
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
+
+# Exemple d'utilisation des variables d'environnement
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", 8000))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)

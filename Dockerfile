@@ -43,6 +43,8 @@ RUN chmod -R 755 /app  # Assure les permissions correctes
 COPY app ./app
 COPY params.yaml ./params.yaml
 COPY .dvc ./.dvc
+# Copier le fichier .env dans l'image
+COPY .env /app/.env
 
 # Utilisateur non-root
 RUN useradd -m appuser \

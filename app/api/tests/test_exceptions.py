@@ -1,6 +1,7 @@
+import json
 import pytest
-from fastapi.exceptions import RequestValidationError
 from starlette.requests import Request
+from fastapi.exceptions import RequestValidationError
 
 from app.api.main import (
     validation_exception_handler,
@@ -18,6 +19,8 @@ async def test_validation_exception_handler():
 
     response = await validation_exception_handler(request, exception)
     assert response.status_code == 422
+    # Utiliser json.loads pour comparer les objets JSON sans tenir compte du formatage
+    assert json.loads(response.body.decode()) == {"detail": "Validation Error"}
 
 
 @pytest.mark.asyncio
@@ -28,3 +31,5 @@ async def test_general_exception_handler():
 
     response = await general_exception_handler(request, exception)
     assert response.status_code == 500
+    # Utiliser json.loads pour comparer les objets JSON sans tenir compte du formatage
+    assert json.loads(response.body.decode()) == {"detail": "Internal Server Error"}

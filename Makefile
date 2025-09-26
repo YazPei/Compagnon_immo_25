@@ -14,9 +14,8 @@ endif
 # ===== Variables =====
 IMAGE_PREFIX := compagnon_immo
 NETWORK := ml_net
-VENV := .venv
-PYTHON_BIN := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
+PYTHON_BIN := python3
+PIP := pip3
 TEST_DIR := app/api/tests
 DVC_TOKEN ?= default_token_securise_ou_vide
 
@@ -43,13 +42,13 @@ COLOR_YELLOW := \033[33m
 .PHONY: \
   help lint check-dependencies \
   quick-start quick-start-airflow quick-start-test \
-  prepare-dirs install api-test clean api-stop \
+  prepare-dirs install api-test clean api-stop fix-permissions \
   airflow-start airflow-build airflow-init airflow-up airflow-down airflow-logs airflow-smoke \
   mlflow-up mlflow-down mlflow-logs \
   docker-build docker-api-build docker-api-run docker-api-stop docker-logs docker-clean \
   build-all run-all-docker run_dvc \
   dvc-add-all dvc-repro-all dvc-push-all dvc-pull-all pipeline-reset \
-  check-ports rebuild
+  check-ports rebuild ci-test
 
 # ===============================
 # Aide & lint
@@ -85,10 +84,8 @@ prepare-dirs: ## Prépare les répertoires nécessaires
 	@touch data/.gitkeep
 
 install: prepare-dirs ## Installe les dépendances Python
-	@test -d $(VENV) || python3 -m venv $(VENV)
 	@$(PIP) install --upgrade pip
 	@$(PIP) install -r requirements.txt
-	@touch app/__init__.py app/api/__init__.py app/api/utils/__init__.py
 
 api-test: ## Lancer les tests de l'API
 	@echo "🧪 Tests de l'API…"
@@ -194,3 +191,25 @@ airflow-logs: ## Logs webserver
 
 airflow-smoke: ## Vérifie Airflow en listant les DAGs
 	@$(DOCKER_COMPOSE_CMD) exec airflow-webserver airflow dags list | head -n 10 || true
+
+# ===============================
+# 🧹 Nettoyage et réparation
+# ===============================
+fix-permissions: ## Corrige les permissions des fichiers du projet
+	@echo "$(COLOR_YELLOW)🔧 Correction des permissions...$(COLOR_RESET)"
+	@sudo chown -R $(shell whoami):$(shell whoami) . || true
+	@chmod -R u+rwx . || true
+	@echo "$(COLOR_GREEN)✅ Permissions corrigées !$(COLOR_RESET)"
+
+check-services: ## Vérifie l'état des services Docker
+	@echo "🔍 Vérification des services Docker..."
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "api|mlflow|airflow|redis"
+
+ci-test: install ## Exécute les tests CI localement
+	@echo "🔍 Lancement des tests CI..."
+	@make check-services
+	@echo "$(COLOR_YELLOW)🧪 Exécution des tests unitaires...$(COLOR_RESET)"
+	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v || { echo "$(COLOR_RED)❌ Tests unitaires échoués$(COLOR_RESET)"; exit 1; }
+	@echo "$(COLOR_YELLOW)🔍 Vérification du linting...$(COLOR_RESET)"
+	@$(PYTHON_BIN) -m flake8 app/ --max-line-length=88 --ignore=E203,W503 || { echo "$(COLOR_RED)❌ Linting échoué$(COLOR_RESET)"; exit 1; }
+	@echo "$(COLOR_GREEN)✅ Tous les tests CI ont réussi !$(COLOR_RESET)"

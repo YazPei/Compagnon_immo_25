@@ -68,6 +68,7 @@ services:
       - ml_net
     depends_on:
       - mlflow
+      - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000"]
       interval: 30s
@@ -294,6 +295,7 @@ services:
       - ml_net
     depends_on:
       - mlflow
+      - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000"]
       interval: 30s

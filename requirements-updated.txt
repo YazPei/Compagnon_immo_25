@@ -1,3 +1,4 @@
+# Dépendances mises à jour pour résoudre les problèmes de bcrypt
 fastapi>=0.95
 uvicorn[standard]>=0.20
 hydra-core
@@ -16,15 +17,7 @@ python-jose[cryptography]
 requests
 PyJWT
 joblib
-passlib[bcrypt]
+passlib==1.7.4
+bcrypt==4.0.1  # Version spécifique pour éviter les problèmes de compatibilité
 mlflow
 gunicorn
-joblib
-passlib[bcrypt]
-sqlalchemy
-pandas
-psutil
-python-jose[cryptography]
-requests
-PyJWT
-

@@ -65,3 +65,5 @@ async def list_estimations(
         },
     }
 
+# Aucun @router.get("/") ici
+

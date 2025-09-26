@@ -189,7 +189,7 @@ services:
   evaluate:
     build:
       context: .
-      dockerfile: mlops/7_Serie_temporelle/4_EVALUATE/Dockerfile.evaluate.ST
+      dockerfile: mlops/7_S
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
@@ -255,72 +255,83 @@ services:
       --default-artifact-root ${MLFLOW_ARTIFACT_URI}
     ports:
       - "5050:5050"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5050/ | grep -qi mlflow"]
-      interval: 10s
-      timeout: 3s
-      retries: 40
-      start_period: 60s
     environment:
       MLFLOW_BACKEND_STORE_URI: "${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}"
       MLFLOW_ARTIFACT_URI: "${MLFLOW_ARTIFACT_URI:-file:/mlflow_artifacts}"
 
-
-
-
-
-#----airflow--------
-
-  postgres-airflow:
-    image: postgres:13
-    environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
-    volumes:
-      - airflow_db:/var/lib/postgresql/data
-    networks:
-      - ml_net
-
+  # --------- Airflow ----------
   airflow:
     image: apache/airflow:2.9.0
     depends_on:
-      - postgres-airflow
+      - mlflow
     env_file:
       - .env
     environment:
-      # --- Airflow (DB locale) ---
-      MLFLOW_TRACKING_URI: "http://mlflow:5050"
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
       AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow"
-
-      # --- MLflow remote (DagsHub) : lu par tes DAGs / clients MLflow ---
-      # (Les 3 variables viennent du .env et suffisent au client mlflow)
-      # On expose aussi une connexion Airflow pour les hooks/opérateurs qui aiment les Connections:
-      AIRFLOW_CONN_DAGSHUB_MLFLOW: "https://${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}@dagshub.com/${DAGSHUB_REPO_OWNER}/${DAGSHUB_REPO_NAME}.mlflow"
-
-      # Optionnel : accessibles dans les DAGs
-      DAGSHUB_USER: "${DAGSHUB_USER}"
-      DAGSHUB_TOKEN: "${DAGSHUB_TOKEN}"
-      DAGSHUB_REPO_OWNER: "${DAGSHUB_REPO_OWNER}"
-      DAGSHUB_REPO_NAME: "${DAGSHUB_REPO_NAME}"
-
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "sqlite:////airflow/airflow.db"
     command: >
       bash -c "
       airflow db init &&
       airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com &&
       airflow webserver & airflow scheduler
       "
+    volumes:
+      - ./dags:/opt/airflow/dags
+    networks:
+      - ml_net
+
+  api:
+    image: "tiangolo/uvicorn-gunicorn-fastapi:python3.9"
     ports:
-      - "8081:8080"
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    env_file:
+      - .env
+    networks:
+      - ml_net
+    depends_on:
+      - mlflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Removed duplicate networks definition
     volumes:
       - ./:/opt/airflow/repo
       - ./dags:/opt/airflow/dags
     working_dir: /opt/airflow
     networks:
       - ml_net
+
+  api:
+    image: "tiangolo/uvicorn-gunicorn-fastapi:python3.9"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    env_file:
+      - .env
+    networks:
+      - ml_net
+    depends_on:
+      - redis
+      - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
 
 volumes:
   airflow_db:

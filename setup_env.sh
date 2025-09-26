@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TEMPLATE=".env.template"
-TARGET=".env.yaz"
+TARGET=".env"
 
 if [[ -f "$TARGET" ]]; then
     echo "✅ Fichier $TARGET déjà présent."

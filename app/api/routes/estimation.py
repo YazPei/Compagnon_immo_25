@@ -97,3 +97,5 @@ async def create_estimation(
         },
     }
 
+# Aucun @router.get("/") ici
+

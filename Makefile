@@ -41,7 +41,7 @@ DOCKER_COMPOSE := $(shell command -v docker >/dev/null 2>&1 && docker compose ve
   setup_dags \
   prepare-dirs install help lint \
   quick-start quick-start-pipeline quick-start-test \
-  api-dev venv install api-test clean api-stop \
+  api-dev venv install api-test \
   mlflow-ui mlflow-clean mlflow-status mlflow-dockerized create-network build-mlflow mlflow-up mlflow-down \
   docker-build docker-api-build docker-api-run docker-api-stop docker-stack-up docker-stack-down docker-logs \
   build-all run-all-docker run_full \
@@ -119,12 +119,13 @@ install: venv
 	@touch app/api/utils/__init__.py
 
 
-api-test:
+api-test: ## Lancer les tests de l'API
 	@echo "🧪 Tests de l'API…"
 	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
 	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
 
 clean:
+
 	@rm -rf .pytest_cache .coverage
 
 
@@ -190,13 +191,19 @@ docker-logs: ## Logs compose
 
 # API image seule
 docker-api-build: ## Build image API
-	@cd api && docker build -t $(IMAGE_PREFIX)-api .
+	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
 
 docker-api-run: docker-api-build ## Run image API
-	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api $(IMAGE_PREFIX)-api
+	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
+	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
 
 docker-api-stop: ## Stop & rm API container
 	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
+
+free-port-8000: ## Libère le port 8000 si occupé (processus local ou docker)
+	@echo "🔄 Libération du port 8000…"
+	-@fuser -k 8000/tcp || true
+	-@docker ps --filter "publish=8000" --format "{{.ID}}" | xargs -r docker stop
 
 
 
@@ -261,7 +268,7 @@ run-all-docker: run_full run_dvc run_fusion run_preprocessing run_clustering run
 run_full:
 	docker run --rm $(IMAGE_PREFIX)-run
 
-run_dvc: ## Lance le script DVC dans l'image dvc (MLflow dockerisé)
+run_dvc: ## Lance le script DVC dans l'image
 	docker run --rm \
 		$(USER_FLAGS) \
 		--env-file .env.yaz \

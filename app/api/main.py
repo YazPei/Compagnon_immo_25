@@ -85,7 +85,13 @@ async def readiness():
     return {"status": "ready"}
 
 
+@app.get("/health", tags=["Health"])
+async def health_root():
+    return {"status": "ok"}
+
+
 # Routers (attention aux préfixes attendus par les tests)
+# Monte le router health sous /api/v1/health
 app.include_router(
     health_routes.router, prefix="/api/v1/health", tags=["Health"]
 )
@@ -134,4 +140,5 @@ app.add_exception_handler(
 app.add_exception_handler(
     Exception, general_exception_handler  # type: ignore[arg-type]
 )
+
 

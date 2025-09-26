@@ -1,10 +1,10 @@
 # app/api/routes/main.py
 from fastapi import APIRouter, Depends
-from app.api.dependencies.auth import verify_api_key
+from app.api.utils.auth import get_api_key  # adapte ce chemin si besoin
 
 router = APIRouter()
 
-@router.get("/", summary="Ping protégé", tags=["Main"])
-async def api_v1_root(_: str = Depends(verify_api_key)):
-    return {"status": "ok", "message": "Bienvenue sur l'API v1"}
+@router.get("/")
+async def api_v1_root(api_key: str = Depends(get_api_key)):
+    return {"message": "API v1 root OK"}
 

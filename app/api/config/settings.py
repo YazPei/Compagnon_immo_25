@@ -187,9 +187,7 @@ class Settings(BaseSettings):
                 pass
 
         if self.ENVIRONMENT == "production" and (
-            self.API_SECRET_KEY == (
-                "development-secret-key-change-in-production"
-            )
+            self.API_SECRET_KEY == "development-secret-key-change-in-production"
         ):
             raise ValueError("API_SECRET_KEY doit être changée en production")
 

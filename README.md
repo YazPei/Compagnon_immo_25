@@ -10,13 +10,11 @@ Ce dépôt contient une pipeline complète pour la prédiction des prix immobili
 
 ## 🧩 **Stack technologique**
 
-- 🐍 **Click** : Interface CLI pour exécuter les pipelines
 - 📈 **MLflow** : Suivi des métriques, modèles et artefacts
 - 📦 **DVC** : Versionnement des données et gestion des artefacts
 - 🐳 **Docker** : Isolation et reproductibilité des environnements
-- 🧪 **Makefile** : Orchestration simplifiée des tâches
 - 🌐 **FastAPI** : API pour exposer les prédictions
-- ⏳ **Airflow** *(prévu)* : Orchestration des pipelines
+- ⏳ **Airflow** : Orchestration des pipelines
 
 ---
 
@@ -117,36 +115,12 @@ docker-compose -f docker-compose.prod.yml up --build
 ## 📊 **Suivi des expériences avec MLflow**
 
 - **Accès à l'interface MLflow :**
-  - URL : [http://localhost:5001](http://localhost:5001)
+  - URL : [http://localhost:5050](http://localhost:5050)
 
 - **Suivi des modèles et métriques :**
-  - Modèles : LightGBM, XGBoost, SARIMAX, KMeans.
-  - Métriques : `MAE`, `RMSE`, `R²`, `Silhouette score`, etc.
+  - Modèles : LightGBM, XGBoost, SARIMAX.
+  - Métriques : `MAE`, `RMSE`, `R²`, etc.
   - Artefacts : Modèles (`.joblib`, `.pkl`), graphiques, données traitées.
-
----
-
-## 🧪 **Tests et nettoyage**
-
-### **1. Lancer les tests :**
-- Tests unitaires et d'intégration :
-  ```bash
-  pytest app/api/tests/ -v
-  ```
-
-### **2. Nettoyage des fichiers générés :**
-- Nettoyer les exports :
-  ```bash
-  make clean_exports
-  ```
-- Nettoyer le cache DVC :
-  ```bash
-  make clean_dvc
-  ```
-- Nettoyer tout :
-  ```bash
-  make clean_all
-  ```
 
 ---
 
@@ -186,7 +160,6 @@ dvc pull
 
 - **GitHub Actions :**
   - Tests automatisés (unitaires et d'intégration).
-  - Construction et déploiement de l'image Docker.
   - Synchronisation des artefacts avec DagsHub.
 
 - **Commandes principales :**
@@ -209,10 +182,35 @@ dvc pull
 
 ---
 
-## 🛠️ **Contributeurs**
-- **Pedro Ketsia** - Développeur principal
-- **Collaborateurs** - Merci à tous les contributeurs du projet !
+## Configuration SELinux et Docker
 
+- Assurez-vous que SELinux est activé sur l’hôte (`enforcing`).
+- Les volumes doivent être montés avec l’option `:Z` dans `docker-compose.yml` pour éviter les problèmes de permissions.
+- Les utilitaires SELinux sont installés dans l’image Docker.
+
+Pour vérifier le statut SELinux sur l’hôte :
+```bash
+sestatus
+```
+Pour activer SELinux de façon permanente :
+```bash
+sudo setenforce 1
+sudo sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+```
+
+## Linting des volumes Docker
+
+Pour vérifier que tous les volumes dans vos fichiers `docker-compose.yml` utilisent bien l’option SELinux `:Z` ou `:z`, lancez :
+
+```bash
+bash scripts/lint_volumes.sh
+```
+
+Intégrez ce script dans votre pipeline CI/CD pour garantir la conformité.
+
+## 🛠️ **Contributeurs**
+- **Peiffer Yasmine**
+- **Pedro Ketsia**
 ---
 
 ## 📄 **Licence**

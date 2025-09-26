@@ -1,108 +1,108 @@
-# docker-compose.yml — Compagnon Immo (version corrigée)
+version: "3.9"
+
+# Réseau partagé
+networks:
+  ml_net:
+    external: true
+
+# Volumes persistants
+volumes:
+  airflow_db:
+  mlflow_artifacts:
 
 services:
-  # --------- Pipeline de lancement ----------
-  base:
-    build:
-      context: .
-      dockerfile: mlops/Dockerfile.base
-    image: compagnon_immo-base:latest
+  # --------- MLflow ---------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    profiles: ["mlflow"]  # Ne pas lancer par défaut
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}
+      --default-artifact-root ${MLFLOW_ARTIFACT_URI:-file:/mlflow_artifacts}
+    ports:
+      - "${MLFLOW_HOST_PORT:-5050}:5050"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: "${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}"
+      MLFLOW_ARTIFACT_URI: "${MLFLOW_ARTIFACT_URI:-file:/mlflow_artifacts}"
+    networks:
+      - ml_net
+    volumes:
+      - mlflow_artifacts:/mlflow_artifacts
 
-  run_full:
+  # --------- Airflow ---------
+  airflow:
+    image: apache/airflow:2.9.0
+    profiles: ["airflow"]
+    depends_on:
+      - mlflow
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com &&
+      airflow webserver & airflow scheduler
+      "
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__EXECUTOR: "LocalExecutor"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: "Europe/Paris"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "sqlite:////airflow/airflow.db"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs/airflow:/opt/airflow/logs
+      - ./dags/airflow.cfg:/opt/airflow/airflow.cfg:ro
+    networks:
+      - ml_net
+
+  # --------- API ---------
+  api:
+    image: "tiangolo/uvicorn-gunicorn-fastapi:python3.9"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    env_file:
+      - .env
+    networks:
+      - ml_net
+    depends_on:
+      - mlflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --------- Redis ---------
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - ml_net
+
+  # --------- DVC Runner ---------
+  dvc-runner:
     build:
       context: .
-      dockerfile: mlops/1_import_donnees/Dockerfile.run
-    user: "${UID:-1000}:${GID:-1000}"
+      dockerfile: mlops/2_dvc/Dockerfile
     volumes:
       - .:/app
+      - ./.dvc:/app/.dvc
+    working_dir: /app
     tty: true
     stdin_open: true
     env_file:
       - .env
     environment:
-      - RUN_MODE=full
+      MLFLOW_TRACKING_URI: "http://mlflow:5050"
     networks:
       - ml_net
-
-  # --------- Préparation des données ----------
-  fusion_geo:
-    build:
-      context: .
-      dockerfile: mlops/3_fusion/Dockerfile.fusion
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - .:/app
-      - ./mlops:/app/mlops
-    env_file:
-      - .env
-    networks:
-      - ml_net
-    command: ["bash", "-lc", "python mlops/3_fusion/fusion.py"]
-    profiles: ["regression", "series"]
-
-  preprocessing:
-    build:
-      context: .
-      dockerfile: mlops/preprocessing_4/Dockerfile.preprocessing
-    image: compagnon_immo-preprocessing
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - .:/app
-      - ./data:/app/data
-      - ./mlops/preprocessing_4:/app/mlops/preprocessing_4
-    env_file:
-      - .env
-    command: ["python","mlops/preprocessing_4/preprocessing.py",
-          "--input-path","/app/data",
-          "--output-path","/app/data"]
-    networks:
-      - ml_net
-    profiles: ["regression", "series"]
-
-  clustering:
-    build:
-      context: .
-      dockerfile: mlops/5_clustering/Dockerfile.clustering
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - ./data:/app/data
-      - ./mlops:/app/mlops
-    env_file:
-      - .env
-    networks:
-      - ml_net
-    command: ["python","mlops/5_clustering/Clustering.py",
-          "--input-path","/app/data/train_clean.csv",
-          "--output-path1","/app/data/df_cluster.csv",
-          "--output-path2","/app/data/df_sales_clean_ST.csv"]
-    profiles: ["regression", "series"]
-
-  encode:
-    build:
-      context: .
-      dockerfile: mlops/6_Regression/1_Encoding/Dockerfile.encoding.REG
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - ./mlops/6_Regression/1_Encoding:/app/mlops/6_Regression/1_Encoding
-      - ./data:/app/data
-      - ./exports:/app/exports
-    command: ["python", "/app/mlops/6_Regression/1_Encoding/encoding.py"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
-    profiles: ["regression"]
-
-  # --------- Régression ----------
-  train_lgbm:
-    build:
-      context: .
-      dockerfile: mlops/6_Regression/2_LGBM/Dockerfile.lgbm.REG
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - ./mlops/6_Regression/2_LGBM:/app/mlops/6_Regression/2_LGBM
-      - ./data:/app/data
-      - ./exports:/app/exports
+    depends_on:
+      mlflow:
+        condition: service_healthy
     command: ["python", "/app/mlops/6_Regression/2_LGBM/train_lgbm.py"]
     env_file:
       - .env

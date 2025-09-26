@@ -570,18 +570,35 @@ ports-check: ## Vérifie les ports locaux
 # ===============================
 airflow: airflow-up airflow-run ## Raccourci
 
+# ----Airflow automation ----
+AIRFLOW_URL ?= http://localhost:8081
 
-airflow-logs: ## Logs du service Airflow
-	@docker logs -f airflow
+.PHONY: airflow-start airflow-up airflow-init airflow-wait airflow-open airflow-smoke airflow-logs
 
-airflow-run: ## Run un service airflow via compose
-	@$(DOCKER_COMPOSE) run --rm airflow
+airflow-start: airflow-build airflow-init airflow-up airflow-logs airflow-smoke
+AIRFLOW_UID ?= 50000
 
-airflow-ps: ## ps des services airflow
-	@$(DOCKER_COMPOSE)  ps -a
+airflow-build:
+	docker compose build airflow-webserver airflow-scheduler
 
-airflow-down: ## Down propre
-	@$(DOCKER_COMPOSE) down airflow
+airflow-init:
+	mkdir -p logs/airflow
+	sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
+	docker compose run --rm airflow-webserver airflow db upgrade
+	docker compose run --rm airflow-webserver \
+	  airflow users create --username admin --password admin \
+	  --firstname Admin --lastname User --role Admin --email admin@example.com || true
 
-airflow-restart: ## Redémarre Airflow
-	@$(DOCKER_COMPOSE) restart airflow
+airflow-up: 
+	docker compose up -d airflow-webserver airflow-scheduler
+
+airflow-logs:
+	docker compose logs -f airflow-webserver
+airflow-down:
+	docker compose stop airflow-webserver airflow-scheduler
+
+airflow-smoke: ## Déploie un DAG 'ping' et le déclenche
+	@python dags/compagnon_immo_stage.py
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list | grep -q ping_dag || sleep 5
+	@$(DOCKER_COMPOSE) exec airflow airflow dags trigger ping_dag
+	@$(DOCKER_COMPOSE) exec airflow airflow dags list-runs -d ping_dag

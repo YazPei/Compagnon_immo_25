@@ -57,57 +57,56 @@ Ce dépôt contient une pipeline complète pour la prédiction des prix immobili
 
 ## 📌 **Étapes de la pipeline**
 
-1. **Fusion des données :**
-   - Jointure des données DVF et indices socio-économiques.
-   - Export des données fusionnées dans `data/`.
+### **1. Fusion des données**
+- Jointure des données DVF et indices socio-économiques.
+- Export des données fusionnées dans `data/`.
 
-2. **Préprocessing :**
-   - Nettoyage des données, gestion des valeurs manquantes et encodage.
-   - Export des snapshots encodés dans `exports/`.
+### **2. Préprocessing**
+- Nettoyage des données, gestion des valeurs manquantes et encodage.
+- Export des snapshots encodés dans `exports/`.
 
-3. **Clustering :**
-   - Segmentation des données avec KMeans.
-   - Suivi des métriques et artefacts dans MLflow.
+### **3. Clustering**
+- Segmentation des données avec KMeans.
+- Suivi des métriques et artefacts dans MLflow.
 
-4. **Régression :**
-   - Modélisation avec LightGBM et XGBoost.
-   - Suivi des performances (`MAE`, `RMSE`, `R²`) dans MLflow.
+### **4. Régression**
+- Modélisation avec LightGBM et XGBoost.
+- Suivi des performances (`MAE`, `RMSE`, `R²`) dans MLflow.
 
-5. **Séries temporelles :**
-   - Modélisation SARIMAX par cluster.
-   - Export des modèles dans `exports/st/`.
+### **5. Séries temporelles**
+- Modélisation SARIMAX par cluster.
+- Export des modèles dans `exports/st/`.
 
-6. **Suivi des expériences :**
-   - Suivi des modèles, métriques et artefacts dans MLflow.
-   - Versionnement des données et modèles avec DVC.
+### **6. Suivi des expériences**
+- Suivi des modèles, métriques et artefacts dans MLflow.
+- Versionnement des données et modèles avec DVC.
 
 ---
 
 ## 🐳 **Lancement avec Docker**
 
-### **1. Lancer tous les services :**
+### **1. Lancer tous les services**
 ```bash
-./setup_env_dagshub.sh
 docker-compose -f infra/deployment/docker-compose.yml up --build
 ```
 
-### **2. Lancer en production :**
+### **2. Lancer en production**
 ```bash
 docker-compose -f docker-compose.prod.yml up --build
 ```
 
-### **3. Commandes Makefile :**
+### **3. Commandes Makefile**
 - Construire l'image Docker :
   ```bash
-  make docker_build
+  make docker-build
   ```
 - Lancer uniquement la régression :
   ```bash
-  make docker_run_regression
+  make docker-run-regression
   ```
 - Lancer uniquement les séries temporelles :
   ```bash
-  make docker_run_series
+  make docker-run-series
   ```
 
 ---
@@ -126,17 +125,17 @@ docker-compose -f docker-compose.prod.yml up --build
 
 ## 📦 **Gestion des données avec DVC**
 
-### **1. Initialisation de DVC :**
+### **1. Initialisation de DVC**
 ```bash
 dvc init
 ```
 
-### **2. Ajouter des données :**
+### **2. Ajouter des données**
 ```bash
 dvc add data/
 ```
 
-### **3. Synchroniser avec DagsHub :**
+### **3. Synchroniser avec DagsHub**
 - Ajouter un remote :
   ```bash
   dvc remote add -d origin https://dagshub.com/<DAGSHUB_USERNAME>/compagnon-immo.dvc
@@ -149,7 +148,7 @@ dvc add data/
   dvc push
   ```
 
-### **4. Récupérer les données :**
+### **4. Récupérer les données**
 ```bash
 dvc pull
 ```
@@ -158,37 +157,38 @@ dvc pull
 
 ## 🚀 **Pipeline CI/CD**
 
-- **GitHub Actions :**
-  - Tests automatisés (unitaires et d'intégration).
-  - Synchronisation des artefacts avec DagsHub.
+### **GitHub Actions**
+- Tests automatisés (unitaires et d'intégration).
+- Synchronisation des artefacts avec DagsHub.
 
-- **Commandes principales :**
-  - Lancer les tests :
-    ```bash
-    pytest
-    ```
-  - Construire et pousser l'image Docker :
-    ```bash
-    docker build -t ghcr.io/<USERNAME>/compagnon-immo-api:latest .
-    docker push ghcr.io/<USERNAME>/compagnon-immo-api:latest
-    ```
+### **Commandes principales**
+- Lancer les tests :
+  ```bash
+  pytest
+  ```
+- Construire et pousser l'image Docker :
+  ```bash
+  docker build -t ghcr.io/<USERNAME>/compagnon-immo-api:latest .
+  docker push ghcr.io/<USERNAME>/compagnon-immo-api:latest
+  ```
 
 ---
 
-## 📌 **À venir :**
+## 📌 **À venir**
 - Intégration complète avec Airflow pour l'orchestration des pipelines.
 - Optimisation des performances des modèles.
 - Documentation détaillée des endpoints de l'API.
 
 ---
 
-## Configuration SELinux et Docker
+## 🛠️ **Contributeurs**
+- **Peiffer Yasmine**
+- **Pedro Ketsia**
 
-- Assurez-vous que SELinux est activé sur l’hôte (`enforcing`).
-- Les volumes doivent être montés avec l’option `:Z` dans `docker-compose.yml` pour éviter les problèmes de permissions.
-- Les utilitaires SELinux sont installés dans l’image Docker.
+---
 
-Pour vérifier le statut SELinux sur l’hôte :
+## 📄 **Licence**
+Ce projet est sous licence MIT. Consultez le fichier `LICENSE` pour plus d'informations.
 ```bash
 sestatus
 ```

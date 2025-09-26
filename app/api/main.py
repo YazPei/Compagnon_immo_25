@@ -112,15 +112,16 @@ app.include_router(
     estimation_routes.router, prefix="/api/v1", tags=["Estimation"]
 )
 app.include_router(
-    historique_routes.router, prefix="/api/v1/historique", tags=["Historique"]
+    historique_routes.router,
+    prefix="/api/v1/historique",
+    tags=["Historique"]
 )
 
 # métriques (optionnel)
 app.include_router(metrics_routes.router, tags=["Monitoring"])
 
+
 # Ajout des gestionnaires d'exceptions avec corrections des types
-
-
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -141,14 +142,16 @@ async def general_exception_handler(
 
 # Correction des types passés à add_exception_handler
 app.add_exception_handler(
-    StarletteHTTPException, http_exception_handler  # type: ignore[arg-type]
+    StarletteHTTPException,
+    http_exception_handler  # type: ignore[arg-type]
 )
 app.add_exception_handler(
     RequestValidationError,
     validation_exception_handler  # type: ignore[arg-type]
 )
 app.add_exception_handler(
-    Exception, general_exception_handler  # type: ignore[arg-type]
+    Exception,
+    general_exception_handler  # type: ignore[arg-type]
 )
 
 

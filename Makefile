@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
 ENV_FILE ?= .env
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
-export $(shell sed -n 's/^\([A-Za-z_][A-ZaZ0-9_]*\)=.*/\1/p' $(ENV_FILE))
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
 # ===== Variables =====
@@ -211,5 +211,6 @@ ci-test: install ## Exécute les tests CI localement
 	@echo "$(COLOR_YELLOW)🧪 Exécution des tests unitaires...$(COLOR_RESET)"
 	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v || { echo "$(COLOR_RED)❌ Tests unitaires échoués$(COLOR_RESET)"; exit 1; }
 	@echo "$(COLOR_YELLOW)🔍 Vérification du linting...$(COLOR_RESET)"
+	@$(PIP) install flake8 --quiet || true
 	@$(PYTHON_BIN) -m flake8 app/ --max-line-length=88 --ignore=E203,W503 || { echo "$(COLOR_RED)❌ Linting échoué$(COLOR_RESET)"; exit 1; }
 	@echo "$(COLOR_GREEN)✅ Tous les tests CI ont réussi !$(COLOR_RESET)"

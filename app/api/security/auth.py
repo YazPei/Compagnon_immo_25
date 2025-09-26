@@ -44,19 +44,29 @@ class AuthManager:
         )
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Vérifie si un mot de passe correspond à son hash."""
-        # Bcrypt limite implicitement à 72 octets
+        """
+        Vérifie si un mot de passe correspond à son hash.
+        Note importante: bcrypt ne considère que les 72 premiers octets, donc nous tronquons
+        explicitement pour garantir un comportement cohérent.
+        """
         try:
-            return PWD_HASHER.verify(plain_password, hashed_password)
+            # Tronquer explicitement à 72 octets pour bcrypt
+            truncated_password = plain_password[:72]
+            return PWD_HASHER.verify(truncated_password, hashed_password)
         except Exception as e:
             logger.error(f"Erreur lors de la vérification du mot de passe : {e}")
             return False
 
     def get_password_hash(self, password: str) -> str:
-        """Hash le mot de passe."""
-        # Bcrypt limite implicitement à 72 octets
+        """
+        Hash le mot de passe en le tronquant à 72 caractères pour respecter la contrainte bcrypt.
+        Cette troncature explicite est nécessaire car bcrypt ignore silencieusement
+        les caractères au-delà de 72 octets, ce qui peut créer des problèmes de sécurité.
+        """
         try:
-            return PWD_HASHER.hash(password)
+            # Tronquer explicitement à 72 octets pour bcrypt
+            truncated_password = password[:72]
+            return PWD_HASHER.hash(truncated_password)
         except Exception as e:
             logger.error(f"Erreur lors du hashage du mot de passe : {e}")
             # Pour les tests, on renvoie un hash statique au lieu de lever une exception

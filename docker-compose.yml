@@ -104,13 +104,9 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-    command: ["python", "/app/mlops/6_Regression/2_LGBM/train_lgbm.py"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
-    profiles: ["regression"]
+    profiles: ["dvc"]
 
+  # --------- Analyse de régression ---------
   analyse:
     build:
       context: .
@@ -120,7 +116,9 @@ services:
       - ./mlops/6_Regression/4_Analyse:/app/mlops/6_Regression/4_Analyse
       - ./exports:/app/exports
       - ./data:/app/data
-    command: ["python", "/app/mlops/6_Regression/4_Analyse/analyse.py"]
+    command:
+      - "python"
+      - "/app/mlops/6_Regression/4_Analyse/analyse.py"
     env_file:
       - .env
     networks:
@@ -137,7 +135,9 @@ services:
       - ./exports:/app/exports
       - ./data:/app/data
       - ./mlops:/app/mlops
-    entrypoint: ["python", "/app/mlops/7_Serie_temporelle/1_SPLIT/load_split.py"]
+    entrypoint:
+      - "python"
+      - "/app/mlops/7_Serie_temporelle/1_SPLIT/load_split.py"
     env_file:
       - .env
     environment:
@@ -155,9 +155,13 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py",
-          "--input-folder","/app/exports/st",
-          "--output-folder","/app/exports/st"]
+    command:
+      - "python"
+      - "/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py"
+      - "--input-folder"
+      - "/app/exports/st"
+      - "--output-folder"
+      - "/app/exports/st"
     env_file:
       - .env
     environment:
@@ -175,9 +179,13 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py",
-          "--input-folder","/app/exports/st",
-          "--output-folder","/app/exports/st"]
+    command:
+      - "python"
+      - "/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py"
+      - "--input-folder"
+      - "/app/exports/st"
+      - "--output-folder"
+      - "/app/exports/st"
     env_file:
       - .env
     environment:
@@ -190,13 +198,15 @@ services:
   evaluate:
     build:
       context: .
-      dockerfile: mlops/7_S
+      dockerfile: mlops/7_Serie_temporelle/4_EVALUATE/Dockerfile.evaluate.ST
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
       - ./data:/app/data
-    entrypoint: ["python", "/app/mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"]
+    entrypoint:
+      - "python"
+      - "/app/mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"
     env_file:
       - .env
     environment:
@@ -215,25 +225,15 @@ services:
       - ./mlops:/app/mlops
       - ./data:/app/data
       - ./exports:/app/exports
-    command: ["python", "/app/mlops/7_Serie_temporelle/pipeline.py", "--help"]
+    command:
+      - "python"
+      - "/app/mlops/7_Serie_temporelle/pipeline.py"
+      - "--help"
     env_file:
       - .env
     networks:
       - ml_net
     profiles: ["series"]
-
-  # --------- DVC ----------
-  dvc-runner:
-    build:
-      context: .
-      dockerfile: mlops/2_dvc/Dockerfile
-    volumes:
-      - .:/app
-      - ./.dvc:/app/.dvc
-    working_dir: /app
-    tty: true
-    stdin_open: true
-    env_file:
       - .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050

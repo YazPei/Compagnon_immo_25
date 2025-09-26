@@ -9,7 +9,6 @@ from app.api.config.settings import settings
 
 client = TestClient(app)
 
-
 class TestAuthentication:
     """Tests pour l'authentification"""
 
@@ -23,9 +22,7 @@ class TestAuthentication:
 
         # Vérifier que le token peut être décodé
         payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
         assert payload["sub"] == "test_user"
         assert "exp" in payload
@@ -76,22 +73,19 @@ class TestAuthentication:
         hashed = auth_manager.get_password_hash(long_password)
         assert hashed is not None
 
-        # Le mot de passe original doit fonctionner même s'il est tronqué
+        # Le mot de passe original doit fonctionner même s'il est tronqué en interne
         assert auth_manager.verify_password(long_password, hashed)
 
         # Vérifier qu'un mauvais mot de passe est rejeté
         assert not auth_manager.verify_password("B" * 100, hashed)
 
-        # Test spécifique: vérifier que seuls les 72 premiers caractères
-        # comptent
-        modified_password = "A" * 72 + "B" * 28  # Modifie après limite 72
+        # Test spécifique: vérifier que seuls les 72 premiers caractères comptent
+        modified_password = "A" * 72 + "B" * 28  # Modifie les caractères après la limite de 72
         assert auth_manager.verify_password(modified_password, hashed)
 
-        # Test pour confirmer qu'une modification dans les 72 premiers
-        # caractères est bien détectée
+        # Test pour confirmer qu'une modification dans les 72 premiers caractères est bien détectée
         modified_password2 = "B" + "A" * 99  # Modifie le premier caractère
         assert not auth_manager.verify_password(modified_password2, hashed)
-
 
 class TestAPIKeyAuthentication:
     """Tests pour l'authentification par clé API"""

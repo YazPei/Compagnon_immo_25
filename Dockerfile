@@ -1,48 +1,50 @@
 # Dockerfile API - Compagnon Immo
 # Multi-stage pour une image légère et sécurisée
 
+FROM python:3.11-slim-bookworm
+
+RUN echo "ok"
+# Installer les outils SELinux et utilitaires nécessaires
+RUN apt-get update && \
+    apt-get install -y selinux-utils policycoreutils && \
+    rm -rf /var/lib/apt/lists/*
+
+# Activer SELinux dans le conteneur (note : SELinux doit être actif sur l'hôte)
+# Afficher le statut SELinux pour vérification
+RUN sestatus || echo "SELinux non disponible dans ce conteneur"
+
 FROM python:3.11-slim-bookworm AS base
 
-# Variables d'environnement
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-# Installation des dépendances système
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        git \
-        selinux-utils \
-        policycoreutils \
+    ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/*
 
-# Vérification SELinux
-RUN sestatus || echo "SELinux non disponible dans ce conteneur"
-
-# Création de l'environnement virtuel
 RUN python -m venv "$VIRTUAL_ENV"
 
 WORKDIR /app
 
-# Installation des dépendances Python
+# Installer les dépendances en amont pour profiter du cache
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt \
-    && pip install gunicorn dvc \
-    && pip check
+    && pip install gunicorn dvc
 
-# Copie des fichiers de l'application
+RUN pip check  # Vérifie les conflits de dépendances
+RUN chmod -R 755 /app  # Assure les permissions correctes
+
+# Copier uniquement ce qui est nécessaire à l'API
 COPY app ./app
 COPY params.yaml ./params.yaml
 COPY .dvc ./.dvc
+# Copier le fichier .env dans l'image
 COPY .env /app/.env
-
-# Configuration des permissions
-RUN chmod -R 755 /app
 
 # Utilisateur non-root
 RUN useradd -m appuser \
@@ -51,18 +53,16 @@ USER appuser
 
 EXPOSE 8000
 
-# Variables d'environnement par défaut
+# Variables par défaut (peuvent être surchargées par Compose/ENV)
 ENV ENVIRONMENT=production \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
     WORKERS=4 \
     LOG_LEVEL=INFO
 
-# Commande par défaut
-CMD ["gunicorn", "app.api.main:app", \
-     "-w", "4", \
-     "-k", "uvicorn.workers.UvicornWorker", \
-     "-b", "0.0.0.0:8000"]
+# Commande par défaut (overridable par docker-compose)
+CMD [ \
+    "gunicorn", "app.api.main:app", \
     "-w", "4", \
     "-k", "uvicorn.workers.UvicornWorker", \
     "-b", "0.0.0.0:8000" \

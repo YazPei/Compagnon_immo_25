@@ -8,7 +8,7 @@ SHELL := /usr/bin/env bash
 ENV_FILE ?= .env
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
-export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
+export $(shell sed -n 's/^\([A-Za-z_][A-ZaZ0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
 # ===== Variables =====

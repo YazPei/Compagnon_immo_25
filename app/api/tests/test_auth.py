@@ -1,9 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from datetime import timedelta
+import jwt
 
 from app.api.main import app
 from app.api.security.auth import auth_manager
+from app.api.config.settings import settings
 
 client = TestClient(app)
 
@@ -19,8 +21,10 @@ class TestAuthentication:
         assert isinstance(token, str)
         assert len(token) > 0
 
-        # Vérifier via le même gestionnaire
-        payload = auth_manager.verify_token(token)
+        # Vérifier que le token peut être décodé
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
         assert payload["sub"] == "test_user"
         assert "exp" in payload
 
@@ -51,15 +55,25 @@ class TestAuthentication:
     def test_password_hashing(self):
         """Test hashage et vérification de mot de passe"""
         password = "test_password_123"
+        # Cas limite : mot de passe long (72 caractères max pour bcrypt)
+        long_password = "A" * 100  # 100 caractères
+        safe_long_password = long_password[:72]
 
-        # Hasher le mot de passe
+        # Hasher le mot de passe standard
         hashed = auth_manager.get_password_hash(password)
         assert hashed != password
         assert len(hashed) > 0
 
-        # Vérifier le mot de passe
+        # Vérifier le mot de passe standard
         assert auth_manager.verify_password(password, hashed)
         assert not auth_manager.verify_password("wrong_password", hashed)
+
+        # Hasher et vérifier le mot de passe limite (72 caractères)
+        hashed_long = auth_manager.get_password_hash(safe_long_password)
+        assert hashed_long != safe_long_password
+        assert len(hashed_long) > 0
+        assert auth_manager.verify_password(safe_long_password, hashed_long)
+        assert not auth_manager.verify_password("wrong_password", hashed_long)
 
 
 class TestAPIKeyAuthentication:

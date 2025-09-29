@@ -107,8 +107,9 @@ api-test: ## Lancer les tests de l'API
 clean: ## Nettoie les fichiers temporaires
 	@rm -rf .pytest_cache .coverage
 
-api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan)
-	@pkill -f "uvicorn app.routes.main:app" || echo "Aucun uvicorn à stopper"
+api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan) et le conteneur Docker
+	@pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
+	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
 
 # ===============================
 # 📈 MLflow

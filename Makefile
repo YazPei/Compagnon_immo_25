@@ -4,14 +4,13 @@
 # ===============================
 # SOMMAIRE
 # ===============================
-# 1. Aide & lint                : help, lint, check-dependencies
-# 2. Quick start                : quick-start, quick-start-airflow, quick-start-test
-# 3. API et Tests               : prepare-dirs, install, api-test, clean, api-stop
-# 4. MLflow                     : mlflow-up, mlflow-down
-# 5. Docker - orchestrations    : docker-build, docker-api-build, docker-api-run, docker-api-stop, docker-logs
-# 6. DVC                        : dvc-add-all, dvc-repro-all, dvc-push-all, dvc-pull-all, pipeline-reset
-# 7. Airflow                    : airflow-build, airflow-init, airflow-up, airflow-down, airflow-logs, airflow-smoke
-# 8. Nettoyage et réparation    : fix-permissions, check-services, ci-test
+# 1. Aide & vérifications        : help, lint, check-dependencies
+# 2. Préparation & installation  : prepare-dirs, install
+# 3. Build                      : docker-build, docker-api-build, airflow-build
+# 4. Démarrage services         : quick-start, quick-start-airflow, quick-start-test, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
+# 5. Tests & CI                 : api-test, ci-test
+# 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
+# 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services
 
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -53,17 +52,16 @@ COLOR_YELLOW := \033[33m
 
 .PHONY: \
   help lint check-dependencies \
-  quick-start quick-start-airflow quick-start-test \
-  prepare-dirs install api-test clean api-stop fix-permissions \
-  airflow-start airflow-build airflow-init airflow-up airflow-down airflow-logs airflow-smoke \
-  mlflow-up mlflow-down mlflow-logs \
-  docker-build docker-api-build docker-api-run docker-api-stop docker-logs docker-clean \
-  build-all run-all-docker run_dvc \
-  dvc-add-all dvc-repro-all dvc-push-all dvc-pull-all pipeline-reset \
-  check-ports rebuild ci-test
+  prepare-dirs install \
+  docker-build docker-api-build airflow-build \
+  quick-start quick-start-airflow quick-start-test docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
+  api-test ci-test \
+  api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
+  docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
+  dvc-push-all pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
 
 # ===============================
-# Aide & lint
+# 1. Aide & vérifications
 # ===============================
 help: ## Affiche l'aide
 	@echo "========== Compagnon Immo - Commandes disponibles =========="
@@ -80,16 +78,7 @@ check-dependencies: ## Vérifie que les dépendances nécessaires sont installé
 	@echo "$(COLOR_GREEN)✅ Toutes les dépendances sont installées.$(COLOR_RESET)"
 
 # ===============================
-# 📦 Quick start
-# ===============================
-quick-start: prepare-dirs build-all airflow-start ## Build + démarrage complet (Airflow, MLflow, API)
-
-quick-start-airflow: build-all airflow-start ## Build + démarrage d'Airflow uniquement
-
-quick-start-test: quick-start dvc-repro-all ## Quick start + exécution complète de DVC
-
-# ===============================
-# 🌐 API et Tests
+# 2. Préparation & installation
 # ===============================
 prepare-dirs: ## Prépare les répertoires nécessaires
 	@mkdir -p data exports mlruns logs/airflow
@@ -99,21 +88,31 @@ install: prepare-dirs ## Installe les dépendances Python
 	@$(PIP) install --upgrade pip
 	@$(PIP) install -r requirements.txt
 
-api-test: ## Lancer les tests de l'API
-	@echo "🧪 Tests de l'API…"
-	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
-	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
+# ===============================
+# 3. Build
+# ===============================
+docker-build: prepare-dirs ## Build via compose
+	@$(DOCKER_COMPOSE_CMD) build
 
-clean: ## Nettoie les fichiers temporaires
-	@rm -rf .pytest_cache .coverage
+docker-api-build: ## Build image API
+	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
 
-api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan) et le conteneur Docker
-	@pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
+airflow-build: ## Build images Airflow
+	docker compose build airflow-webserver airflow-scheduler
 
 # ===============================
-# 📈 MLflow
+# 4. Démarrage services
 # ===============================
+quick-start: prepare-dirs build-all airflow-start ## Build + démarrage complet (Airflow, MLflow, API)
+
+quick-start-airflow: build-all airflow-start ## Build + démarrage d'Airflow uniquement
+
+quick-start-test: quick-start dvc-repro-all ## Quick start + exécution complète de DVC
+
+docker-api-run: docker-api-build ## Run image API
+	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
+	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
+
 mlflow-up: ## Démarre MLflow
 	docker run -d --rm \
 		--name $(MLFLOW_HOST) \
@@ -125,31 +124,9 @@ mlflow-up: ## Démarre MLflow
 		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
 		  --default-artifact-root /mlflow/mlruns
 
-mlflow-down: ## Stoppe MLflow
-	docker stop $(MLFLOW_HOST) || true
+airflow-up: ## Démarre uniquement Airflow
+	docker compose up -d $(AIRFLOW_SERVICES)
 
-# ===============================
-# 🐳 Docker - orchestrations
-# ===============================
-docker-build: prepare-dirs ## Build via compose
-	@$(DOCKER_COMPOSE_CMD) build
-
-docker-api-build: ## Build image API
-	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
-
-docker-api-run: docker-api-build ## Run image API
-	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
-	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
-
-docker-api-stop: ## Stop & rm API container
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
-
-docker-logs: ## Logs compose (tous services)
-	@$(DOCKER_COMPOSE_CMD) logs -f
-
-# ===============================
-# 🏗️ DVC: ajout des stages & orchestration
-# ===============================
 dvc-add-all: ## Ajoute tous les stages DVC
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	  dvc stage add -n import_data \
@@ -163,60 +140,19 @@ dvc-repro-all: ## dvc repro de tout le pipeline
 	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
 	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc repro -f
 
-dvc-push-all: ## dvc push
-	docker run --rm $(USER_FLAGS) \
-	  --network $(NETWORK) \
-	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app -w /app \
-	  -e DVC_TOKEN=$(DVC_TOKEN) $(DVC_IMAGE) dvc push
-
 dvc-pull-all: ## dvc pull
 	docker run --rm $(USER_FLAGS) \
 	  --network $(NETWORK) \
 	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
 	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc pull
 
-pipeline-reset: dvc-pull-all dvc-add-all dvc-repro-all ## Pull + add + repro
-
 # ===============================
-# Airflow
+# 5. Tests & CI
 # ===============================
-airflow-build: ## Build images Airflow
-	docker compose build airflow-webserver airflow-scheduler
-
-airflow-init: ## Init DB Airflow + user admin
-	mkdir -p logs/airflow
-	sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
-	docker compose run --rm airflow-webserver airflow db upgrade
-	docker compose run --rm airflow-webserver \
-	  airflow users create --username admin --password admin \
-	  --firstname Admin --lastname User --role Admin --email admin@example.com || true
-
-airflow-up: ## Démarre uniquement Airflow
-	docker compose up -d $(AIRFLOW_SERVICES)
-
-airflow-down: ## Stoppe Airflow
-	docker compose stop $(AIRFLOW_SERVICES)
-	docker compose rm -f $(AIRFLOW_SERVICES) || true
-
-airflow-logs: ## Logs webserver
-	docker compose logs -f airflow-webserver
-
-airflow-smoke: ## Vérifie Airflow en listant les DAGs
-	@$(DOCKER_COMPOSE_CMD) exec airflow-webserver airflow dags list | head -n 10 || true
-
-# ===============================
-# 🧹 Nettoyage et réparation
-# ===============================
-fix-permissions: ## Corrige les permissions des fichiers du projet
-	@echo "$(COLOR_YELLOW)🔧 Correction des permissions...$(COLOR_RESET)"
-	@sudo chown -R $(shell whoami):$(shell whoami) . || true
-	@chmod -R u+rwx . || true
-	@echo "$(COLOR_GREEN)✅ Permissions corrigées !$(COLOR_RESET)"
-
-check-services: ## Vérifie l'état des services Docker
-	@echo "🔍 Vérification des services Docker..."
-	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "api|mlflow|airflow|redis"
+api-test: ## Lancer les tests de l'API
+	@echo "🧪 Tests de l'API…"
+	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
+	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
 
 ci-test: install ## Exécute les tests CI localement
 	@echo "🔍 Lancement des tests CI..."
@@ -227,3 +163,64 @@ ci-test: install ## Exécute les tests CI localement
 	@$(PIP) install flake8 --quiet || true
 	@$(PYTHON_BIN) -m flake8 app/ --max-line-length=88 --ignore=E203,W503 || { echo "$(COLOR_RED)❌ Linting échoué$(COLOR_RESET)"; exit 1; }
 	@echo "$(COLOR_GREEN)✅ Tous les tests CI ont réussi !$(COLOR_RESET)"
+
+# ===============================
+# 6. Arrêt & nettoyage
+# ===============================
+api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan) et le conteneur Docker
+	@pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
+	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
+
+docker-api-stop: ## Stop & rm API container
+	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
+
+mlflow-down: ## Stoppe MLflow
+	docker stop $(MLFLOW_HOST) || true
+
+airflow-down: ## Stoppe Airflow
+	docker compose stop $(AIRFLOW_SERVICES)
+	docker compose rm -f $(AIRFLOW_SERVICES) || true
+
+stop-all: ## Stoppe tous les services, conteneurs, réseaux et processus liés au projet
+	@echo "🔴 Arrêt de tous les processus uvicorn locaux..."
+	-pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
+	@echo "🔴 Suppression des conteneurs Docker nommés compagnon_immo-* ..."
+	-docker ps -a --filter "name=compagnon_immo" -q | xargs -r docker rm -f || echo "Aucun conteneur compagnon_immo à supprimer"
+	@echo "🔴 Arrêt et suppression des services Docker Compose..."
+	-$(DOCKER_COMPOSE_CMD) down -v --remove-orphans || echo "Aucun service compose à stopper"
+	@echo "🟢 Tous les services et conteneurs liés au projet sont arrêtés."
+
+clean: ## Nettoie les fichiers temporaires
+	@rm -rf .pytest_cache .coverage
+
+# ===============================
+# 7. Utilitaires & réparation
+# ===============================
+docker-logs: ## Logs compose (tous services)
+	@$(DOCKER_COMPOSE_CMD) logs -f
+
+airflow-logs: ## Logs webserver
+	docker compose logs -f airflow-webserver
+
+airflow-init: ## Init DB Airflow + user admin
+	mkdir -p logs/airflow
+	sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
+	docker compose run --rm airflow-webserver airflow db upgrade
+	docker compose run --rm airflow-webserver \
+	  airflow users create --username admin --password admin \
+	  --firstname Admin --lastname User --role Admin --email admin@example.com || true
+
+airflow-smoke: ## Vérifie Airflow en listant les DAGs
+	@$(DOCKER_COMPOSE_CMD) exec airflow-webserver airflow dags list | head -n 10 || true
+
+fix-permissions: ## Corrige les permissions des fichiers du projet
+	@echo "$(COLOR_YELLOW)🔧 Correction des permissions...$(COLOR_RESET)"
+	@sudo chown -R $(shell whoami):$(shell whoami) . || true
+	@chmod -R u+rwx . || true
+	@echo "$(COLOR_GREEN)✅ Permissions corrigées !$(COLOR_RESET)"
+
+check-services: ## Vérifie l'état des services Docker
+	@echo "🔍 Vérification des services Docker..."
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "api|mlflow|airflow|redis"
+
+# ...autres cibles annexes si besoin (build-all, pipeline-reset, etc.)...

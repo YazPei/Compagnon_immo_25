@@ -8,7 +8,6 @@ from app.api.main import app
 
 client = TestClient(app)
 
-
 @pytest.mark.integration
 def test_health_check():
     """Vérifie que l'endpoint de santé fonctionne correctement."""
@@ -33,4 +32,5 @@ def test_estimation_endpoint():
     data = response.json()
     assert "estimation" in data
     assert "prix" in data["estimation"]
+    assert data["estimation"]["prix"] > 0
     assert data["estimation"]["prix"] > 0

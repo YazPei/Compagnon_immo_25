@@ -1,6 +1,18 @@
 # ========== Makefile MLOps - Compagnon Immo ==========
 # Gestion des pipelines avec Airflow, MLflow, DVC et Docker
 
+# ===============================
+# SOMMAIRE
+# ===============================
+# 1. Aide & lint                : help, lint, check-dependencies
+# 2. Quick start                : quick-start, quick-start-airflow, quick-start-test
+# 3. API et Tests               : prepare-dirs, install, api-test, clean, api-stop
+# 4. MLflow                     : mlflow-up, mlflow-down
+# 5. Docker - orchestrations    : docker-build, docker-api-build, docker-api-run, docker-api-stop, docker-logs
+# 6. DVC                        : dvc-add-all, dvc-repro-all, dvc-push-all, dvc-pull-all, pipeline-reset
+# 7. Airflow                    : airflow-build, airflow-init, airflow-up, airflow-down, airflow-logs, airflow-smoke
+# 8. Nettoyage et réparation    : fix-permissions, check-services, ci-test
+
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 

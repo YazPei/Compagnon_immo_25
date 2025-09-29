@@ -1,18 +1,6 @@
 # Dockerfile API - Compagnon Immo
 # Multi-stage pour une image légère et sécurisée
 
-FROM python:3.11-slim-bookworm
-
-RUN echo "ok"
-# Installer les outils SELinux et utilitaires nécessaires
-RUN apt-get update && \
-    apt-get install -y selinux-utils policycoreutils && \
-    rm -rf /var/lib/apt/lists/*
-
-# Activer SELinux dans le conteneur (note : SELinux doit être actif sur l'hôte)
-# Afficher le statut SELinux pour vérification
-RUN sestatus || echo "SELinux non disponible dans ce conteneur"
-
 FROM python:3.11-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -34,7 +22,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt \
-    && pip install gunicorn dvc
+    && pip install gunicorn dvc apache-airflow==2.8.3 psycopg2-binary
 
 RUN pip check  # Vérifie les conflits de dépendances
 RUN chmod -R 755 /app  # Assure les permissions correctes
@@ -43,8 +31,6 @@ RUN chmod -R 755 /app  # Assure les permissions correctes
 COPY app ./app
 COPY params.yaml ./params.yaml
 COPY .dvc ./.dvc
-# Copier le fichier .env dans l'image
-COPY .env /app/.env
 
 # Utilisateur non-root
 RUN useradd -m appuser \
@@ -67,3 +53,4 @@ CMD [ \
     "-k", "uvicorn.workers.UvicornWorker", \
     "-b", "0.0.0.0:8000" \
     ]
+

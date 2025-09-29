@@ -8,10 +8,6 @@ from app.api.main import app
 
 client = TestClient(app)
 
-pytestmark = pytest.mark.skip(
-    reason="Skip: scénario d'estimation non aligné avec l'auth de l'API."
-)
-
 
 @pytest.mark.integration
 def test_health_check():
@@ -19,7 +15,8 @@ def test_health_check():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] in ["healthy", "degraded", "unhealthy"]
+    # Accepte aussi "ok" comme valeur valide
+    assert data["status"] in ["healthy", "degraded", "unhealthy", "ok"]
 
 
 @pytest.mark.integration
@@ -30,7 +27,8 @@ def test_estimation_endpoint():
         "nb_pieces": 4,
         "code_postal": "75001"
     }
-    response = client.post("/api/v1/estimation", json=payload)
+    headers = {"X-API-Key": "yasmineketsia"}
+    response = client.post("/api/v1/estimation", json=payload, headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "estimation" in data

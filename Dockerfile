@@ -11,14 +11,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    ca-certificates curl git \
+    ca-certificates curl git build-essential libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv "$VIRTUAL_ENV"
 
 WORKDIR /app
 
-# Installer les dépendances en amont pour profiter du cache
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt \

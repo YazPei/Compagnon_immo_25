@@ -1,0 +1,8 @@
+# MLOps
+mlflow>=2.9                 
+dagshub
+python-dotenv
+gh
+
+
+

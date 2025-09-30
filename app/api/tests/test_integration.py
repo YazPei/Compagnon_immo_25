@@ -5,6 +5,7 @@ Tests d'intégration pour vérifier le fonctionnement global des pipelines.
 import pytest
 from fastapi.testclient import TestClient
 from app.api.main import app
+import os
 
 client = TestClient(app)
 
@@ -26,11 +27,11 @@ def test_estimation_endpoint():
         "nb_pieces": 4,
         "code_postal": "75001"
     }
-    headers = {"X-API-Key": "yasmineketsia"}
+    api_key = os.getenv("API_SECRET_KEY", "yasmineketsia")
+    headers = {"X-API-Key": api_key}
     response = client.post("/api/v1/estimation", json=payload, headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "estimation" in data
     assert "prix" in data["estimation"]
-    assert data["estimation"]["prix"] > 0
     assert data["estimation"]["prix"] > 0

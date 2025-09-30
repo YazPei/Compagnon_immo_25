@@ -21,7 +21,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt \
-    && pip install gunicorn dvc apache-airflow==2.8.3 psycopg2-binary
+    && pip install gunicorn dvc apache-airflow==2.8.3 psycopg2-binary email-validator>=2.0
 
 RUN pip check  # Vérifie les conflits de dépendances
 RUN chmod -R 755 /app  # Assure les permissions correctes

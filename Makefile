@@ -149,10 +149,24 @@ dvc-pull-all: ## dvc pull
 # ===============================
 # 5. Tests & CI
 # ===============================
-api-test: ## Lancer les tests de l'API
+api-test: ## Lancer les tests de l'API avec démarrage automatique des services
 	@echo "🧪 Tests de l'API…"
 	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
-	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
+	@echo "🚀 Démarrage des services pour les tests..."
+	@$(DOCKER_COMPOSE_CMD) up -d api mlflow redis
+	@echo "⏳ Attente que l'API soit prête..."
+	@timeout 60 bash -c 'until curl -f http://localhost:8000/api/v1/health >/dev/null 2>&1; do sleep 2; done' || { echo "❌ L'API n'a pas démarré dans les temps"; $(DOCKER_COMPOSE_CMD) logs api; exit 1; }
+	@echo "✅ API prête, lancement des tests..."
+	@API_BASE_URL=http://localhost:8000/api/v1 PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
+	@echo "🛑 Arrêt des services de test..."
+	@$(DOCKER_COMPOSE_CMD) stop api mlflow redis
+
+api-test-docker: ## Lancer les tests de l'API dans un environnement Docker complet
+	@echo "🐳 Tests de l'API avec Docker…"
+	@echo "🚀 Démarrage de l'environnement de test complet..."
+	@$(DOCKER_COMPOSE_CMD) --profile test up --build --abort-on-container-exit --exit-code-from api-test
+	@echo "🛑 Nettoyage de l'environnement de test..."
+	@$(DOCKER_COMPOSE_CMD) --profile test down -v
 
 ci-test: install ## Exécute les tests CI localement
 	@echo "🔍 Lancement des tests CI..."

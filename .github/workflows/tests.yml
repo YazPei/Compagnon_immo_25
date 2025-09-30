@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      API_SECRET_KEY: yasmineketsia
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

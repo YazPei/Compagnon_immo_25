@@ -2,11 +2,14 @@
 Module pour le géocodage.
 """
 
+from typing import Dict, Optional
+
 import requests
-from typing import Optional, Dict
 
 
-def geocode_address(code_postal: str, ville: str, quartier: Optional[str] = None) -> Dict[str, float]:
+def geocode_address(
+    code_postal: str, ville: str, quartier: Optional[str] = None
+) -> Dict[str, float]:
     """
     Géocode une adresse en latitude et longitude.
 
@@ -20,10 +23,7 @@ def geocode_address(code_postal: str, ville: str, quartier: Optional[str] = None
     """
     # Mock : retourne des coordonnées fixes pour les tests
     # Remplacez cette partie par une requête à une API de géocodage si nécessaire
-    return {
-        "latitude": 48.8566,
-        "longitude": 2.3522
-    }
+    return {"latitude": 48.8566, "longitude": 2.3522}
 
 
 def reverse_geocode(latitude: float, longitude: float) -> str:

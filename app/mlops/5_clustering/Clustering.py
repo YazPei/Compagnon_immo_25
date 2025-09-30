@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 
 import os
-from pathlib import Path
 import warnings
+from pathlib import Path
 
+import geopandas as gpd
+import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import geopandas as gpd
 from shapely.geometry import Point
-from sklearn.linear_model import LinearRegression
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
@@ -131,10 +131,14 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         test_cluster_ST["split"] = "train_test"
         test_cluster["split"] = "test"
 
-        df_cluster = pd.concat([train_cluster_ST, test_cluster_ST, test_cluster], ignore_index=True)
+        df_cluster = pd.concat(
+            [train_cluster_ST, test_cluster_ST, test_cluster], ignore_index=True
+        )
 
         # Drop lat/lon manquants et prépare points
-        df_base = df_cluster.dropna(subset=["mapCoordonneesLatitude", "mapCoordonneesLongitude"]).copy()
+        df_base = df_cluster.dropna(
+            subset=["mapCoordonneesLatitude", "mapCoordonneesLongitude"]
+        ).copy()
         df_base["lat"] = df_base["mapCoordonneesLatitude"]
         df_base["lon"] = df_base["mapCoordonneesLongitude"]
         df_base["orig_index"] = df_base.index
@@ -153,7 +157,7 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         results = []
         chunksize = 100_000
         for i in range(0, len(df_base), chunksize):
-            chunk = df_base.iloc[i:i + chunksize]
+            chunk = df_base.iloc[i : i + chunksize]
             results.append(process_chunk(chunk, pcodes))
 
         df_joined = pd.concat(results, ignore_index=True).drop_duplicates("orig_index")
@@ -163,7 +167,9 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         # Nettoyage date/index + codePostal
         df_base["date"] = pd.to_datetime(df_base["date"], errors="coerce")
         df_base = df_base.sort_values("date").set_index("date")
-        df_base["codePostal"] = df_base["codePostal"].astype(str).str.replace(r"\.0$", "", regex=True)
+        df_base["codePostal"] = (
+            df_base["codePostal"].astype(str).str.replace(r"\.0$", "", regex=True)
+        )
 
         # ─────────────────────────────────────────────────────────────────────────
         # Variable hybride zone_mixte (CP détaillé si >=10 obs, sinon département)
@@ -184,16 +190,22 @@ def run_clustering_pipeline(input_path: str, output_path: str):
                 return cp[:2]  # département
             return "inconnu"
 
-        train_cluster["zone_mixte"] = train_cluster["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
+        train_cluster["zone_mixte"] = (
+            train_cluster["codePostal"]
+            .astype(str)
+            .apply(lambda x: regroup_code(x, cp_frequents))
         )
-        test_cluster["zone_mixte"] = test_cluster["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
+        test_cluster["zone_mixte"] = (
+            test_cluster["codePostal"]
+            .astype(str)
+            .apply(lambda x: regroup_code(x, cp_frequents))
         )
 
         # Lags dans le train
         train_cluster = train_cluster.sort_values(["zone_mixte", "date"])
-        train_cluster["prix_lag_1m"] = train_cluster.groupby("zone_mixte")["prix_m2_vente"].shift(1)
+        train_cluster["prix_lag_1m"] = train_cluster.groupby("zone_mixte")[
+            "prix_m2_vente"
+        ].shift(1)
         train_cluster["prix_roll_3m"] = (
             train_cluster.groupby("zone_mixte")["prix_m2_vente"]
             .rolling(3, closed="left")
@@ -225,15 +237,23 @@ def run_clustering_pipeline(input_path: str, output_path: str):
             return "inconnu"
 
         train_mensuel["date"] = pd.to_datetime(
-            dict(year=train_mensuel["Year"].astype(int),
-                 month=train_mensuel["Month"].astype(int),
-                 day=1),
-            errors="raise"
+            dict(
+                year=train_mensuel["Year"].astype(int),
+                month=train_mensuel["Month"].astype(int),
+                day=1,
+            ),
+            errors="raise",
         )
-        train_mensuel["codePostal_recons"] = train_mensuel["zone_mixte"].apply(get_code_postal_final)
+        train_mensuel["codePostal_recons"] = train_mensuel["zone_mixte"].apply(
+            get_code_postal_final
+        )
         train_mensuel = train_mensuel.sort_values(["codePostal_recons", "date"])
-        train_mensuel["ym_ordinal"] = train_mensuel["Year"] * 12 + train_mensuel["Month"]
-        train_mensuel["t"] = train_mensuel.groupby("codePostal_recons")["ym_ordinal"].transform(lambda x: x - x.min())
+        train_mensuel["ym_ordinal"] = (
+            train_mensuel["Year"] * 12 + train_mensuel["Month"]
+        )
+        train_mensuel["t"] = train_mensuel.groupby("codePostal_recons")[
+            "ym_ordinal"
+        ].transform(lambda x: x - x.min())
 
         # TCAM via régression sur log(prix)
         train_mensuel["log_prix"] = np.log(train_mensuel["prix_m2_vente"])
@@ -267,7 +287,7 @@ def run_clustering_pipeline(input_path: str, output_path: str):
                 prix_m2_std=("prix_m2_mean", "std"),
                 prix_m2_max=("prix_m2_mean", "max"),
                 prix_m2_min=("prix_m2_mean", "min"),
-                avg_lag_1m=("prix_m2_mean", "mean"),   # proxies si besoin
+                avg_lag_1m=("prix_m2_mean", "mean"),  # proxies si besoin
                 avg_roll_3m=("prix_m2_mean", "mean"),
             )
             .assign(prix_m2_cv=lambda df: df["prix_m2_std"] / df["prix_m2_mean"])
@@ -276,15 +296,22 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         )
 
         Path("mlflow_outputs").mkdir(exist_ok=True)
-        df_cluster_input.to_csv("mlflow_outputs/cluster_input.csv", index=False, sep=";")
+        df_cluster_input.to_csv(
+            "mlflow_outputs/cluster_input.csv", index=False, sep=";"
+        )
         mlflow.log_artifact("mlflow_outputs/cluster_input.csv")
 
         # ─────────────────────────────────────────────────────────────────────────
         # Clustering KMeans (k choisi avec coude)
         # ─────────────────────────────────────────────────────────────────────────
         features = [
-            "prix_m2_std", "prix_m2_max", "prix_m2_min",
-            "tc_am_reg", "prix_m2_cv", "avg_roll_3m", "avg_lag_1m",
+            "prix_m2_std",
+            "prix_m2_max",
+            "prix_m2_min",
+            "tc_am_reg",
+            "prix_m2_cv",
+            "avg_roll_3m",
+            "avg_lag_1m",
         ]
         X = df_cluster_input[features].replace([np.inf, -np.inf], np.nan)
         X_train = X.dropna()
@@ -333,32 +360,43 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         df_cluster_input["cluster_label"] = df_cluster_input["cluster"].map(mapping)
 
         # Sauvegarde des assignations agrégées (optionnel)
-        df_cluster_input.to_csv("mlflow_outputs/cluster_input_labeled.csv", index=False, sep=";")
+        df_cluster_input.to_csv(
+            "mlflow_outputs/cluster_input_labeled.csv", index=False, sep=";"
+        )
         mlflow.log_artifact("mlflow_outputs/cluster_input_labeled.csv")
 
         # ─────────────────────────────────────────────────────────────────────────
         # ⚠️ MERGE DES LABELS DANS LES DONNÉES FINALES
         # ─────────────────────────────────────────────────────────────────────────
-        mapping_df = (
-            df_cluster_input[["codePostal_recons", "cluster", "cluster_label"]]
-            .drop_duplicates(subset=["codePostal_recons"])
-        )
+        mapping_df = df_cluster_input[
+            ["codePostal_recons", "cluster", "cluster_label"]
+        ].drop_duplicates(subset=["codePostal_recons"])
 
         # Reconstitution du full (train + test) en conservant index pour 'date'
         df_cluster_full = pd.concat([train_cluster, test_cluster]).copy()
         if isinstance(df_cluster_full.index, pd.DatetimeIndex):
-            df_cluster_full = df_cluster_full.reset_index().rename(columns={"index": "date"})
+            df_cluster_full = df_cluster_full.reset_index().rename(
+                columns={"index": "date"}
+            )
 
         # Recrée zone_mixte et codePostal_recons avec la même logique que plus haut
-        df_cluster_full["zone_mixte"] = df_cluster_full["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
+        df_cluster_full["zone_mixte"] = (
+            df_cluster_full["codePostal"]
+            .astype(str)
+            .apply(lambda x: regroup_code(x, cp_frequents))
         )
-        df_cluster_full["codePostal_recons"] = df_cluster_full["zone_mixte"].apply(get_code_postal_final)
+        df_cluster_full["codePostal_recons"] = df_cluster_full["zone_mixte"].apply(
+            get_code_postal_final
+        )
 
         # Merge labels
-        df_cluster_full = df_cluster_full.merge(mapping_df, on="codePostal_recons", how="left")
+        df_cluster_full = df_cluster_full.merge(
+            mapping_df, on="codePostal_recons", how="left"
+        )
         df_cluster_full["cluster"] = df_cluster_full["cluster"].astype("Int64")
-        df_cluster_full["cluster_label"] = df_cluster_full["cluster_label"].fillna("inconnu")
+        df_cluster_full["cluster_label"] = df_cluster_full["cluster_label"].fillna(
+            "inconnu"
+        )
 
         # ─────────────────────────────────────────────────────────────────────────
         # Exports finaux pour le pipeline
@@ -371,21 +409,30 @@ def run_clustering_pipeline(input_path: str, output_path: str):
         # Données pour régression (on force 'train_test' -> 'train'), labels inclus
         df_cluster_reg = df_cluster_full.copy()
         if "split" in df_cluster_reg.columns:
-            df_cluster_reg["split"] = df_cluster_reg["split"].replace("train_test", "train")
+            df_cluster_reg["split"] = df_cluster_reg["split"].replace(
+                "train_test", "train"
+            )
         df_cluster_reg.to_csv(out_cluster_csv, sep=";", index=False)
         mlflow.log_artifact(str(out_cluster_csv))
 
         # Duplicatas pour DVC
-        dvc_out_dir = Path("data"); dvc_out_dir.mkdir(parents=True, exist_ok=True)
-        (dvc_out_dir / "df_sales_clean_ST.csv").write_text("", encoding="utf-8")  # ensure path exists (optional)
-        df_cluster_ST.to_csv(dvc_out_dir / "df_sales_clean_ST.csv", sep=";", index=False)
+        dvc_out_dir = Path("data")
+        dvc_out_dir.mkdir(parents=True, exist_ok=True)
+        (dvc_out_dir / "df_sales_clean_ST.csv").write_text(
+            "", encoding="utf-8"
+        )  # ensure path exists (optional)
+        df_cluster_ST.to_csv(
+            dvc_out_dir / "df_sales_clean_ST.csv", sep=";", index=False
+        )
         df_cluster_reg.to_csv(dvc_out_dir / "df_cluster.csv", sep=";", index=False)
 
         print("✅ Exports (exports/ + data/ pour DVC) :")
         print(f"  - exports/df_cluster.csv        → {out_cluster_csv}")
         print(f"  - exports/df_sales_clean_ST.csv → {out_st_csv}")
         print(f"  - data/df_cluster.csv           → {dvc_out_dir/'df_cluster.csv'}")
-        print(f"  - data/df_sales_clean_ST.csv    → {dvc_out_dir/'df_sales_clean_ST.csv'}")
+        print(
+            f"  - data/df_sales_clean_ST.csv    → {dvc_out_dir/'df_sales_clean_ST.csv'}"
+        )
 
 
 if __name__ == "__main__":
@@ -393,4 +440,3 @@ if __name__ == "__main__":
         input_path="data/processed/",
         output_path="exports/df_cluster.csv",
     )
-

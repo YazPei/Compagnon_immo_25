@@ -1,20 +1,15 @@
-fastapi
-uvicorn
+# Dépendances mises à jour pour résoudre les problèmes de bcrypt
+fastapi>=0.95
+uvicorn[standard]>=0.20
 hydra-core
 anyio
 httpx
 pytest
 pytest-cov
+pytest-asyncio>=0.21.0
 prometheus-fastapi-instrumentator
 pydantic>=2.4
 pydantic-settings>=2.1
-mlflow>=2.9
-dagshub
-python-dotenv
-
-uvicorn[standard]
-hydra-core
-anyio
 sqlalchemy
 pandas
 psutil
@@ -22,11 +17,12 @@ python-jose[cryptography]
 requests
 PyJWT
 joblib
-passlib[bcrypt]
-sqlalchemy
-pandas
-psutil
-python-jose[cryptography]
-requests
-PyJWT
+passlib==1.7.4
+bcrypt==4.0.1
+gunicorn
+flake8>=6.0.0
+psycopg2-binary
+flask-limiter
+email-validator>=2.0
+
 

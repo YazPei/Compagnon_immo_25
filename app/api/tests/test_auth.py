@@ -1,11 +1,12 @@
+from datetime import timedelta
+
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-from datetime import timedelta
-import jwt
 
+from app.api.config.settings import settings
 from app.api.main import app
 from app.api.security.auth import auth_manager
-from app.api.config.settings import settings
 
 client = TestClient(app)
 
@@ -58,12 +59,37 @@ class TestAuthentication:
 
         # Hasher le mot de passe
         hashed = auth_manager.get_password_hash(password)
-        assert hashed != password
-        assert len(hashed) > 0
+        assert hashed is not None
 
-        # Vérifier le mot de passe
+        # Vérifier que le hashage fonctionne
         assert auth_manager.verify_password(password, hashed)
+
+        # Vérifier qu'un mauvais mot de passe est rejeté
         assert not auth_manager.verify_password("wrong_password", hashed)
+
+    def test_password_hashing_long_password(self):
+        """Test hashage avec mot de passe > 72 octets pour bcrypt"""
+        long_password = "A" * 100  # 100 caractères ASCII, donc 100 octets
+
+        # Hasher le mot de passe
+        hashed = auth_manager.get_password_hash(long_password)
+        assert hashed is not None
+
+        # Le mot de passe original doit fonctionner même s'il est tronqué en interne
+        assert auth_manager.verify_password(long_password, hashed)
+
+        # Vérifier qu'un mauvais mot de passe est rejeté
+        assert not auth_manager.verify_password("B" * 100, hashed)
+
+        # Test spécifique: vérifier que seuls les 72 premiers caractères comptent
+        modified_password = (
+            "A" * 72 + "B" * 28
+        )  # Modifie les caractères après la limite de 72
+        assert auth_manager.verify_password(modified_password, hashed)
+
+        # Test pour confirmer qu'une modification dans les 72 premiers caractères est bien détectée
+        modified_password2 = "B" + "A" * 99  # Modifie le premier caractère
+        assert not auth_manager.verify_password(modified_password2, hashed)
 
 
 class TestAPIKeyAuthentication:

@@ -10,47 +10,37 @@ services:
       "
     ports:
       - "8000:8000"
-      - "9090:9090"
     environment:
       - ENVIRONMENT=production
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - WORKERS=4
       - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
-      - METRICS_ENABLED=true
       - DAGSHUB_USERNAME=${DAGSHUB_USERNAME}
       - DAGSHUB_TOKEN=${DAGSHUB_TOKEN}
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
       - MLFLOW_TRACKING_USERNAME=${MLFLOW_TRACKING_USERNAME}
       - MLFLOW_TRACKING_PASSWORD=${MLFLOW_TRACKING_PASSWORD}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
     depends_on:
-      - redis
-      - db
+      - mlflow
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  redis:
-    image: redis:alpine
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.1
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5050
+      --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
+      --default-artifact-root ${MLFLOW_ARTIFACT_URI}
     ports:
-      - "6379:6379"
-    restart: unless-stopped
-
-  db:
-    image: postgres:13
+      - "5050:5050"
     environment:
-      POSTGRES_DB: compagnon_immo
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      MLFLOW_BACKEND_STORE_URI: "${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}"
+      MLFLOW_ARTIFACT_URI: "${MLFLOW_ARTIFACT_URI:-file:/mlflow_artifacts}"
     restart: unless-stopped
-
-volumes:
-  postgres_data:

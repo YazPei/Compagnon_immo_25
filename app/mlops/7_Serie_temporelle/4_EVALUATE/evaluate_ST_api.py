@@ -1,7 +1,8 @@
 #evaluate_ST	
+from subprocess import run
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from subprocess import run
 
 app = FastAPI()
 

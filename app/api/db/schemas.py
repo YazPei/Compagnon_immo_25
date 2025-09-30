@@ -1,13 +1,14 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel
 
 
 class PropertyBase(BaseModel):
     property_type: str
     surface: float
     postal_code: str
-    
+
 
 class PropertyCreate(PropertyBase):
     price: Optional[float] = None
@@ -36,7 +37,6 @@ class Estimation(EstimationBase):
     model_name: str
     mlflow_run_id: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         orm_mode = True
-        

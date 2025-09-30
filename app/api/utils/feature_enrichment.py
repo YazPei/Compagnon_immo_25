@@ -2,17 +2,18 @@
 Module pour l'enrichissement des features.
 """
 
-import pandas as pd
-import os
-from typing import Dict, Any
-from pydantic import BaseModel, ValidationError, Field
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field, ValidationError
 
 
 # Modèle Pydantic pour valider les entrées utilisateur
 class FeatureInput(BaseModel):
-    code_postal: str = Field(..., regex=r"^\d{5}$", description="Code postal à 5 chiffres.")
+    code_postal: str = Field(
+        ..., pattern=r"^\d{5}$", description="Code postal à 5 chiffres."
+    )
     ville: str
-    quartier: str = None
+    quartier: Optional[str] = None
 
 
 def validate_input(data: Dict[str, Any]) -> FeatureInput:
@@ -32,4 +33,3 @@ def validate_input(data: Dict[str, Any]) -> FeatureInput:
         return FeatureInput(**data)
     except ValidationError as e:
         raise ValueError(f"Entrées invalides : {e}")
-    

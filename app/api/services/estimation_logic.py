@@ -1,21 +1,18 @@
-from app.api.services.ml_service import ml_service
-from app.api.models.schemas import (
-    EstimationRequest,
-    EstimationResponse,
-    EstimationResultModel,
-    MarcheModel,
-    MetadataModel,
-)
-from app.api.utils.model_loader import get_model, get_preprocessor
-from app.api.utils.feature_enrichment import enrich_features_from_code_postal
-from app.api.utils.geocoding import geocode_address
-import pandas as pd
-import numpy as np
+import logging
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
-import logging
+import numpy as np
+import pandas as pd
+
+from app.api.models.schemas import (EstimationRequest, EstimationResponse,
+                                    EstimationResultModel, MarcheModel,
+                                    MetadataModel)
+from app.api.services.ml_service import ml_service
+from app.api.utils.feature_enrichment import enrich_features_from_code_postal
+from app.api.utils.geocoding import geocode_address
+from app.api.utils.model_loader import get_model, get_preprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +24,10 @@ def extract_features(request: EstimationRequest) -> Dict[str, Any]:
     """
     try:
         # Enrichissement géographique si nécessaire
-        if request.localisation.latitude is None or request.localisation.longitude is None:
+        if (
+            request.localisation.latitude is None
+            or request.localisation.longitude is None
+        ):
             coords = geocode_address(
                 request.localisation.code_postal,
                 request.localisation.ville,
@@ -124,7 +124,11 @@ def compute_estimation(estimation_request: EstimationRequest) -> EstimationRespo
         prediction = model.predict(features_processed)
 
         # Assurer que la prédiction est un float
-        prix_estime = float(prediction[0]) if isinstance(prediction, (list, np.ndarray)) else float(prediction)
+        prix_estime = (
+            float(prediction[0])
+            if isinstance(prediction, (list, np.ndarray))
+            else float(prediction)
+        )
 
         # Calculer l'indice de confiance
         indice_confiance = 0.85  # Valeur par défaut, peut être ajustée dynamiquement

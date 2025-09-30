@@ -1,8 +1,9 @@
 import os
+
 import click
+import mlflow
 import numpy as np
 import pandas as pd
-import mlflow
 from sklearn.preprocessing import OneHotEncoder
 
 
@@ -13,8 +14,7 @@ from sklearn.preprocessing import OneHotEncoder
     help="Fichier CSV complet avec colonne split",
 )
 @click.option(
-    "--output", prompt="Dossier de sortie",
-    help="Où sauvegarder les fichiers encodés"
+    "--output", prompt="Dossier de sortie", help="Où sauvegarder les fichiers encodés"
 )
 @click.option(
     "--target",
@@ -37,8 +37,7 @@ def encode_data(data_path, output, target, max_modalities):
         with mlflow.start_run(run_name="encoding"):
             print(f"Chargement depuis {data_path}")
             df = pd.read_csv(
-                data_path, sep=";", parse_dates=["date"],
-                dtype={target: np.float32}
+                data_path, sep=";", parse_dates=["date"], dtype={target: np.float32}
             )
 
             for col in ["split", target, "date"]:
@@ -57,15 +56,10 @@ def encode_data(data_path, output, target, max_modalities):
                 ["split", "date"], errors="ignore"
             )
             few_modalities = [
-                col for col in cat_cols
-                if train[col].nunique() <= max_modalities
+                col for col in cat_cols if train[col].nunique() <= max_modalities
             ]
 
-            encoder = OneHotEncoder(
-                drop="first",
-                handle_unknown="ignore",
-                sparse=False
-            )
+            encoder = OneHotEncoder(drop="first", handle_unknown="ignore", sparse=False)
             if few_modalities:
                 encoder.fit(train[few_modalities])
                 train_encoded = encoder.transform(train[few_modalities])

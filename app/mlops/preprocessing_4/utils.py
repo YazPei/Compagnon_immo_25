@@ -1,18 +1,19 @@
-import re
+import math
 import os
+import re
+from datetime import datetime
+from pathlib import Path
+
 import click
+import mlflow
+import numpy as np
 import pandas as pd
 import polars as pl
-import mlflow
-from pathlib import Path
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from datetime import datetime
-import math
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 run_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -224,4 +225,3 @@ def log_figure(fig, filename, artifact_path="figures"):
     fig.savefig(full_path)
     mlflow.log_artifact(full_path, artifact_path=artifact_path)
     mlflow.set_tag("figure_logged", filename)
-

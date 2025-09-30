@@ -3,9 +3,11 @@ Module pour centraliser la vérification des dépendances.
 """
 
 import logging
+
 import httpx
 import redis
 from sqlalchemy import text
+
 from app.api.db.database import engine
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,10 @@ async def check_mlflow(mlflow_url):
             response = await client.get(f"{mlflow_url}/health")
             if response.status_code == 200:
                 return {"status": "healthy", "message": "MLflow accessible"}
-            return {"status": "degraded", "message": f"MLflow status: {response.status_code}"}
+            return {
+                "status": "degraded",
+                "message": f"MLflow status: {response.status_code}",
+            }
     except Exception as e:
         logger.error(f"Erreur MLflow : {str(e)}")
         return {"status": "unhealthy", "message": f"MLflow inaccessible : {str(e)}"}

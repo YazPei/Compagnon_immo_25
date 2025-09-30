@@ -1,7 +1,7 @@
 """Fonctions custom pour le modèle."""
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def replace_minus1(value):
@@ -101,10 +101,12 @@ def cyclical_encode(df):
         date = pd.to_datetime(df)
 
     # Création des features cycliques
-    res = pd.DataFrame({
-        "month_sin": np.sin(2 * np.pi * date.dt.month / 12),
-        "month_cos": np.cos(2 * np.pi * date.dt.month / 12),
-        "dow_sin": np.sin(2 * np.pi * date.dt.weekday / 7),
-        "dow_cos": np.cos(2 * np.pi * date.dt.weekday / 7),
-    })
+    res = pd.DataFrame(
+        {
+            "month_sin": np.sin(2 * np.pi * date.dt.month / 12),
+            "month_cos": np.cos(2 * np.pi * date.dt.month / 12),
+            "dow_sin": np.sin(2 * np.pi * date.dt.weekday / 7),
+            "dow_cos": np.cos(2 * np.pi * date.dt.weekday / 7),
+        }
+    )
     return res

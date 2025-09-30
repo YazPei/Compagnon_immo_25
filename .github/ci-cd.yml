@@ -46,6 +46,7 @@ jobs:
 
       - name: Run API tests
         env:
+          API_KEY: test_api_key
           DATABASE_URL: sqlite:///:memory:
           JWT_SECRET_KEY: test-secret-key
           TESTING: true
@@ -186,6 +187,7 @@ jobs:
 
       - name: Run integration tests
         env:
+          API_KEY: test_api_key
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compagnon_immo_test
           REDIS_URL: redis://localhost:6379/0
         run: |

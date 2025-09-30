@@ -3,10 +3,11 @@ Pipeline de prétraitement des données avec suivi MLflow.
 """
 
 import os
-import pandas as pd
-import mlflow
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import mlflow
+import pandas as pd
 
 run_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -54,12 +55,11 @@ import matplotlib
 
 matplotlib.use("Agg")  # Empêche l'ouverture d'une fenêtre GUI, nécessaire en Docker
 
-import pandas as pd
 import click
-import seaborn as sns
 import matplotlib.pyplot as plt
 import mlflow
-
+import pandas as pd
+import seaborn as sns
 from utils import *
 
 
@@ -100,10 +100,10 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         x=missing_value_percentage_sales.percent_missing,
         hue=missing_value_percentage_sales.column_name,
         order=missing_value_percentage_sales.column_name,
-        ax=ax
+        ax=ax,
     )
 
-	# Seuil visuel
+    # Seuil visuel
     ax.axvline(x=75, color="red", linestyle="--", label="Threshold (75%)")
 
     # Style
@@ -112,28 +112,26 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=9)
     ax.set_ylabel("Features")
     ax.legend()
-    
+
     # Sauvegarde
     figures_dir = Path(output_path) / "reports" / "figures"
 
     try:
         figures_dir.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        print(
+            f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions."
+        )
         os.system(f"chmod -R u+rwX {figures_dir.parent}")
         figures_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"missing_values_{run_suffix}.png"
     fig_path = os.path.join(figures_dir, "Nan_distribution.png")
     fig.savefig(fig_path)
-    
+
     # Log MLflow
-    log_figure(
-        fig,
-        filename=filename,
-        artifact_path="figures/missing"
-    )
-    
+    log_figure(fig, filename=filename, artifact_path="figures/missing")
+
     #  Nettoyage mémoire
     plt.close(fig)
 
@@ -231,24 +229,21 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     plt.yticks(fontsize=8)
     plt.tight_layout()
 
-
-
     figures_dir = Path(output_path) / "reports" / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
     try:
         figures_dir.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
+        print(
+            f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions."
+        )
         os.system(f"chmod -R u+rwX {figures_dir.parent}")
         figures_dir.mkdir(parents=True, exist_ok=True)
-
 
     fig_path = os.path.join(figures_dir, "prix_m2_distribution.png")
     plt.savefig(fig_path)
     plt.close()
-       
-        
-        
+
     # visualisation des variables catégorielles
     numeric_cols = get_numeric_cols(df_3, GROUP_COL)
 
@@ -274,7 +269,6 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     for j in range(i + 1, len(axes)):
         fig_o.delaxes(axes[j])
 
-
         plt.tight_layout()
 
         # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
@@ -285,18 +279,12 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
         filename = f"boxplots_outliers_{run_suffix}.png"
         fig_path = os.path.join(figures_dir, "Boxplot_variables.png")
         fig_o.savefig(fig_path)
-	
 
         # 2. Log dans MLflow
-        log_figure(
-        fig_o,
-        filename=filename,
-        artifact_path="figures/boxplots"
-        )
+        log_figure(fig_o, filename=filename, artifact_path="figures/boxplots")
 
         # 3. Fermeture propre
         plt.close(fig_o)
-
 
     ## Anomalies
     ### Détection des anomalies logiques entre colonnes
@@ -347,8 +335,10 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # Aperçu des premières anomalies détectées (dans les logs ou stdout)
     anomalies_detected = df_logic_check[df_logic_check["anomalie_logique"]].head(10)
     print("🔎 Aperçu des anomalies logiques détectées :")
-    print(anomalies_detected.to_string(index=False))  # ou .to_markdown() si tu veux joli
-    
+    print(
+        anomalies_detected.to_string(index=False)
+    )  # ou .to_markdown() si tu veux joli
+
     # Sauvegarde dans un fichier CSV (optionnel)
     figures_dir = Path(output_path) / "reports" / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -356,11 +346,10 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     filename = "anomaly_logic_preview.csv"
     csv_path = os.path.join(figures_dir, "anomaly_logic_preview.csv")
     anomalies_detected.to_csv(csv_path, index=False)
-    
+
     # Logging MLflow
     mlflow.log_artifact(str(csv_path), artifact_path="extracts/anomaly_logic")
-    
-        
+
     ### Détection 	des anomalies de saisie
     # L'idée ici est de borner les valeurs complètement aberrantes avant d'éliminer les valeurs extrêmes
     # Colonnes à vérifier pour erreurs d’échelle
@@ -469,16 +458,14 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     # Suppression des lignes identifiées
     df_3 = df_3[~mask_combined]
 
-
     ## Outliers
     ### Outliers Regression
     #### Imputation par mediane par code insee
     # SPLIT ET PARAMÈTRES
 
     # SPL
-    
-    mlflow.log_dict(outlier_counts, "metrics/outlier_counts.json")
 
+    mlflow.log_dict(outlier_counts, "metrics/outlier_counts.json")
 
     ## Nettoyage (remplacement des -999) avec les médianes du TRAIN
     train_clean = clean_outliers(
@@ -507,37 +494,37 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
     # Boucle pour tracer les boxplots
     print(" Visualisation des boxplots après traitement des outliers...")
-    
+
     # Création des figures et axes
-    fig, axes = plt.subplots(nrows=math.ceil(len(bounds) / 2), ncols=2, figsize=(14, 6 * math.ceil(len(bounds) / 2)))
+    fig, axes = plt.subplots(
+        nrows=math.ceil(len(bounds) / 2),
+        ncols=2,
+        figsize=(14, 6 * math.ceil(len(bounds) / 2)),
+    )
     axes = axes.flatten()
-    
+
     # Tracer les boxplots
     for i, col in enumerate(bounds):
         train_clean.boxplot(column=col, ax=axes[i])
-        axes[i].set_title(f"Boxplot de la colonne '{col}' après traitement des outliers")
+        axes[i].set_title(
+            f"Boxplot de la colonne '{col}' après traitement des outliers"
+        )
 
     # Supprimer les axes inutiles
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
-    
 
     figures_dir = Path(output_path) / "reports" / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
-
 
     filename = f"boxplots_outliers_clean_{run_suffix}.png"
     fig_path = figures_dir / filename
     fig.savefig(fig_path)
 
     # Logging MLflow
-    log_figure(
-        fig,
-        filename=filename,
-        artifact_path="figures/boxplots"
-    )
+    log_figure(fig, filename=filename, artifact_path="figures/boxplots")
 
     # Fermeture propre
     plt.close(fig)
@@ -642,33 +629,32 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
     output_dir.mkdir(parents=True, exist_ok=True)
     train_clean.to_csv(output_dir / "df_sales_clean_train.csv", sep=";", index=False)
     test_clean.to_csv(output_dir / "df_sales_clean_test.csv", sep=";", index=False)
-    df_sales_short_ST.to_csv(output_dir / "df_sales_clean_series.csv", sep=";", index=False)
+    df_sales_short_ST.to_csv(
+        output_dir / "df_sales_clean_series.csv", sep=";", index=False
+    )
 
     print("✅ Écriture de :", output_dir / "df_sales_clean_train.csv")
     print("✅ Écriture de :", output_dir / "df_sales_clean_test.csv")
     print("✅ Écriture de :", output_dir / "df_sales_clean_series.csv")
 
-
-
-    
     mlflow.log_artifact(str(output_dir / "df_sales_clean_train.csv"))
     mlflow.log_artifact(str(output_dir / "df_sales_clean_test.csv"))
     mlflow.log_artifact(str(output_dir / "df_sales_clean_series.csv"))
 
     print(f" Données sauvegardées dans : {output_path}")
 
-    
-
     # === END PIPELINE ===
     print("✅ Pipeline preprocessing terminée avec succès")
 
 
 @click.command()
-@click.option('--input-path', type=click.Path(exists=True), prompt='📂 Chemin vers les données')
-@click.option('--output-path', type=click.Path(), prompt='📁 Dossier de sortie')
+@click.option(
+    "--input-path", type=click.Path(exists=True), prompt="📂 Chemin vers les données"
+)
+@click.option("--output-path", type=click.Path(), prompt="📁 Dossier de sortie")
 def main(input_path, output_path):
     run_preprocessing_pipeline(input_path=input_path, output_path=output_path)
 
+
 if __name__ == "__main__":
     main()
-

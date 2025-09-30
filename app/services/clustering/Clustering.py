@@ -1,36 +1,35 @@
 #!/usr/bin/env python
 
 
+import logging
+import math
 # Standard library imports
 import os
 import re
 import time
-import math
 import warnings
-from pathlib import Path
-import click
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
+import click
 import mlflow
 import polars as pl
-import warnings
+
 warnings.filterwarnings("ignore")
 
+# Géospatial imports
+import geopandas as gpd
+import matplotlib.pyplot as plt
 # Third-party imports
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-from sklearn.linear_model import LinearRegression
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
-
-# Géospatial imports
-import geopandas as gpd
 from shapely.geometry import Point
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 # Configuration de l'affichage pandas
 pd.set_option('print.max_columns', None)  # Affiche toutes les colonnes
@@ -518,9 +517,10 @@ def main(input_path, output_path):
 # ### Recherche du nombre optimal de clusters
 
 
-    from sklearn.preprocessing import StandardScaler
     from sklearn.cluster import KMeans
-    from sklearn.model_selection import train_test_split # pour un clustering applicable aux 2 modèles
+    from sklearn.model_selection import \
+        train_test_split  # pour un clustering applicable aux 2 modèles
+    from sklearn.preprocessing import StandardScaler
 
 # --- 0. Liste des features de clustering ---
     features = [
@@ -546,9 +546,9 @@ def main(input_path, output_path):
     scaler = StandardScaler().fit(X_train)
     X_train_scaled = scaler.transform(X_train)
 
-# --- 3. Méthode du coude pour k de 2 à 9 ---
-    from sklearn.preprocessing import StandardScaler
+- 3. Méthode du coude pour k de 2 à 9 ---
     from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
 
     inertias = []
     for k in range(2, 10):

@@ -1,11 +1,12 @@
 """Tests d'intégration pour le déploiement."""
 
-import pytest
-import requests
 import os
 import time
-from unittest.mock import patch, MagicMock
 from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
 
 
 class TestDeploymentIntegration:
@@ -20,7 +21,7 @@ class TestDeploymentIntegration:
         """Test de l'endpoint de santé du déploiement."""
         max_retries = 3
         retry_delay = 2
-        
+
         for attempt in range(max_retries):
             try:
                 response = requests.get(f"{api_base_url}/health", timeout=10)
@@ -37,15 +38,15 @@ class TestDeploymentIntegration:
                     continue
                 else:
                     # Si on arrive ici, c'est que toutes les tentatives ont échoué
-                    pytest.skip(f"API non disponible après {max_retries} tentatives: {e}")
+                    pytest.skip(
+                        f"API non disponible après {max_retries} tentatives: {e}"
+                    )
 
     @patch("subprocess.run")
     def test_deployment_script_execution(self, mock_subprocess: Any):
         """Test d'exécution du script de déploiement."""
         mock_subprocess.return_value = MagicMock(
-            returncode=0,
-            stdout="Deployment successful",
-            stderr=""
+            returncode=0, stdout="Deployment successful", stderr=""
         )
 
         result = mock_subprocess(["bash", "run_deployment.sh"])

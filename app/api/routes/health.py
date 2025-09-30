@@ -1,7 +1,9 @@
 # app/api/routes/health.py
-from fastapi import APIRouter
-from app.api.services import health_service
 from typing import Dict
+
+from fastapi import APIRouter
+
+from app.api.services import health_service
 
 router = APIRouter()
 
@@ -25,4 +27,3 @@ async def health_check_detailed() -> Dict[str, object]:
             "ml_service": ml,
         },
     }
-

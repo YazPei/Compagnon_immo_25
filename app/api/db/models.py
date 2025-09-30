@@ -1,5 +1,5 @@
 # app/api/db/models.py
-from sqlalchemy import Column, Integer, String, DateTime, Float, Text, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.sql import func
 
 # ⚠️ On utilise le SEUL Base du projet (défini dans database.py)
@@ -8,6 +8,7 @@ from app.api.db.database import Base
 
 class Property(Base):
     """Modèle pour les propriétés immobilières."""
+
     __tablename__ = "properties"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,6 +29,7 @@ class Property(Base):
 
 class Estimation(Base):
     """Modèle pour les estimations utilisateur."""
+
     __tablename__ = "estimations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -45,6 +47,7 @@ class Estimation(Base):
 
 class APIKey(Base):
     """Modèle pour les clés API."""
+
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -58,9 +61,9 @@ class APIKey(Base):
 # --- Modèle minimal User pour satisfaire les imports/tests ---
 class User(Base):
     """Utilisateur minimal (pour tests et dépendances)."""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-

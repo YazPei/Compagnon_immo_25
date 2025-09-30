@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Response, HTTPException
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
+from fastapi import APIRouter, HTTPException, Response
 
 from app.api.services.health_service import check_database, check_ml_service
 

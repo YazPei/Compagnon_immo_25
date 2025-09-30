@@ -1,6 +1,6 @@
 # app/api/routes/historique.py
 from datetime import datetime, timezone
-from typing import List, Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
@@ -8,16 +8,16 @@ from app.api.dependencies.auth import verify_api_key_required
 
 router = APIRouter()
 
+
 # --- Stubs patchables par les tests ---
-def get_estimations(
-    db: Any = None, limit: int = 10, offset: int = 0
-) -> List[Any]:
+def get_estimations(db: Any = None, limit: int = 10, offset: int = 0) -> List[Any]:
     class Obj:
         id_estimation = "stub-1"
         date_estimation = datetime.now(timezone.utc)
         bien: Dict[str, Any] = {"type": "appartement", "surface": 50}
         localisation: Dict[str, Any] = {"code_postal": "75000"}
         estimation: Dict[str, Any] = {"prix": 250000, "indice_confiance": 0.8}
+
     return [Obj()]
 
 
@@ -65,5 +65,5 @@ async def list_estimations(
         },
     }
 
-# Aucun @router.get("/") ici
 
+# Aucun @router.get("/") ici

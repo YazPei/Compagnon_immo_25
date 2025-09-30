@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.api.utils import models_loader
 
@@ -19,11 +19,10 @@ class TestModelLoader:
 
     @patch("app.api.services.ml_service.MLService.get_model_metadata")
     def test_get_model_metadata(self, mock_get_metadata: MagicMock):
-        """Vérifie que les métadonnées du modèle sont correctement chargées.
-        """
+        """Vérifie que les métadonnées du modèle sont correctement chargées."""
         mock_get_metadata.return_value = {
             "version": "1.0",
-            "date_creation": "2025-09-12"
+            "date_creation": "2025-09-12",
         }
 
         metadata = mock_get_metadata()
@@ -35,9 +34,7 @@ class TestModelLoader:
     def test_get_preprocessor(self):
         """Vérifie que le préprocesseur est correctement chargé."""
         preprocessor = models_loader.get_preprocessor()
-        assert preprocessor is not None, (
-            "Le préprocesseur n'a pas pu être chargé."
-        )
-        assert hasattr(preprocessor, "transform"), (
-            "Le préprocesseur chargé ne possède pas de méthode 'transform'."
-        )
+        assert preprocessor is not None, "Le préprocesseur n'a pas pu être chargé."
+        assert hasattr(
+            preprocessor, "transform"
+        ), "Le préprocesseur chargé ne possède pas de méthode 'transform'."

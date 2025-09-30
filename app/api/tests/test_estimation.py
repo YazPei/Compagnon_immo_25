@@ -1,7 +1,8 @@
-import pytest
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
+import pytest
 from fastapi.testclient import TestClient
+
 from app.api.main import app
 
 client = TestClient(app)
@@ -23,14 +24,14 @@ EXAMPLES: List[Dict[str, Any]] = [
             "terrasse": False,
             "parking": False,
             "cave": True,
-            "dpe": "D"
+            "dpe": "D",
         },
         "localisation": {
             "code_postal": "75015",
             "ville": "Paris",
-            "quartier": "Vaugirard"
+            "quartier": "Vaugirard",
         },
-        "transaction": {"type": "vente"}
+        "transaction": {"type": "vente"},
     },
     {
         "bien": {
@@ -48,14 +49,14 @@ EXAMPLES: List[Dict[str, Any]] = [
             "surface_exterieure": 40,
             "parking": True,
             "cave": False,
-            "dpe": "B"
+            "dpe": "B",
         },
         "localisation": {
             "code_postal": "69008",
             "ville": "Lyon",
-            "quartier": "Monplaisir"
+            "quartier": "Monplaisir",
         },
-        "transaction": {"type": "vente"}
+        "transaction": {"type": "vente"},
     },
     {
         "bien": {
@@ -71,13 +72,10 @@ EXAMPLES: List[Dict[str, Any]] = [
             "balcon": False,
             "terrasse": False,
             "parking": False,
-            "cave": False
+            "cave": False,
         },
-        "localisation": {
-            "code_postal": "13006",
-            "ville": "Marseille"
-        },
-        "transaction": {"type": "location"}
+        "localisation": {"code_postal": "13006", "ville": "Marseille"},
+        "transaction": {"type": "location"},
     },
     {
         "bien": {
@@ -95,16 +93,16 @@ EXAMPLES: List[Dict[str, Any]] = [
             "surface_exterieure": 20,
             "parking": True,
             "cave": False,
-            "dpe": "C"
+            "dpe": "C",
         },
         "localisation": {
             "code_postal": "33000",
             "ville": "Bordeaux",
             "latitude": 44.8378,
-            "longitude": -0.5792
+            "longitude": -0.5792,
         },
-        "transaction": {"type": "vente"}
-    }
+        "transaction": {"type": "vente"},
+    },
 ]
 
 
@@ -112,9 +110,7 @@ EXAMPLES: List[Dict[str, Any]] = [
 def test_estimation(payload: Dict[str, Any]):
     """Test de l'endpoint d'estimation avec différents payloads."""
     response = client.post(
-        "/api/v1/estimation",
-        json=payload,
-        headers={"X-API-Key": API_KEY}
+        "/api/v1/estimation", json=payload, headers={"X-API-Key": API_KEY}
     )
     assert response.status_code == 200
 
@@ -135,10 +131,6 @@ def test_estimation_unauthorized():
     """Test de l'endpoint d'estimation sans authentification."""
     response = client.post(
         "/api/v1/estimation",
-        json={
-            "surface": 100,
-            "nb_pieces": 4,
-            "code_postal": "75001"
-        }
+        json={"surface": 100, "nb_pieces": 4, "code_postal": "75001"},
     )
     assert response.status_code == 401

@@ -3,11 +3,12 @@ Module pour le prétraitement des données.
 """
 
 import os
-import pandas as pd
-import mlflow
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import click
+import mlflow
+import pandas as pd
 
 run_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -45,7 +46,9 @@ def preprocessing_pipeline(input_path: str, output_path: str):
 
 
 @click.command()
-@click.option("--input-path", type=click.Path(exists=True), prompt="Chemin du fichier d'entrée")
+@click.option(
+    "--input-path", type=click.Path(exists=True), prompt="Chemin du fichier d'entrée"
+)
 @click.option("--output-path", type=click.Path(), prompt="Chemin du dossier de sortie")
 def main(input_path, output_path):
     """

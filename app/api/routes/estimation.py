@@ -1,5 +1,5 @@
 # app/api/routes/estimation.py
-from typing import Optional, Literal, Annotated, Any, Dict, Tuple
+from typing import Annotated, Any, Dict, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -8,11 +8,13 @@ from app.api.dependencies.auth import verify_api_key
 
 router = APIRouter()
 
+
 # --- Modèles pour le format "simple" (tests d'intégration) ---
 class EstimationSimple(BaseModel):
     surface: float = Field(..., ge=1)
     nb_pieces: int = Field(..., ge=0)
     code_postal: str = Field(..., min_length=4, max_length=10)
+
 
 # --- Modèles pour le format "complet" (tests paramétrés) ---
 class Bien(BaseModel):
@@ -27,6 +29,7 @@ class Bien(BaseModel):
     cave: Optional[bool] = None
     etage: Optional[int] = None
     etat: Optional[str] = None
+
 
 class Localisation(BaseModel):
     code_postal: str
@@ -44,6 +47,7 @@ class EstimationComplet(BaseModel):
     bien: Bien
     localisation: Localisation
     transaction: Transaction
+
 
 # Union d'entrée : on va essayer de parser l’un puis l’autre
 class EstimationInput(BaseModel):
@@ -74,6 +78,7 @@ def _normalize(payload: Dict[str, Any]) -> Tuple[float, int, str]:
         detail="Payload non supporté",
     )
 
+
 @router.post("/estimation", tags=["Estimation"])
 async def create_estimation(
     body: Dict[str, Any],
@@ -97,5 +102,5 @@ async def create_estimation(
         },
     }
 
-# Aucun @router.get("/") ici
 
+# Aucun @router.get("/") ici

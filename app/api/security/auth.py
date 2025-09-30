@@ -1,21 +1,26 @@
 # app/api/security/auth.py
 """Module de gestion de l'authentification par clé API et JWT."""
 
-from fastapi import Depends, HTTPException, Header, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+
 # Importation plus sûre de passlib
 try:
     from passlib.hash import bcrypt
+
     PWD_HASHER = bcrypt
 except ImportError:
     from passlib.hash import sha256_crypt
+
     PWD_HASHER = sha256_crypt
-    logging.warning("⚠️ bcrypt non disponible, utilisation de sha256_crypt comme fallback")
+    logging.warning(
+        "⚠️ bcrypt non disponible, utilisation de sha256_crypt comme fallback"
+    )
 
 from app.api.config.settings import settings
 
@@ -102,6 +107,7 @@ class AuthManager:
 # Instance globale
 auth_manager = AuthManager()
 
+
 # ------------- API Key checks -------------
 def verify_api_key_value(api_key: Optional[str]) -> bool:
     """Vérifie une valeur de clé API (chaîne)."""
@@ -109,13 +115,16 @@ def verify_api_key_value(api_key: Optional[str]) -> bool:
         return False
     return api_key in VALID_API_KEYS
 
+
 def verify_api_key(x_api_key: str) -> bool:
     """Compat avec get_api_key(x_api_key: Header(...))."""
     return verify_api_key_value(x_api_key)
 
+
 def verify_api_key_from_request(request: Request) -> bool:
     api_key = request.headers.get("X-API-Key")
     return verify_api_key_value(api_key)
+
 
 # ------------- Dépendances JWT -------------
 async def get_current_user(
@@ -139,6 +148,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
 async def get_optional_user(request: Request) -> Optional[Dict[str, Any]]:
     """Récupère l'utilisateur si authentifié (JWT), sinon retourne None."""
     try:
@@ -151,6 +161,7 @@ async def get_optional_user(request: Request) -> Optional[Dict[str, Any]]:
         return {"user_id": payload.get("sub"), "payload": payload}
     except Exception:
         return None
+
 
 async def require_auth_or_api_key(
     request: Request,

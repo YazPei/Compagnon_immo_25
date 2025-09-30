@@ -1,13 +1,15 @@
+from datetime import timedelta
+
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-from datetime import timedelta
-import jwt
 
+from app.api.config.settings import settings
 from app.api.main import app
 from app.api.security.auth import auth_manager
-from app.api.config.settings import settings
 
 client = TestClient(app)
+
 
 class TestAuthentication:
     """Tests pour l'authentification"""
@@ -80,12 +82,15 @@ class TestAuthentication:
         assert not auth_manager.verify_password("B" * 100, hashed)
 
         # Test spécifique: vérifier que seuls les 72 premiers caractères comptent
-        modified_password = "A" * 72 + "B" * 28  # Modifie les caractères après la limite de 72
+        modified_password = (
+            "A" * 72 + "B" * 28
+        )  # Modifie les caractères après la limite de 72
         assert auth_manager.verify_password(modified_password, hashed)
 
         # Test pour confirmer qu'une modification dans les 72 premiers caractères est bien détectée
         modified_password2 = "B" + "A" * 99  # Modifie le premier caractère
         assert not auth_manager.verify_password(modified_password2, hashed)
+
 
 class TestAPIKeyAuthentication:
     """Tests pour l'authentification par clé API"""

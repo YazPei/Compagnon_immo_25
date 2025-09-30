@@ -2,8 +2,9 @@
 Exceptions personnalisées pour l'API Compagnon Immobilier.
 """
 
-from fastapi import HTTPException
 from typing import Any, Dict, Optional
+
+from fastapi import HTTPException
 
 
 class CompagnionImmoException(HTTPException):

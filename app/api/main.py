@@ -1,29 +1,26 @@
 # app/api/main.py
 import logging
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import os
+from typing import Awaitable, Callable
 
-from app.api.config.settings import settings
-from app.api.middleware.error_handling import ErrorHandlingMiddleware
-
-from app.api.routes import main as main_routes
-from app.api.routes import estimation as estimation_routes
-from app.api.routes import health as health_routes
-from app.api.routes import historique as historique_routes
-from app.api.routes import metrics as metrics_routes
-
-# Importation des gestionnaires d'exceptions personnalisés
-from app.api.utils.exception_handlers import (
-    http_exception_handler,
-)
+from dotenv import load_dotenv
+from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
-from typing import Callable, Awaitable
+from starlette.responses import JSONResponse, Response
+
+from app.api.config.settings import settings
+from app.api.middleware.error_handling import ErrorHandlingMiddleware
+from app.api.routes import estimation as estimation_routes
+from app.api.routes import health as health_routes
+from app.api.routes import historique as historique_routes
+from app.api.routes import main as main_routes
+from app.api.routes import metrics as metrics_routes
+# Importation des gestionnaires d'exceptions personnalisés
+from app.api.utils.exception_handlers import http_exception_handler
 
 # Charger les variables d'environnement depuis .env
 load_dotenv()
@@ -33,9 +30,7 @@ API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
-)
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -62,9 +57,7 @@ app.add_middleware(ErrorHandlingMiddleware)
 # Logging Middleware
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(
-        self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]]
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         logger.info(f"Request: {request.method} {request.url}")
         response = await call_next(request)
@@ -102,15 +95,9 @@ async def health_root():
 
 # Routers (attention aux préfixes attendus par les tests)
 # Monte le router health sous /api/v1/health
-app.include_router(
-    health_routes.router, prefix="/api/v1/health", tags=["Health"]
-)
-app.include_router(
-    main_routes.router, prefix="/api/v1", tags=["Main"]
-)
-app.include_router(
-    estimation_routes.router, prefix="/api/v1", tags=["Estimation"]
-)
+app.include_router(health_routes.router, prefix="/api/v1/health", tags=["Health"])
+app.include_router(main_routes.router, prefix="/api/v1", tags=["Main"])
+app.include_router(estimation_routes.router, prefix="/api/v1", tags=["Estimation"])
 app.include_router(
     historique_routes.router, prefix="/api/v1/historique", tags=["Historique"]
 )
@@ -124,19 +111,11 @@ app.include_router(metrics_routes.router, tags=["Monitoring"])
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    return JSONResponse(
-        content={"detail": "Validation Error"},
-        status_code=422
-    )
+    return JSONResponse(content={"detail": "Validation Error"}, status_code=422)
 
 
-async def general_exception_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
-    return JSONResponse(
-        content={"detail": "Internal Server Error"},
-        status_code=500
-    )
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(content={"detail": "Internal Server Error"}, status_code=500)
 
 
 # Correction des types passés à add_exception_handler
@@ -144,11 +123,8 @@ app.add_exception_handler(
     StarletteHTTPException, http_exception_handler  # type: ignore[arg-type]
 )
 app.add_exception_handler(
-    RequestValidationError,
-    validation_exception_handler  # type: ignore[arg-type]
+    RequestValidationError, validation_exception_handler  # type: ignore[arg-type]
 )
 app.add_exception_handler(
     Exception, general_exception_handler  # type: ignore[arg-type]
 )
-
-

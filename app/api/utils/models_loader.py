@@ -6,7 +6,7 @@ Tolérant aux environnements de test : fallback factice si .joblib absent.
 
 import os
 from functools import lru_cache
-from typing import Optional, Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -20,15 +20,29 @@ class _DummyPreprocessor:
     @property
     def feature_names_in_(self):
         return [
-            "surface", "nb_pieces", "nb_chambres", "etage",
-            "annee_construction", "ascenseur", "balcon", "terrasse",
-            "parking", "cave", "x", "y", "cluster", "dpeL",
-            "type_vente", "type_appartement", "type_maison",
-            "type_studio", "type_loft",
+            "surface",
+            "nb_pieces",
+            "nb_chambres",
+            "etage",
+            "annee_construction",
+            "ascenseur",
+            "balcon",
+            "terrasse",
+            "parking",
+            "cave",
+            "x",
+            "y",
+            "cluster",
+            "dpeL",
+            "type_vente",
+            "type_appartement",
+            "type_maison",
+            "type_studio",
+            "type_loft",
         ]
 
     def transform(self, X: List[Any]):
-        if hasattr(X, "values"):      # pandas DataFrame
+        if hasattr(X, "values"):  # pandas DataFrame
             X_array = X.values
         else:
             X_array = np.array(X)
@@ -53,6 +67,7 @@ def _resolve_models_dir() -> str:
     """Chemin des modèles -> Settings d'abord, puis variable d'env, sinon 'models/'."""
     try:
         from app.api.config.settings import settings
+
         if hasattr(settings, "MODELS_DIR"):
             return str(settings.MODELS_DIR)
     except Exception:
@@ -93,4 +108,3 @@ def get_model_metadata(version: Optional[str] = None):
         "version": version or "latest",
         "model_type": "RandomForestRegressor",
     }
-

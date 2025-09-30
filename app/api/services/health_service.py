@@ -8,4 +8,3 @@ async def check_database() -> Dict[str, str]:
 
 async def check_ml_service() -> Dict[str, str]:
     return {"status": "healthy"}
-

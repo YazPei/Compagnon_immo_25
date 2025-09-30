@@ -1,8 +1,5 @@
-from app.api.utils.models_loader import (
-    get_model,
-    get_preprocessor,
-)
 from app.api.utils.feature_enrichment import validate_input
+from app.api.utils.models_loader import get_model, get_preprocessor
 
 
 def test_get_model():

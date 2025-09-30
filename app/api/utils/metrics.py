@@ -1,5 +1,5 @@
-from prometheus_client import Counter, Histogram, generate_latest
 from fastapi import APIRouter, Response
+from prometheus_client import Counter, Histogram, generate_latest
 
 router = APIRouter()
 

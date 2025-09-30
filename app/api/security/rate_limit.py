@@ -7,9 +7,9 @@ Pensé pour les tests : stateless par process, configurable via Settings.
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Deque, Dict, Tuple
-from starlette.responses import Response
 
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
+from starlette.responses import Response
 
 from app.api.config.settings import settings
 from app.api.security.auth import require_auth_or_api_key
@@ -54,6 +54,7 @@ def rate_limit_middleware(app: FastAPI) -> None:
     Middleware à brancher sur l'app FastAPI.
     Ajoute des headers X-RateLimit-* à titre informatif.
     """
+
     @app.middleware("http")
     async def _rl_mw(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]

@@ -1,23 +1,32 @@
 import os
+
 import click
 import joblib
-import pandas as pd
 import mlflow
-from utils import compute_metrics, print_metrics, plot_residuals, shap_summary_plot
+import pandas as pd
+from utils import (compute_metrics, plot_residuals, print_metrics,
+                   shap_summary_plot)
+
 
 @click.command()
-@click.option('--encoded-folder', prompt='Dossier des fichiers encodés', type=click.Path(exists=True))
-@click.option('--model', type=click.Choice(['lightgbm', 'xgboost']), prompt='Modèle à analyser')
+@click.option(
+    "--encoded-folder",
+    prompt="Dossier des fichiers encodés",
+    type=click.Path(exists=True),
+)
+@click.option(
+    "--model", type=click.Choice(["lightgbm", "xgboost"]), prompt="Modèle à analyser"
+)
 def analyse_model(encoded_folder, model):
     mlflow.set_experiment("regression_pipeline")
     with mlflow.start_run(run_name=f"analyse_{model}"):
-        model_path = os.path.join(encoded_folder, f'{model}_model.joblib')
-        X_test_path = os.path.join(encoded_folder, 'X_test.csv')
-        y_test_path = os.path.join(encoded_folder, 'y_test.csv')
+        model_path = os.path.join(encoded_folder, f"{model}_model.joblib")
+        X_test_path = os.path.join(encoded_folder, "X_test.csv")
+        y_test_path = os.path.join(encoded_folder, "y_test.csv")
 
         model_obj = joblib.load(model_path)
-        X_test = pd.read_csv(X_test_path, sep=';')
-        y_test = pd.read_csv(y_test_path, sep=';').values.ravel()
+        X_test = pd.read_csv(X_test_path, sep=";")
+        y_test = pd.read_csv(y_test_path, sep=";").values.ravel()
 
         y_pred = model_obj.predict(X_test)
         metrics = compute_metrics(y_test, y_pred)
@@ -32,4 +41,3 @@ def analyse_model(encoded_folder, model):
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(model_path)
         mlflow.log_artifact(X_test_path)
-

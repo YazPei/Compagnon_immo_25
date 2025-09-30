@@ -2,8 +2,9 @@
 Module pour l'enrichissement des features.
 """
 
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, ValidationError, Field
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field, ValidationError
 
 
 # Modèle Pydantic pour valider les entrées utilisateur
@@ -32,4 +33,3 @@ def validate_input(data: Dict[str, Any]) -> FeatureInput:
         return FeatureInput(**data)
     except ValidationError as e:
         raise ValueError(f"Entrées invalides : {e}")
-    

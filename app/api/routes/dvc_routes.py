@@ -1,6 +1,7 @@
 import logging
-from fastapi import APIRouter, HTTPException
 from typing import Any
+
+from fastapi import APIRouter, HTTPException
 
 from app.api.services.dvc_connector import dvc_connector
 from app.api.services.ml_service import ml_service
@@ -17,9 +18,7 @@ async def get_dvc_status():
         logger.info("✅ État de DVC récupéré avec succès")
         return status
     except Exception as e:
-        logger.error(
-            f"❌ Erreur lors de la récupération de l'état de DVC: {str(e)}"
-        )
+        logger.error(f"❌ Erreur lors de la récupération de l'état de DVC: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Erreur lors de la récupération de l'état de DVC",
@@ -34,22 +33,17 @@ async def pull_dvc_models():
         result = dvc_connector.pull_latest_models()
 
         if result["status"] in ["success", "warning"]:
-            logger.info(
-                "🔄 Rechargement des modèles ML après synchronisation DVC..."
-            )
+            logger.info("🔄 Rechargement des modèles ML après synchronisation DVC...")
             ml_result = ml_service.refresh_models()
             result["ml_reload"] = ml_result
             logger.info("✅ Modèles ML rechargés avec succès")
         else:
-            logger.warning(
-                "⚠️ Synchronisation DVC terminée avec des avertissements"
-            )
+            logger.warning("⚠️ Synchronisation DVC terminée avec des avertissements")
 
         return result
     except Exception as e:
         logger.error(
-            "❌ Erreur lors de la synchronisation des modèles avec DVC: "
-            f"{str(e)}"
+            "❌ Erreur lors de la synchronisation des modèles avec DVC: " f"{str(e)}"
         )
         raise HTTPException(
             status_code=500,
@@ -66,8 +60,7 @@ async def get_models_status() -> Any:
         return status
     except Exception as e:
         logger.error(
-            "❌ Erreur lors de la récupération de l'état des modèles ML: "
-            f"{str(e)}"
+            "❌ Erreur lors de la récupération de l'état des modèles ML: " f"{str(e)}"
         )
         raise HTTPException(
             status_code=500,
@@ -84,9 +77,7 @@ async def reload_models():
         logger.info("✅ Modèles ML rechargés avec succès")
         return result
     except Exception as e:
-        logger.error(
-            f"❌ Erreur lors du rechargement des modèles ML: {str(e)}"
-        )
+        logger.error(f"❌ Erreur lors du rechargement des modèles ML: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Erreur lors du rechargement des modèles ML",
@@ -94,6 +85,7 @@ async def reload_models():
 
 
 # Ajout des endpoints pour interagir avec DVC
+
 
 @router.post("/dvc/pull")
 async def pull_data():
@@ -108,8 +100,7 @@ async def pull_data():
     except Exception as e:
         logger.error(f"❌ Error pulling data: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="Error pulling data from DVC remote storage."
+            status_code=500, detail="Error pulling data from DVC remote storage."
         )
 
 
@@ -126,8 +117,7 @@ async def push_data():
     except Exception as e:
         logger.error(f"❌ Error pushing data: {str(e)}")
         raise HTTPException(
-            status_code=500,
-            detail="Error pushing data to DVC remote storage."
+            status_code=500, detail="Error pushing data to DVC remote storage."
         )
 
 
@@ -143,7 +133,4 @@ async def run_pipeline():
         return {"message": "Pipeline executed successfully."}
     except Exception as e:
         logger.error(f"❌ Error running pipeline: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Error running DVC pipeline."
-        )
+        raise HTTPException(status_code=500, detail="Error running DVC pipeline.")

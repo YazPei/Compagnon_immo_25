@@ -2,20 +2,19 @@
 Middleware pour capturer et gérer les erreurs dans l'application.
 """
 
-from fastapi import Request, HTTPException
+import logging
+from typing import Awaitable, Callable
+
+from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
-import logging
-from typing import Callable, Awaitable
 
 logger = logging.getLogger("error_middleware")
 
 
 class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     async def dispatch(
-        self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]]
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         try:
             response: Response = await call_next(request)

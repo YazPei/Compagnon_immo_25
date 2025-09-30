@@ -1,7 +1,8 @@
 # main.py (conteneur clustering)
 from fastapi import FastAPI
 from pydantic import BaseModel
-from mlops.5_clustering.Clustering import run_clustering_pipeline 
+
+from mlops.5_clustering.Clustering import run_clustering_pipeline
 
 app = FastAPI(title="Clustering Step", version="1.0.0")
 

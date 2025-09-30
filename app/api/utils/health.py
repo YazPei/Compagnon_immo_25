@@ -3,18 +3,18 @@ Module pour vérifier la santé des services et dépendances.
 """
 
 import asyncio
-import time
 import logging
-from typing import Dict, Any  # Suppression de `Callable` inutilisé
+import time
+from typing import Any, Dict  # Suppression de `Callable` inutilisé
+
 import httpx
 import redis
+from fastapi import Request, Response
+from prometheus_client import Counter, Histogram, generate_latest
 from redis.client import Redis
 from sqlalchemy import text
-from prometheus_client import Counter, Histogram, generate_latest
-from fastapi import Request, Response
-from starlette.middleware.base import (
-    BaseHTTPMiddleware, RequestResponseEndpoint
-)
+from starlette.middleware.base import (BaseHTTPMiddleware,
+                                       RequestResponseEndpoint)
 
 from app.api.config.settings import settings
 from app.api.db.database import engine
@@ -44,9 +44,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
         with REQUEST_LATENCY.labels(method=method, endpoint=endpoint).time():
             response: Response = await call_next(request)
-            assert isinstance(
-                response, Response
-            )  # Vérification explicite du type
+            assert isinstance(response, Response)  # Vérification explicite du type
 
         REQUEST_COUNT.labels(
             method=method, endpoint=endpoint, http_status=response.status_code
@@ -62,9 +60,7 @@ async def prometheus_metrics():
 
 # Correction des types inconnus
 checks: list[Dict[str, Any]] = []  # Exemple de définition pour éviter l'erreur
-all_statuses: list[str] = [
-    check.get("status", "unknown") for check in checks
-]
+all_statuses: list[str] = [check.get("status", "unknown") for check in checks]
 
 if all(status == "healthy" for status in all_statuses):
     overall_status = "healthy"
@@ -104,9 +100,7 @@ class HealthChecker:
         """Vérifie la connexion à MLflow."""
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{settings.MLFLOW_TRACKING_URI}/health"
-                )
+                response = await client.get(f"{settings.MLFLOW_TRACKING_URI}/health")
 
                 if response.status_code == 200:
                     return {
@@ -136,12 +130,8 @@ class HealthChecker:
             )
             r.ping()  # type: ignore
 
-            assert isinstance(
-                settings.REDIS_URL, str
-            )  # Vérification explicite du type
-            assert settings.REDIS_URL.startswith(
-                "redis://"
-            )  # Vérification du format
+            assert isinstance(settings.REDIS_URL, str)  # Vérification explicite du type
+            assert settings.REDIS_URL.startswith("redis://")  # Vérification du format
 
             return {
                 "status": "healthy",
@@ -159,15 +149,12 @@ class HealthChecker:
     async def check_models(self) -> Dict[str, Any]:
         """Vérifie l'état des modèles ML."""
         try:
-            models_status = ml_service.get_models_status(
-            )  # Suppression de await
+            models_status = ml_service.get_models_status()  # Suppression de await
 
             if models_status.get("models_loaded", 0) > 0:
                 return {
                     "status": "healthy",
-                    "message": (
-                        f"{models_status['models_loaded']} modèles chargés"
-                    ),
+                    "message": (f"{models_status['models_loaded']} modèles chargés"),
                     "details": models_status,
                 }
             else:
@@ -209,9 +196,7 @@ class HealthChecker:
         dependencies = await self.check_dependencies()
 
         # Déterminer le statut global
-        all_statuses: list[str] = [
-            check.get("status", "unknown") for check in checks
-        ]
+        all_statuses: list[str] = [check.get("status", "unknown") for check in checks]
 
         if all(status == "healthy" for status in all_statuses):
             overall_status = "healthy"

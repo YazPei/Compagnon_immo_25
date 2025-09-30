@@ -1,5 +1,6 @@
+from typing import Any, Dict, List, cast
+
 from fastapi.testclient import TestClient
-from typing import List, Dict, Any, cast
 
 from app.api.main import app
 
@@ -37,6 +38,3 @@ class TestBaseEndpoints:
                 if isinstance(op_id, str) and op_id:
                     operation_ids.append(op_id)
         assert len(operation_ids) == len(set(operation_ids))
-
-
-        

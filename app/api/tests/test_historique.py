@@ -1,6 +1,6 @@
-from unittest.mock import patch
 from datetime import datetime
 from typing import Any
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -29,22 +29,22 @@ def test_get_estimations_authorized():
                 "prix": 300000,
                 "indice_confiance": 0.8,
             }
+
         return [FakeObj()]
 
     def fake_count_estimations(db: Any) -> int:
         return 1
 
     with patch(
-        'app.api.routes.historique.get_estimations',
+        "app.api.routes.historique.get_estimations",
         side_effect=fake_get_estimations,
     ):
         with patch(
-            'app.api.routes.historique.count_estimations',
+            "app.api.routes.historique.count_estimations",
             side_effect=fake_count_estimations,
         ):
             response = client.get(
-                "/api/v1/historique/estimations",
-                headers={"X-API-Key": API_KEY}
+                "/api/v1/historique/estimations", headers={"X-API-Key": API_KEY}
             )
             assert response.status_code == 200
             data = response.json()

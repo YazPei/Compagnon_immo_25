@@ -5,9 +5,10 @@ Configuration centralisée des logs pour le projet.
 import logging
 import logging.config
 import os
-from loguru import logger
 import sys
-from typing import Dict, Any
+from typing import Any, Dict
+
+from loguru import logger
 
 # Définir les niveaux de log par environnement
 ENV = os.getenv("ENV", "development")
@@ -70,7 +71,7 @@ logger.add(
     sys.stdout,
     format="{{'time': '{time}', 'level': '{level}', 'message': '{message}'}}",
     level=LOG_LEVEL,
-    serialize=True
+    serialize=True,
 )
 
 # Exemple d'utilisation :

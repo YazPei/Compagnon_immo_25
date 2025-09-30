@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,9 +12,7 @@ async def trigger_experiment(experiment_id: int) -> Dict[str, str]:
     """
     try:
         # Logic to trigger MLflow experiment
-        return {
-            "message": f"Experiment {experiment_id} triggered successfully."
-        }
+        return {"message": f"Experiment {experiment_id} triggered successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

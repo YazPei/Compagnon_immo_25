@@ -1,0 +1,12 @@
+FROM apache/airflow:2.9.0
+
+USER airflow
+# Dockerfile.airflow (relevant lines)
+WORKDIR /opt/airflow
+COPY dags/requirements.txt /opt/airflow/dags/requirements.txt
+RUN pip install --no-cache-dir -r /opt/airflow/dags/requirements.txt
+
+
+COPY dags/ /opt/airflow/dags/
+
+

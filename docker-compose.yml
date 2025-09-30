@@ -55,12 +55,18 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
       AIRFLOW_UID: 50000
+      MLFLOW_TRACKING_URI: http://mlflow:5050
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
+      - .:/opt/airflow/repo
+      - ./data:/opt/airflow/data
+      - ./exports:/opt/airflow/exports
+      - ./mlops:/opt/airflow/mlops
     depends_on:
       - postgres-airflow
       - redis
+      - mlflow
     networks:
       - ml_net
     profiles: ["airflow"]
@@ -77,12 +83,18 @@ services:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW_UID: 50000
+      MLFLOW_TRACKING_URI: http://mlflow:5050
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
+      - .:/opt/airflow/repo
+      - ./data:/opt/airflow/data
+      - ./exports:/opt/airflow/exports
+      - ./mlops:/opt/airflow/mlops
     depends_on:
       - postgres-airflow
       - redis
+      - mlflow
     networks:
       - ml_net
     profiles: ["airflow"]

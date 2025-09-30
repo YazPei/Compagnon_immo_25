@@ -12,11 +12,13 @@
 # 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
 # 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services
 
-SHELL := /usr/bin/env bash
-.SHELLFLAGS := -eu -o pipefail -c
 
-# Auto-load .env
-ENV_FILE ?= .env
+# --- Choix du fichier d'env local ---
+# Si tu veux garder env.txt en local, mets: ENV_DST ?= env.txt
+ENV_DST  ?= .env
+ENV_FILE ?= $(ENV_DST)
+
+# Auto-load variables d'environnement (si fichier présent)
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
 export $(shell sed -n 's/^\([A-Za-z_][A-ZaZ0-9_]*\)=.*/\1/p' $(ENV_FILE))

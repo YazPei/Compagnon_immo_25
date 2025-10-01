@@ -55,12 +55,12 @@ COLOR_YELLOW := \033[33m
 .PHONY: \
   help lint check-dependencies \
   prepare-dirs install \
-  docker-build docker-api-build airflow-build \
-  quick-start quick-start-airflow quick-start-test docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
+  docker-build docker-api-build airflow-build build-all \
+  quick-start quick-start-airflow quick-start-test docker-api-run mlflow-up airflow-up airflow-start dvc-add-all dvc-repro-all dvc-pull-all \
   api-test ci-test \
   api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
-  dvc-push-all pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
+  dvc-push-all pipeline-reset run-all-docker run_dvc check-ports rebuild
 
 # ===============================
 # 1. Aide & vérifications
@@ -102,6 +102,8 @@ docker-api-build: ## Build image API
 airflow-build: ## Build images Airflow
 	docker compose build airflow-webserver airflow-scheduler
 
+build-all: docker-build ## Build toutes les images
+
 # ===============================
 # 4. Démarrage services
 # ===============================
@@ -128,6 +130,11 @@ mlflow-up: ## Démarre MLflow
 
 airflow-up: ## Démarre uniquement Airflow
 	docker compose up -d $(AIRFLOW_SERVICES)
+
+airflow-start: ## Démarre Airflow et services associés
+	docker compose up -d postgres-airflow redis mlflow
+	sleep 5
+	docker compose --profile airflow up -d
 
 dvc-add-all: ## Ajoute tous les stages DVC
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \

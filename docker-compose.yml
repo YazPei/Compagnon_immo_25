@@ -1,7 +1,7 @@
 services:
   # Base de données PostgreSQL pour Airflow
   postgres-airflow:
-    image: postgres:13
+    image: postgres:16
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -22,7 +22,7 @@ services:
 
   # MLflow pour le suivi des expériences
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.8.1
+    image: ghcr.io/mlflow/mlflow:v2.13.1
     ports:
       - "5050:5050"
     command: >

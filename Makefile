@@ -21,7 +21,7 @@ ENV_FILE ?= $(ENV_DST)
 # Auto-load variables d'environnement (si fichier présent)
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
-export $(shell sed -n 's/^\([A-Za-z_][A-ZaZ0-9_]*\)=.*/\1/p' $(ENV_FILE))
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
 # ===== Variables =====
@@ -53,7 +53,7 @@ COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
 .PHONY: \
-  help lint check-dependencies \
+  help lint check-dependencies install-gh\
   prepare-dirs install \
   docker-build docker-api-build airflow-build build-all \
   quick-start quick-start-airflow quick-start-test docker-api-run mlflow-up airflow-up airflow-start dvc-add-all dvc-repro-all dvc-pull-all \
@@ -77,6 +77,7 @@ check-dependencies: ## Vérifie que les dépendances nécessaires sont installé
 	@command -v docker >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ Docker n'est pas installé.$(COLOR_RESET)"; exit 1; }
 	@command -v python3 >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ Python3 n'est pas installé.$(COLOR_RESET)"; exit 1; }
 	@command -v dvc >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ DVC n'est pas installé.$(COLOR_RESET)"; exit 1; }
+	@command -v gh >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ 'gh' (GitHub CLI) introuvable.$(COLOR_RESET)"; echo "$(COLOR_YELLOW)💡 Lance 'make install-gh' pour l'installer.$(COLOR_RESET)"; exit 1; }
 	@echo "$(COLOR_GREEN)✅ Toutes les dépendances sont installées.$(COLOR_RESET)"
 
 # ===============================
@@ -89,6 +90,17 @@ prepare-dirs: ## Prépare les répertoires nécessaires
 install: prepare-dirs ## Installe les dépendances Python
 	@$(PIP) install --upgrade pip
 	@$(PIP) install -r requirements.txt
+
+install-gh: ## Installe GitHub CLI si absent
+	@echo "🔧 Vérification/installation de GitHub CLI..."
+	@command -v gh >/dev/null 2>&1 && { echo "✅ GitHub CLI déjà installé."; exit 0; } || true
+	@echo "📦 Installe manuellement GitHub CLI avec ces commandes :"
+	@echo "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg"
+	@echo "sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg"
+	@echo "echo 'deb [arch='$$(dpkg --print-architecture)' signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null"
+	@echo "sudo apt update && sudo apt install gh"
+	@echo "Puis lance 'gh auth login' pour te connecter."
+	@exit 1
 
 # ===============================
 # 3. Build
@@ -139,7 +151,7 @@ airflow-start: ## Démarre Airflow et services associés
 dvc-add-all: ## Ajoute tous les stages DVC
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	  dvc stage add -n import_data \
-	  -d data/raw/merged_sales_data.csv \
+	  -d data/merged_sales_data.csv.dvc \
 	  -o data/df_sample.csv \
 	  python mlops/1_import_donnees/import_data.py
 
@@ -148,6 +160,49 @@ dvc-repro-all: ## dvc repro de tout le pipeline
 
 dvc-pull-all: ## dvc pull
 	$(DOCKER_COMPOSE_CMD) --profile dvc run --rm dvc dvc pull
+
+# ===============================
+# ☁️ Secrets depuis GitHub Actions → .env
+# ===============================
+# Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
+BRANCH   ?= Auto_github
+WF       ?= permissions
+ART_NAME ?= env-artifact
+
+env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'installe en $(ENV_DST)
+	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
+	@echo "🚀 Déclenche '$(WF)' sur branche '$(BRANCH)'"
+	@if gh auth status >/dev/null 2>&1; then \
+	  gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
+	fi
+	@sleep 2
+	@echo "⏳ Récupération du dernier run…"
+	@RUN_ID=$$(gh run list --workflow="$(WF)" --limit 30 --json databaseId,headBranch \
+	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur '$(BRANCH)'"; exit 1; }; \
+	echo "▶ RUN_ID=$$RUN_ID"; \
+	gh run watch "$$RUN_ID" || true; \
+	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
+	if [ "$$CONC" != "success" ]; then \
+	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
+	fi; \
+	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
+	rm -rf tmp-$(ART_NAME); \
+	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
+	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
+	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
+	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
+	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true; \
+	mv "$$SRC" "$(ENV_DST)"; \
+	rm -rf tmp-$(ART_NAME); \
+	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
+	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
+
+check-permissions:
+	@gh run list --workflow=$(WF) --limit 1
 
 # ===============================
 # 5. Tests & CI
@@ -185,7 +240,7 @@ ci-test: install ## Exécute les tests CI localement
 # 6. Arrêt & nettoyage
 # ===============================
 api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan) et le conteneur Docker
-	@pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
+	@pkill -f "uvicorn app.api.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
 	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
 
 docker-api-stop: ## Stop & rm API container
@@ -200,7 +255,7 @@ airflow-down: ## Stoppe Airflow
 
 stop-all: ## Stoppe tous les services, conteneurs, réseaux et processus liés au projet
 	@echo "🔴 Arrêt de tous les processus uvicorn locaux..."
-	-pkill -f "uvicorn app.routes.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
+	-pkill -f "uvicorn app.api.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
 	@echo "🔴 Suppression des conteneurs Docker nommés compagnon_immo-* ..."
 	-docker ps -a --filter "name=compagnon_immo" -q | xargs -r docker rm -f || echo "Aucun conteneur compagnon_immo à supprimer"
 	@echo "🔴 Arrêt et suppression des services Docker Compose..."

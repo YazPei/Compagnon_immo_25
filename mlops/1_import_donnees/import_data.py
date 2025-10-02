@@ -1,12 +1,14 @@
 # mlops/1_import_donnees/import_data.py
 import os
 import json
+from io import StringIO
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
 import pandas as pd
 import mlflow
+import dvc.api
 
 
 # ============= MLflow bootstrap =============
@@ -79,7 +81,8 @@ def to_str_cols(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
 
 # ============= Extraction incrémentale =============
 def incremental_extract(
-    source_path: Path,
+    dvc_path: str,
+    repo: Optional[str],
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -96,8 +99,10 @@ def incremental_extract(
     """
     seen_keys, watermark = load_checkpoint(checkpoint_path)
 
+    content = dvc.api.read(dvc_path, repo=repo)
+    source_file = StringIO(content)
     chunks = pd.read_csv(
-        source_path, sep=sep, chunksize=200_000, on_bad_lines="skip", low_memory=False
+        source_file, sep=sep, chunksize=200_000, on_bad_lines="skip", low_memory=False
     )
 
     new_rows = []
@@ -180,8 +185,8 @@ def incremental_extract(
 
 # ============= CLI =============
 @click.command()
-@click.option("--folder-path", type=click.Path(exists=True), required=True, help="Dossier source contenant le CSV")
-@click.option("--input-file", type=str, required=True, help="Nom du fichier CSV source dans folder-path")
+@click.option("--dvc-path", type=str, required=True, help="Chemin du fichier dans DVC (ex: data/merged_sales_data.csv)")
+@click.option("--repo", type=str, default=None, help="URL du repo DVC (optionnel, utilise la config locale si non spécifié)")
 @click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv",
               help="Chemin du CSV cumul (df_sample.csv) — NOM HISTORIQUE CONSERVÉ")
@@ -190,8 +195,8 @@ def incremental_extract(
 @click.option("--key-columns", type=str, default="", help="Colonnes clés séparées par des virgules (ex: id_transaction,lot)")
 @click.option("--sep", type=str, default=";", help="Séparateur CSV (défaut ';')")
 def main(
-    folder_path,
-    input_file,
+    dvc_path,
+    repo,
     output_folder,
     cumulative_path,
     checkpoint_path,
@@ -202,7 +207,6 @@ def main(
     artifact_location = setup_mlflow()
 
     key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
-    source_path = Path(folder_path) / input_file
     delta_folder = Path(output_folder)
     cumulative_csv = Path(cumulative_path)
     checkpoint_path = Path(checkpoint_path)
@@ -217,7 +221,8 @@ def main(
 
     with mlflow.start_run(run_name="Import incrémental"):
         delta_path, cumul_path, rows_delta, rows_cumul = incremental_extract(
-            source_path=source_path,
+            dvc_path=dvc_path,
+            repo=repo,
             delta_folder=delta_folder,
             cumulative_csv=cumulative_csv,
             checkpoint_path=checkpoint_path,
@@ -228,7 +233,7 @@ def main(
         )
 
         # Params
-        mlflow.log_param("source_path", str(source_path))
+        mlflow.log_param("source_path", dvc_path)
         mlflow.log_param("delta_folder", str(delta_folder))
         mlflow.log_param("cumulative_path", str(cumul_path))
         mlflow.log_param("checkpoint_path", str(checkpoint_path))

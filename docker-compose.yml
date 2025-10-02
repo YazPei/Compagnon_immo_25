@@ -121,7 +121,7 @@ services:
       start_period: 40s
 
   # Service DVC pour les pipelines de données
-  dvc-runner:
+  dvc:
     build:
       context: .
       dockerfile: Dockerfile

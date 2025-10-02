@@ -144,16 +144,10 @@ dvc-add-all: ## Ajoute tous les stages DVC
 	  python mlops/1_import_donnees/import_data.py
 
 dvc-repro-all: ## dvc repro de tout le pipeline
-	docker run --rm $(USER_FLAGS) \
-	  --network $(NETWORK) \
-	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc repro -f
+	$(DOCKER_COMPOSE_CMD) --profile dvc run --rm dvc dvc repro -f
 
 dvc-pull-all: ## dvc pull
-	docker run --rm $(USER_FLAGS) \
-	  --network $(NETWORK) \
-	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc pull
+	$(DOCKER_COMPOSE_CMD) --profile dvc run --rm dvc dvc pull
 
 # ===============================
 # 5. Tests & CI

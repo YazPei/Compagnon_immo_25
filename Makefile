@@ -5,7 +5,7 @@
 # SOMMAIRE
 # ===============================
 # 1. Aide & vérifications        : help, lint, check-dependencies
-# 2. Préparation & installation  : prepare-dirs, venv, install
+# 2. Préparation & installation  : prepare-dirs, venv, install, setup-env
 # 3. Build                      : docker-build, docker-api-build, airflow-build
 # 4. Démarrage services         : quick-start, quick-start-airflow, quick-start-test, docker-api-run, api-dev, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
 # 5. Tests & CI                 : api-test, ci-test, test-ml, test-all
@@ -65,7 +65,7 @@ COLOR_YELLOW := \033[33m
 
 .PHONY: \
   help lint check-dependencies install-gh\
-  prepare-dirs venv install \
+  prepare-dirs venv install setup-env \
   docker-build docker-api-build airflow-build build-all \
   quick-start quick-start-airflow quick-start-test docker-api-run api-dev mlflow-up airflow-up airflow-start dvc-add-all dvc-repro-all dvc-pull-all dvc-push-all pipeline-reset \
   add_stage_import add_stage_fusion add_stage_preprocessing add_stage_clustering add_stage_encoding add_stage_lgbm add_stage_utils add_stage_analyse add_stage_splitst add_stage_decompose add_stage_sarimax add_stage_evaluate \
@@ -286,6 +286,45 @@ BRANCH   ?= Auto_github
 WF       ?= permissions
 ART_NAME ?= env-artifact
 
+setup-env: ## Crée un .env adapté à l'installation en détectant le profil git et récupérant les permissions depuis GitHub Actions
+	@command -v gh >/dev/null 2>&1 || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
+	@echo "🔍 Détection du profil git..."
+	@GIT_REMOTE_URL=$$(git remote get-url origin 2>/dev/null || echo ""); \
+	if [[ -z "$$GIT_REMOTE_URL" ]]; then \
+	  echo "⚠️  Impossible de détecter le remote git 'origin'. Utilisation des valeurs par défaut."; \
+	  WF="permissions"; \
+	else \
+	  echo "📡 Remote détecté: $$GIT_REMOTE_URL"; \
+	  WF="permissions"; \
+	fi; \
+	echo "🚀 Déclenche '$$WF' sur branche '$(BRANCH)'"; \
+	if gh auth status >/dev/null 2>&1; then \
+	  gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null; \
+	else \
+	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
+	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$$WF" --ref "$(BRANCH)" >/dev/null; \
+	fi; \
+	sleep 2; \
+	echo "⏳ Récupération du dernier run…"; \
+	RUN_ID=$$(gh run list --workflow="$$WF" --limit 30 --json databaseId,headBranch \
+	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$$WF' sur '$(BRANCH)'"; exit 1; }; \
+	echo "▶ RUN_ID=$$RUN_ID"; \
+	gh run watch "$$RUN_ID" || true; \
+	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
+	if [ "$$CONC" != "success" ]; then \
+	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
+	fi; \
+	echo "📦 Télécharge l'artefact '$(ART_NAME)'…"; \
+	rm -rf tmp-$(ART_NAME); \
+	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
+	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
+	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
+	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :"; ls -la tmp-$(ART_NAME); exit 1; }; \
+	cp "$$SRC" "$(ENV_DST)"; \
+	rm -rf tmp-$(ART_NAME); \
+	echo "✅ .env installé en $(ENV_DST)"
+
 env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'installe en $(ENV_DST)
 	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
 	@echo "🚀 Déclenche '$(WF)' sur branche '$(BRANCH)'"
@@ -311,4 +350,7 @@ env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'ins
 	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
 	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
 	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
-	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ;
+	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :"; ls -la tmp-$(ART_NAME); exit 1; }; \
+	cp "$$SRC" "$(ENV_DST)"; \
+	rm -rf tmp-$(ART_NAME); \
+	echo "✅ .env installé en $(ENV_DST)"

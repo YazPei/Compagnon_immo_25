@@ -125,6 +125,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: root
     volumes:
       - .:/app
       - ./data:/app/data
@@ -132,6 +133,7 @@ services:
     working_dir: /app
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
+      - DVC_NO_ANALYTICS=1
     depends_on:
       - mlflow
     networks:

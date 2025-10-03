@@ -94,13 +94,9 @@ install: prepare-dirs ## Installe les dépendances Python
 install-gh: ## Installe GitHub CLI si absent
 	@echo "🔧 Vérification/installation de GitHub CLI..."
 	@command -v gh >/dev/null 2>&1 && { echo "✅ GitHub CLI déjà installé."; exit 0; } || true
-	@echo "📦 Installe manuellement GitHub CLI avec ces commandes :"
-	@echo "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg"
-	@echo "sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg"
-	@echo "echo 'deb [arch='$$(dpkg --print-architecture)' signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null"
-	@echo "sudo apt update && sudo apt install gh"
-	@echo "Puis lance 'gh auth login' pour te connecter."
-	@exit 1
+	@echo "📦 Installation de GitHub CLI via Snap..."
+	sudo snap install gh
+	@echo "✅ GitHub CLI installé. Lance 'gh auth login' pour te connecter."
 
 # ===============================
 # 3. Build

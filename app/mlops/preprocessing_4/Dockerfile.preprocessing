@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 
 # === Étape 1 : Création utilisateur non-root ===
 RUN adduser --disabled-password --gecos '' appuser && \

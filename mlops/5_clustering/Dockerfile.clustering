@@ -1,8 +1,8 @@
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-    
+
 # 1. Dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -20,6 +20,6 @@ COPY exports /app/exports
 
 RUN pip install --upgrade pip && \
     pip install -r /app/mlops/5_clustering/requirements.txt
-    
+
 
 ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]

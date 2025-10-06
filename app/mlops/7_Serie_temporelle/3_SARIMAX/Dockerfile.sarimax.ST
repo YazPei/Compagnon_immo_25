@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 WORKDIR /app
 
 COPY mlops/Serie_temporelle/sarimax_train.py /app/mlops/Serie_temporelle/	

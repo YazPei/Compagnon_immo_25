@@ -1,10 +1,13 @@
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML ok
 
+# API
+pydantic==2.7.1
+email-validator>=2.0
 
 # ML Stack
-numpy>=1.26.0,<2.0.0 
+numpy>=1.26.0,<2.0.0
 pandas==2.2.1
-scikit-learn==1.6.1 
+scikit-learn==1.6.1
 prometheus-fastapi-instrumentator==6.1.0
 

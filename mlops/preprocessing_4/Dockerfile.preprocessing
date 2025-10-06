@@ -1,8 +1,8 @@
-FROM python:3.10-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-    
+
 # 1. Dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6 \
     libpng16-16 \
     && rm -rf /var/lib/apt/lists/*
-    
+
 # === Étape 1 : Création utilisateur non-root ===
 RUN adduser --disabled-password --gecos '' appuser && \
     mkdir -p /app /data /mlruns && \
@@ -23,8 +23,8 @@ ENV PYTHONPATH=/app
 
 # === Étape 3 : Pré-création des dossiers nécessaires ===
 RUN mkdir -p /app/mlops \
-             /app/data/processed/reports/figures \
-             /app/data/processed
+    /app/data/processed/reports/figures \
+    /app/data/processed
 
 # === Étape 4 : Copie du code après pré-setup ===
 COPY mlops/preprocessing_4/requirements.txt /app/mlops/preprocessing_4/requirements.txt
@@ -39,7 +39,7 @@ USER root
 RUN chown -R appuser:appuser /app
 RUN pip install --upgrade pip && \
     pip install -r /app/mlops/preprocessing_4/requirements.txt
-    
+
 # === Étape 6 : Execution avec user générique ===
 USER appuser
 

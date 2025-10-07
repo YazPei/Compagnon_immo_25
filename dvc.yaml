@@ -3,9 +3,6 @@
 # =========================
 stages:
   import_data:
-<<<<<<< HEAD
-    cmd: python mlops/1_import_donnees/import_data.py --dvc-path data/merged_sales_data.csv --output-folder data/ --checkpoint-path data/checkpoint.parquet
-=======
     cmd: >
       python mlops/1_import_donnees/import_data.py
       --folder-path data
@@ -16,19 +13,12 @@ stages:
       --date-column date_vente
       --key-columns id_transaction
       --sep ';'
->>>>>>> a2720d5 (etape1 pipeline)
     deps:
       - mlops/1_import_donnees/import_data.py
     outs:
       - data/df_sample.csv
-<<<<<<< HEAD
-    
-   
-  
-=======
       - data/incremental
 
->>>>>>> a2720d5 (etape1 pipeline)
   fusion_geo:
     cmd: >
       python mlops/3_fusion/fusion_geo_dvf.py

@@ -1,10 +1,6 @@
-<<<<<<< HEAD
+# --- path: Dockerfile.run
 FROM python:3.11-slim-bookworm
-=======
-# --- path: Dockerfile
-FROM python:3.10-slim
 
->>>>>>> a2720d5 (etape1 pipeline)
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1

@@ -118,7 +118,8 @@ airflow-build: ## Build images Airflow
 # 4. Démarrage services
 # ===============================
 permission: prepare-dirs install install-gh env-from-gh
-
+docker-start: docker-network docker-up
+dvc-all: dvc-pull-all docker-repro-image-all
 quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC
 
 docker-api-run: docker-api-build ## Run image API
@@ -141,12 +142,31 @@ docker-network:
 docker-up: 
 	docker compose up -d 
 
-dvc-add-all: ## Ajoute tous les stages DVC
-	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
-	  dvc stage add -n import_data \
-	  -d data/merged_sales_data.csv.dvc \
-	  -o data/df_sample.csv \
-	  python mlops/1_import_donnees/import_data.py
+dvc-use-data: 
+	docker run --rm \
+	  -v $(pwd):/app \
+	  -w /app \
+	  compagnon_immo-dvc \
+	  python mlops/1_import_donnees/import_data.py \
+	    --output-folder data/incremental \
+	    --cumulative-path data/df_sample.csv \
+	    --checkpoint-path data/checkpoint.parquet \
+	    --date-column date_vente \
+	    --key-columns id_transaction \
+	    --sep ";" \
+	    --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo \
+	    --dvc-path data/merged_sales_data.csv \
+	    --dvc-rev main
+
+
+
+#dvc-add-all: ## Ajoute tous les stages DVC
+#	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
+#	  dvc stage add -n import_data \
+#	  -d data/merged_sales_data.csv \
+#	  -o data/df_sample.csv \
+#	  --force \
+#	  python mlops/1_import_donnees/import_data.py
 	  
 	  
 docker-repro-image-all: docker-dvc-check dvc-repro-all
@@ -166,11 +186,7 @@ dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
 
 
 
-dvc-pull-all: ## dvc pull
-	docker run --rm $(USER_FLAGS) \
-	  --network $(NETWORK) \
-	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc pull
+
 
 # ===============================
 # ☁️ Secrets depuis GitHub Actions → .env

@@ -14,7 +14,7 @@ stages:
       --key-columns id_transaction
       --sep ';'
     deps:
-      - mlops/1_import_donnees/import_data.py
+    - data/merged_sales_data.csv
     outs:
       - data/df_sample.csv
       - data/incremental
@@ -26,24 +26,25 @@ stages:
       --folder-path2 data
       --output-folder data/clean
     deps:
-      - mlops/3_fusion/fusion_geo_dvf.py
-      - data/DVF_donnees_macroeco.csv
-      - data/df_sample.csv
+    - mlops/3_fusion/fusion_geo_dvf.py
+    - data/DVF_donnees_macroeco.csv
+    - data/df_sample.csv
     outs:
-      - data/clean/df_sales_clean.csv
+    - data/clean/df_sales_clean.csv
 
   preprocessing:
     cmd: >
       mkdir -p data/processed/reports/figures &&
-      python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
+      python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path
+      data/processed/
     deps:
-      - mlops/preprocessing_4/preprocessing.py
-      - mlops/preprocessing_4/utils.py
-      - data/clean/df_sales_clean.csv
+    - mlops/preprocessing_4/preprocessing.py
+    - mlops/preprocessing_4/utils.py
+    - data/clean/df_sales_clean.csv
     outs:
-      - data/processed/df_sales_clean_train.csv
-      - data/processed/df_sales_clean_test.csv
-      - data/processed/df_sales_clean_series.csv
+    - data/processed/df_sales_clean_train.csv
+    - data/processed/df_sales_clean_test.csv
+    - data/processed/df_sales_clean_series.csv
 
   clustering:
     cmd: >
@@ -51,60 +52,60 @@ stages:
       --input-path data/processed
       --output-path exports/df_cluster.csv
     deps:
-      - mlops/5_clustering/Clustering.py
-      - data/processed/df_sales_clean_train.csv
+    - mlops/5_clustering/Clustering.py
+    - data/processed/df_sales_clean_train.csv
     outs:
-      - exports/df_cluster.csv
-      - data/df_sales_clean_ST.csv
+    - exports/df_cluster.csv
+    - data/df_sales_clean_ST.csv
     metrics:
-      - mlflow_outputs/cluster_input.csv:
-          cache: false
+    - mlflow_outputs/cluster_input.csv:
+        cache: false
     plots:
-      - mlflow_outputs/elbow_plot.png
+    - mlflow_outputs/elbow_plot.png
 
   encode:
     cmd: python mlops/6_Regression/1_Encoding/encoding.py
     deps:
-      - mlops/6_Regression/1_Encoding/encoding.py
-      - exports/df_cluster.csv
+    - mlops/6_Regression/1_Encoding/encoding.py
+    - exports/df_cluster.csv
     outs:
-      - data/encoded/X_train.csv
-      - data/encoded/X_test.csv
-      - data/encoded/y_train.csv
-      - data/encoded/y_test.csv
+    - data/encoded/X_train.csv
+    - data/encoded/X_test.csv
+    - data/encoded/y_train.csv
+    - data/encoded/y_test.csv
 
   train_lgbm:
     cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
-      - mlops/6_Regression/2_LGBM/train_lgbm.py
-      - data/encoded/X_train.csv
-      - data/encoded/y_train.csv
+    - mlops/6_Regression/2_LGBM/train_lgbm.py
+    - data/encoded/X_train.csv
+    - data/encoded/y_train.csv
     outs:
-      - data/encoded/lgbm_model.joblib
+    - data/encoded/lgbm_model.joblib
     metrics:
-      - metrics/train_lgbm.json:
-          cache: false
+    - metrics/train_lgbm.json:
+        cache: false
     plots:
-      - reports/feature_importance.json:
-          cache: false
+    - reports/feature_importance.json:
+        cache: false
 
   analyse:
     cmd: python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:
-      - mlops/6_Regression/4_Analyse/analyse.py
-      - data/encoded/X_test.csv
-      - data/encoded/y_test.csv
-      - data/encoded/lgbm_model.joblib
+    - mlops/6_Regression/4_Analyse/analyse.py
+    - data/encoded/X_test.csv
+    - data/encoded/y_test.csv
+    - data/encoded/lgbm_model.joblib
 
   splitst:
     cmd: python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
     deps:
-      - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
-      - data/df_sales_clean_ST.csv
-      - data/processed/contours-codes-postaux.geojson
-      - data/clean/taux_immo.xlsx
+    - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+    - data/df_sales_clean_ST.csv
+    - data/processed/contours-codes-postaux.geojson
+    - data/clean/taux_immo.xlsx
     outs:
-      - data/split
+    - data/split
 
   decompose:
     cmd: >
@@ -113,11 +114,11 @@ stages:
       --output-folder outputs/decomposition
       --suffix ${ST_SUFFIX}
     deps:
-      - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
-      - data/split/train_periodique_q12.csv
+    - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
+    - data/split/train_periodique_q12.csv
     outs:
-      - outputs/decomposition/decomposition_additive_cluster_0.png
-      - outputs/decomposition/decomposition_multiplicative_cluster_0.png
+    - outputs/decomposition/decomposition_additive_cluster_0.png
+    - outputs/decomposition/decomposition_multiplicative_cluster_0.png
 
   train_sarimax:
     cmd: >
@@ -131,11 +132,11 @@ stages:
       --stop-on-first-valid
       --max-models 300
     deps:
-      - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
-      - data/split/train_periodique_q12.csv
-      - data/split/test_periodique_q12.csv
+    - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
+    - data/split/train_periodique_q12.csv
+    - data/split/test_periodique_q12.csv
     outs:
-      - outputs/best
+    - outputs/best
 
   evaluate:
     cmd: >
@@ -145,7 +146,7 @@ stages:
       --output-folder outputs/evaluate
       --suffix ${ST_SUFFIX}
     deps:
-      - outputs/best
-      - data/split
+    - outputs/best
+    - data/split
     outs:
-      - outputs/evaluate
+    - outputs/evaluate

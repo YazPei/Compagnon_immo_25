@@ -1,11 +1,7 @@
 # mlops/1_import_donnees/import_data.py
 import os
 import json
-<<<<<<< HEAD
-from io import StringIO
-=======
 from contextlib import nullcontext
->>>>>>> a2720d5 (etape1 pipeline)
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
 
@@ -17,10 +13,6 @@ import dvc.api
 
 # ============= MLflow bootstrap =============
 def setup_mlflow() -> Optional[str]:
-    """
-    Configure MLflow depuis l'env si présent, sinon fallback local file://mlruns.
-    Renvoie artifact_location si local, sinon None (serveur distant gère).
-    """
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
@@ -32,9 +24,6 @@ def setup_mlflow() -> Optional[str]:
 
 # ============= Checkpoint I/O =============
 def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
-    """
-    Checkpoint = parquet (colonnes: key_hash) + .json adjacent (last_watermark).
-    """
     if not path.exists():
         return set(), None
 
@@ -60,9 +49,6 @@ def save_checkpoint(path: Path, seen_keys: set, last_watermark: Optional[str]) -
 
 # ============= Utilitaires =============
 def make_key_hash(df: pd.DataFrame, key_cols: List[str]) -> pd.Series:
-    """
-    Hash stable des clés métier (concat '||') pour anti-join; sinon hash du dataframe.
-    """
     if not key_cols:
         return pd.util.hash_pandas_object(df, index=False).astype(str)
     arr = df[key_cols].astype(str).fillna("")
@@ -83,54 +69,30 @@ def to_str_cols(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     return df
 
 
-# ============= Source opening (Local / DVC) =============
+# ============= Source opening (DVC) =============
 def open_source_for_csv(
-    local_path: Optional[Path],
     *,
     dvc_repo_url: Optional[str],
     dvc_path: Optional[str],
     dvc_rev: Optional[str],
     dvc_remote: Optional[str],
 ) -> Tuple[Union[IO[str], Path], bool]:
-    """
-    Ouvre la source en mode texte. Renvoie (handle_or_path, is_stream).
-    is_stream=True => passer l'objet à pandas; False => passer Path.
-    """
-    use_dvc = bool(dvc_repo_url and dvc_path)
-    if use_dvc:
-        try:
-            import dvc.api as dvcapi
-        except Exception as exc:
-            raise RuntimeError(
-                "DVC requis pour le mode Dagshub. Installe: pip install 'dvc[http,s3,gdrive]'"
-            ) from exc
-        # Pourquoi: lecture streaming sans 'dvc pull', utile en Airflow/CI.
-        f = dvcapi.open(
-            path=dvc_path,
-            repo=dvc_repo_url,
-            rev=dvc_rev,
-            remote=dvc_remote,
-            mode="r",
-            encoding="utf-8",
-        )
-        return f, True
+    if not (dvc_repo_url and dvc_path):
+        raise ValueError("DVC repo URL et path requis.")
 
-    # Mode local: valider la présence du fichier.
-    if local_path is None:
-        raise ValueError("Chemin local manquant (folder_path + input_file) et DVC non configuré.")
-    if not local_path.exists():
-        raise FileNotFoundError(f"Source locale introuvable: {local_path}")
-    return local_path, False
+    f = dvc.api.open(
+        path=dvc_path,
+        repo=dvc_repo_url,
+        rev=dvc_rev,
+        remote=dvc_remote,
+        mode="r",
+        encoding="utf-8",
+    )
+    return f, True
 
 
 # ============= Extraction incrémentale =============
 def incremental_extract(
-<<<<<<< HEAD
-    dvc_path: str,
-    repo: Optional[str],
-=======
-    source_path: Optional[Path],
->>>>>>> a2720d5 (etape1 pipeline)
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -139,47 +101,30 @@ def incremental_extract(
     sep: str,
     run_ds: Optional[str],
     *,
-    dvc_repo_url: Optional[str] = None,
-    dvc_path: Optional[str] = None,
-    dvc_rev: Optional[str] = None,
-    dvc_remote: Optional[str] = None,
+    dvc_repo_url: Optional[str],
+    dvc_path: Optional[str],
+    dvc_rev: Optional[str],
+    dvc_remote: Optional[str],
 ) -> Tuple[Path, Path, int, int]:
-    """
-    Lit la source (local ou DVC) par chunks, filtre > watermark (si date), anti-join sur clés,
-    écrit le delta (df_new.csv) ET met à jour le cumul (df_sample.csv) sans doublons.
-    Retourne: (delta_path, cumul_path, rows_delta, rows_cumul).
-    """
     seen_keys, watermark = load_checkpoint(checkpoint_path)
-<<<<<<< HEAD
-
-    content = dvc.api.read(dvc_path, repo=repo)
-    source_file = StringIO(content)
-    chunks = pd.read_csv(
-        source_file, sep=sep, chunksize=200_000, on_bad_lines="skip", low_memory=False
-=======
     handle_or_path, is_stream = open_source_for_csv(
-        source_path,
         dvc_repo_url=dvc_repo_url,
         dvc_path=dvc_path,
         dvc_rev=dvc_rev,
         dvc_remote=dvc_remote,
->>>>>>> a2720d5 (etape1 pipeline)
     )
 
-    # Prépare dossiers
     delta_folder.mkdir(parents=True, exist_ok=True)
     delta_path = delta_folder / "df_new.csv"
     cumulative_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    # Lecture chunkée
     max_date_seen = pd.to_datetime(watermark, utc=True, errors="coerce") if watermark else None
     new_rows: List[pd.DataFrame] = []
 
-    # Pourquoi: garantir fermeture du flux DVC.
     cm = handle_or_path if is_stream else nullcontext(open(handle_or_path, "r", encoding="utf-8"))
     with cm as f:
         chunks = pd.read_csv(
-            f if is_stream else f,  # uniformise
+            f,
             sep=sep,
             chunksize=200_000,
             on_bad_lines="skip",
@@ -211,15 +156,11 @@ def incremental_extract(
 
             new_rows.append(delta)
 
-    # Concatène & écrit
     if new_rows:
         df_new = pd.concat(new_rows, ignore_index=True)
         df_new = to_str_cols(df_new, ["code_postal", "INSEE_COM", "departement", "commune"])
+        df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=sep, index=False)
 
-        # écrit delta (sans colonne technique)
-        df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=";", index=False)
-
-        # met à jour cumul
         if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
             df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
             df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
@@ -233,15 +174,12 @@ def incremental_extract(
 
         df_all.to_csv(cumulative_csv, sep=sep, index=False)
 
-        # Update checkpoint (ajoute clés + watermark)
         seen_keys.update(make_key_hash(df_new, key_cols).astype(str).tolist())
         last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
         save_checkpoint(checkpoint_path, seen_keys, last_wm)
     else:
-        # pas de nouveauté → persiste un delta vide pour cohérence
         delta_path.write_text("", encoding="utf-8")
 
-    # Métriques
     rows_delta = 0
     if delta_path.exists() and delta_path.stat().st_size > 0:
         with open(delta_path, "r", encoding="utf-8") as f:
@@ -257,32 +195,18 @@ def incremental_extract(
 
 # ============= CLI =============
 @click.command()
-<<<<<<< HEAD
-@click.option("--dvc-path", type=str, required=True, help="Chemin du fichier dans DVC (ex: data/merged_sales_data.csv)")
-@click.option("--repo", type=str, default=None, help="URL du repo DVC (optionnel, utilise la config locale si non spécifié)")
-=======
-@click.option("--folder-path", type=click.Path(), required=False,
-              help="Dossier source local contenant le CSV (ignoré en mode DVC).")
-@click.option("--input-file", type=str, required=False,
-              help="Nom du fichier CSV local (ignoré en mode DVC).")
->>>>>>> a2720d5 (etape1 pipeline)
 @click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv",
-              help="Chemin du CSV cumul (df_sample.csv) — NOM HISTORIQUE CONSERVÉ")
+              help="Chemin du CSV cumul (df_sample.csv)")
 @click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin du checkpoint (parquet)")
-@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark (ex: date_vente)")
-@click.option("--key-columns", type=str, default="", help="Colonnes clés séparées par des virgules (ex: id_transaction,lot)")
-@click.option("--sep", type=str, default=";", help="Séparateur CSV (défaut ';')")
-# --- Mode DVC/Dagshub ---
-@click.option("--dvc-repo-url", type=str, default=None,
-              help="URL du repo DVC (ex: https://dagshub.com/<user>/<repo>)")
-@click.option("--dvc-path", type=str, default=None,
-              help="Chemin du fichier DVC dans le repo (ex: data/raw.csv)")
-@click.option("--dvc-rev", type=str, default=None, help="Révision git (branche/tag/sha)")
-@click.option("--dvc-remote", type=str, default=None, help="Nom du remote DVC (optionnel)")
+@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark")
+@click.option("--key-columns", type=str, default="", help="Colonnes clés séparées par des virgules")
+@click.option("--sep", type=str, default=";", help="Séparateur CSV")
+@click.option("--dvc-repo-url", type=str, required=True, help="URL du repo DVC sur DagsHub")
+@click.option("--dvc-path", type=str, required=True, help="Chemin du fichier dans DVC")
+@click.option("--dvc-rev", type=str, default="main", help="Révision git")
+@click.option("--dvc-remote", type=str, default=None, help="Nom du remote DVC")
 def main(
-    dvc_path,
-    repo,
     output_folder,
     cumulative_path,
     checkpoint_path,
@@ -295,40 +219,19 @@ def main(
     dvc_remote,
 ):
     artifact_location = setup_mlflow()
-
     key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
-<<<<<<< HEAD
-=======
-    source_path = None
-    # Valider le mode choisi
-    if dvc_repo_url and dvc_path:
-        # mode DVC
-        pass
-    else:
-        # mode local
-        if not folder_path or not input_file:
-            raise click.UsageError("En mode local, --folder-path et --input-file sont requis.")
-        source_path = Path(folder_path) / input_file
-        if not source_path.exists():
-            raise click.ClickException(f"Fichier local introuvable: {source_path}")
-
->>>>>>> a2720d5 (etape1 pipeline)
     delta_folder = Path(output_folder)
     cumulative_csv = Path(cumulative_path)
     checkpoint_path = Path(checkpoint_path)
 
-    # Expériment MLflow (créée seulement en local file://)
     experiment_name = "Import données"
     if artifact_location and mlflow.get_experiment_by_name(experiment_name) is None:
         mlflow.create_experiment(name=experiment_name, artifact_location=artifact_location)
 
-    # Airflow fournit 'ds' (YYYY-MM-DD) dans l'env; fallback "manual"
     run_ds = os.getenv("AIRFLOW_CTX_EXECUTION_DATE", os.getenv("ds", "manual"))
 
     with mlflow.start_run(run_name="Import incrémental"):
         delta_path, cumul_path, rows_delta, rows_cumul = incremental_extract(
-            dvc_path=dvc_path,
-            repo=repo,
             delta_folder=delta_folder,
             cumulative_csv=cumulative_csv,
             checkpoint_path=checkpoint_path,
@@ -342,42 +245,31 @@ def main(
             dvc_remote=dvc_remote,
         )
 
-        # Params
-<<<<<<< HEAD
-        mlflow.log_param("source_path", dvc_path)
-=======
-        mlflow.log_param("mode", "dvc" if (dvc_repo_url and dvc_path) else "local")
-        mlflow.log_param("source_local_path", str(source_path) if source_path else "")
+        mlflow.log_param("mode", "dvc")
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
         mlflow.log_param("dvc_rev", dvc_rev or "")
         mlflow.log_param("dvc_remote", dvc_remote or "")
->>>>>>> a2720d5 (etape1 pipeline)
         mlflow.log_param("delta_folder", str(delta_folder))
-        mlflow.log_param("cumulative_path", str(cumul_path))
+        mlflow.log_param("cumulative_path", str(cumulative_csv))
         mlflow.log_param("checkpoint_path", str(checkpoint_path))
         mlflow.log_param("date_column", date_column or "")
         mlflow.log_param("key_columns", ",".join(key_cols))
         mlflow.log_param("sep", sep)
 
-        # Metrics
         mlflow.log_metric("rows_delta", rows_delta)
         mlflow.log_metric("rows_cumul", rows_cumul)
 
-        # Artifacts (léger; évite les giga-fichiers selon ta politique)
         if delta_path.exists():
             mlflow.log_artifact(str(delta_path))
-        if cumul_path.exists():
-            mlflow.log_artifact(str(cumul_path))
+        if cumulative_csv.exists():
+            mlflow.log_artifact(str(cumulative_csv))
 
         print(
-            f"✅ Delta → {delta_path} (rows={rows_delta}) | "
-            f"Cumul → {cumul_path} (rows={rows_cumul})"
+            f"✅ Delta → {delta_path} (rows={rows_delta}) | Cumul → {cumul_path} (rows={rows_cumul})"
         )
 
 
 if __name__ == "__main__":
-    # Dépendances côté Airflow/requirements:
-    # pandas, pyarrow, click, mlflow, dvc[http] (ou dvc[s3]/etc selon ton remote Dagshub)
     main()
 

@@ -14,9 +14,13 @@ email-validator>=2.0            # Validation emails
 
 # MLOps
 mlflow==2.13.0                  # Tracking d’expériences ML
-dvc[all]==3.44.0
 openpyxl==3.1.2
 
+dvc[http]
+mlflow
+click
+pyarrow
+pandas
 
 
 

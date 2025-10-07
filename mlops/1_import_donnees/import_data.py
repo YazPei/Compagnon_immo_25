@@ -1,11 +1,7 @@
 # mlops/1_import_donnees/import_data.py
 import os
 import json
-<<<<<<< HEAD
-from io import StringIO
-=======
 from contextlib import nullcontext
->>>>>>> a2720d5 (etape1 pipeline)
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
 
@@ -125,12 +121,7 @@ def open_source_for_csv(
 
 # ============= Extraction incrémentale =============
 def incremental_extract(
-<<<<<<< HEAD
-    dvc_path: str,
-    repo: Optional[str],
-=======
     source_path: Optional[Path],
->>>>>>> a2720d5 (etape1 pipeline)
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -150,20 +141,12 @@ def incremental_extract(
     Retourne: (delta_path, cumul_path, rows_delta, rows_cumul).
     """
     seen_keys, watermark = load_checkpoint(checkpoint_path)
-<<<<<<< HEAD
-
-    content = dvc.api.read(dvc_path, repo=repo)
-    source_file = StringIO(content)
-    chunks = pd.read_csv(
-        source_file, sep=sep, chunksize=200_000, on_bad_lines="skip", low_memory=False
-=======
     handle_or_path, is_stream = open_source_for_csv(
         source_path,
         dvc_repo_url=dvc_repo_url,
         dvc_path=dvc_path,
         dvc_rev=dvc_rev,
         dvc_remote=dvc_remote,
->>>>>>> a2720d5 (etape1 pipeline)
     )
 
     # Prépare dossiers
@@ -257,15 +240,10 @@ def incremental_extract(
 
 # ============= CLI =============
 @click.command()
-<<<<<<< HEAD
-@click.option("--dvc-path", type=str, required=True, help="Chemin du fichier dans DVC (ex: data/merged_sales_data.csv)")
-@click.option("--repo", type=str, default=None, help="URL du repo DVC (optionnel, utilise la config locale si non spécifié)")
-=======
 @click.option("--folder-path", type=click.Path(), required=False,
               help="Dossier source local contenant le CSV (ignoré en mode DVC).")
 @click.option("--input-file", type=str, required=False,
               help="Nom du fichier CSV local (ignoré en mode DVC).")
->>>>>>> a2720d5 (etape1 pipeline)
 @click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv",
               help="Chemin du CSV cumul (df_sample.csv) — NOM HISTORIQUE CONSERVÉ")
@@ -297,8 +275,6 @@ def main(
     artifact_location = setup_mlflow()
 
     key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
-<<<<<<< HEAD
-=======
     source_path = None
     # Valider le mode choisi
     if dvc_repo_url and dvc_path:
@@ -312,7 +288,6 @@ def main(
         if not source_path.exists():
             raise click.ClickException(f"Fichier local introuvable: {source_path}")
 
->>>>>>> a2720d5 (etape1 pipeline)
     delta_folder = Path(output_folder)
     cumulative_csv = Path(cumulative_path)
     checkpoint_path = Path(checkpoint_path)
@@ -343,16 +318,12 @@ def main(
         )
 
         # Params
-<<<<<<< HEAD
-        mlflow.log_param("source_path", dvc_path)
-=======
         mlflow.log_param("mode", "dvc" if (dvc_repo_url and dvc_path) else "local")
         mlflow.log_param("source_local_path", str(source_path) if source_path else "")
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
         mlflow.log_param("dvc_rev", dvc_rev or "")
         mlflow.log_param("dvc_remote", dvc_remote or "")
->>>>>>> a2720d5 (etape1 pipeline)
         mlflow.log_param("delta_folder", str(delta_folder))
         mlflow.log_param("cumulative_path", str(cumul_path))
         mlflow.log_param("checkpoint_path", str(checkpoint_path))

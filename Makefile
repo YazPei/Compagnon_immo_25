@@ -119,7 +119,7 @@ airflow-build: ## Build images Airflow
 # ===============================
 permission: prepare-dirs install install-gh env-from-gh
 
-quick-start-dvc: build-all docker-repro-image-all ## Quick start + exécution complète de DVC
+quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC
 
 docker-api-run: docker-api-build ## Run image API
 	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
@@ -135,9 +135,11 @@ mlflow-up: ## Démarre MLflow
 		mlflow server --host 0.0.0.0 --port $(MLFLOW_PORT) \
 		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
 		  --default-artifact-root /mlflow/mlruns
+docker-network:
+	docker network create ml_net
 
-airflow-up: ## Démarre uniquement Airflow
-	docker compose up -d $(AIRFLOW_SERVICES)
+docker-up: 
+	docker compose up -d 
 
 dvc-add-all: ## Ajoute tous les stages DVC
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \

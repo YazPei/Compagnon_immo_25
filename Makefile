@@ -144,7 +144,7 @@ docker-up:
 dvc-add-all: ## Ajoute tous les stages DVC
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 	  dvc stage add -n import_data \
-	  -d data/merged_sales_data.csv.dvc \
+	  -d data/merged_sales_data.csv \
 	  -o data/df_sample.csv \
 	  python mlops/1_import_donnees/import_data.py
 	  

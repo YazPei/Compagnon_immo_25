@@ -1,30 +1,38 @@
+<<<<<<< HEAD
 FROM python:3.11-slim-bookworm
+=======
+# --- path: Dockerfile
+FROM python:3.10-slim
+
+>>>>>>> a2720d5 (etape1 pipeline)
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-    
-# 1. Dépendances système
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# 1) Dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
+    curl \
+    libgomp1 \
     libfreetype6 \
     libpng16-16 \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# 2. Dossier de travail
-WORKDIR /app
+# 2) Dossier de travail (aligné avec Airflow)
+WORKDIR /opt/airflow
 
+# 3) Copie requirements + install
+COPY requirements.txt /opt/airflow/requirements.txt
+RUN pip install --upgrade pip && pip install -r /opt/airflow/requirements.txt
 
+# 4) Copie du repo complet (tous tes scripts sont accessibles)
+COPY . /opt/airflow/repo
 
+# 5) Pré-crée des dossiers persistants (checkpoint, outputs)
+RUN mkdir -p /opt/airflow/data/state /opt/airflow/data/incremental /opt/airflow/output
 
-# 4. Copie requirements.txt uniquement (cache)
-COPY mlops/1_import_donnees/requirements.txt /app/requirements.txt
-COPY mlops/1_import_donnees /app/mlops/1_import_donnees
-
-# 5. Création de l’environnement virtuel + install
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# 7. Création des dossiers requis
-RUN mkdir -p data output && touch data/.gitkeep
-
+# Optionnel: utilisateur non-root
+# RUN useradd -m airflow && chown -R airflow:airflow /opt/airflow
+# USER airflow
 

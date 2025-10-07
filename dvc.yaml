@@ -1,13 +1,34 @@
+# =========================
+# file: dvc.yaml  (corrigé: stage import_data complet + chemins)
+# =========================
 stages:
   import_data:
+<<<<<<< HEAD
     cmd: python mlops/1_import_donnees/import_data.py --dvc-path data/merged_sales_data.csv --output-folder data/ --checkpoint-path data/checkpoint.parquet
+=======
+    cmd: >
+      python mlops/1_import_donnees/import_data.py
+      --folder-path data
+      --input-file merged_sales_data.csv
+      --output-folder data/incremental
+      --cumulative-path data/df_sample.csv
+      --checkpoint-path data/state/immo_checkpoint.parquet
+      --date-column date_vente
+      --key-columns id_transaction
+      --sep ';'
+>>>>>>> a2720d5 (etape1 pipeline)
     deps:
       - mlops/1_import_donnees/import_data.py
     outs:
       - data/df_sample.csv
+<<<<<<< HEAD
     
    
   
+=======
+      - data/incremental
+
+>>>>>>> a2720d5 (etape1 pipeline)
   fusion_geo:
     cmd: >
       python mlops/3_fusion/fusion_geo_dvf.py
@@ -18,10 +39,9 @@ stages:
       - mlops/3_fusion/fusion_geo_dvf.py
       - data/DVF_donnees_macroeco.csv
       - data/df_sample.csv
-
     outs:
       - data/clean/df_sales_clean.csv
-      
+
   preprocessing:
     cmd: >
       mkdir -p data/processed/reports/figures &&
@@ -35,7 +55,6 @@ stages:
       - data/processed/df_sales_clean_test.csv
       - data/processed/df_sales_clean_series.csv
 
-      
   clustering:
     cmd: >
       python mlops/5_clustering/Clustering.py
@@ -54,8 +73,7 @@ stages:
       - mlflow_outputs/elbow_plot.png
 
   encode:
-    cmd: >
-      python mlops/6_Regression/1_Encoding/encoding.py 
+    cmd: python mlops/6_Regression/1_Encoding/encoding.py
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
@@ -66,16 +84,13 @@ stages:
       - data/encoded/y_test.csv
 
   train_lgbm:
-    cmd: >
-      python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
-
     outs:
       - data/encoded/lgbm_model.joblib
-
     metrics:
       - metrics/train_lgbm.json:
           cache: false
@@ -84,8 +99,7 @@ stages:
           cache: false
 
   analyse:
-    cmd: >
-      python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+    cmd: python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv
@@ -93,8 +107,7 @@ stages:
       - data/encoded/lgbm_model.joblib
 
   splitst:
-    cmd: >
-      python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+    cmd: python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
     deps:
       - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       - data/df_sales_clean_ST.csv
@@ -102,9 +115,6 @@ stages:
       - data/clean/taux_immo.xlsx
     outs:
       - data/split
-      
-
-
 
   decompose:
     cmd: >
@@ -115,11 +125,9 @@ stages:
     deps:
       - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       - data/split/train_periodique_q12.csv
-
     outs:
       - outputs/decomposition/decomposition_additive_cluster_0.png
       - outputs/decomposition/decomposition_multiplicative_cluster_0.png
-
 
   train_sarimax:
     cmd: >
@@ -136,11 +144,9 @@ stages:
       - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       - data/split/train_periodique_q12.csv
       - data/split/test_periodique_q12.csv
-      
     outs:
       - outputs/best
 
-         
   evaluate:
     cmd: >
       python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
@@ -150,7 +156,6 @@ stages:
       --suffix ${ST_SUFFIX}
     deps:
       - outputs/best
-      - data/split   # force l’exécution de split_clusters avant
+      - data/split
     outs:
       - outputs/evaluate
-

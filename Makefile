@@ -170,7 +170,7 @@ ART_NAME ?= env-artifact
 
 env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'installe en $(ENV_DST)
 	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
-	@echo "🚀 Déclenche '$(WF)' sur branche '$(BRANCH)'"
+	@echo "🚀 Déclenche les permissions"
 	@if gh auth status >/dev/null 2>&1; then \
 	  gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
 	else \
@@ -180,9 +180,11 @@ env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'ins
 	@sleep 2
 	@echo "⏳ Récupération du dernier run…"
 	@RUN_ID=$$(gh run list --workflow="$(WF)" --limit 30 --json databaseId,headBranch \
-	  -q '.[] | select(.headBranch=="'$(BRANCH)'") | .databaseId' | head -n1); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur '$(BRANCH)'"; exit 1; }; \
-	echo "▶ RUN_ID=$$RUN_ID"; \
+	  -q '.[] | .databaseId' | head -n1); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur toutes les branches"; exit 1; }; \
+	BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch); \
+	echo "▶ RUN_ID=$$RUN_ID (branche: $$BRANCH_RUN)"; \
+	echo "🔐 Permissions accordées pour la branche: $$BRANCH_RUN (niveau: workflow '$(WF)')"; \
 	gh run watch "$$RUN_ID" || true; \
 	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
 	if [ "$$CONC" != "success" ]; then \
@@ -201,7 +203,7 @@ env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'ins
 	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
 
 check-permissions:
-	@gh run list --workflow=$(WF) --limit 1
+	@gh run list --workflow=$(WF) --limit 5
 
 # ===============================
 # 5. Tests & CI

@@ -3,12 +3,22 @@
 # =========================
 stages:
   import_data:
-    cmd: >-
+    cmd: >
       python mlops/1_import_donnees/import_data.py
+      --folder-path data
+      --input-file merged_sales_data.csv
+      --output-folder data/incremental
+      --cumulative-path data/df_sample.csv
+      --checkpoint-path data/state/immo_checkpoint.parquet
+      --date-column date_vente
+      --key-columns id_transaction
+      --sep ';'
     deps:
     - data/merged_sales_data.csv
     outs:
-    - data/df_sample.csv
+      - data/df_sample.csv
+      - data/incremental
+
   fusion_geo:
     cmd: >
       python mlops/3_fusion/fusion_geo_dvf.py

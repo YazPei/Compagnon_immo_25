@@ -93,6 +93,7 @@ def open_source_for_csv(
 
 # ============= Extraction incrémentale =============
 def incremental_extract(
+    source_path: Optional[Path],
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -195,6 +196,10 @@ def incremental_extract(
 
 # ============= CLI =============
 @click.command()
+@click.option("--folder-path", type=click.Path(), required=False,
+              help="Dossier source local contenant le CSV (ignoré en mode DVC).")
+@click.option("--input-file", type=str, required=False,
+              help="Nom du fichier CSV local (ignoré en mode DVC).")
 @click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv",
               help="Chemin du CSV cumul (df_sample.csv)")
@@ -220,6 +225,19 @@ def main(
 ):
     artifact_location = setup_mlflow()
     key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
+    source_path = None
+    # Valider le mode choisi
+    if dvc_repo_url and dvc_path:
+        # mode DVC
+        pass
+    else:
+        # mode local
+        if not folder_path or not input_file:
+            raise click.UsageError("En mode local, --folder-path et --input-file sont requis.")
+        source_path = Path(folder_path) / input_file
+        if not source_path.exists():
+            raise click.ClickException(f"Fichier local introuvable: {source_path}")
+
     delta_folder = Path(output_folder)
     cumulative_csv = Path(cumulative_path)
     checkpoint_path = Path(checkpoint_path)
@@ -245,7 +263,9 @@ def main(
             dvc_remote=dvc_remote,
         )
 
-        mlflow.log_param("mode", "dvc")
+        # Params
+        mlflow.log_param("mode", "dvc" if (dvc_repo_url and dvc_path) else "local")
+        mlflow.log_param("source_local_path", str(source_path) if source_path else "")
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
         mlflow.log_param("dvc_rev", dvc_rev or "")

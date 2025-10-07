@@ -6,7 +6,6 @@ __pycache__
 *.py[cod]
 *.log
 .pytest_cache
-mlruns
 mlflow.db
 data
 exports
@@ -20,9 +19,6 @@ uvicorn.log
 *.env.*
 infra/secrets
 airflow/
-dags/
-mlops/
-k8s/
 reports/
 scripts/
 tests/

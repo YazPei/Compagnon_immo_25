@@ -95,12 +95,12 @@ install-gh: ## Installe GitHub CLI si absent
 	@echo "🔧 Vérification/installation de GitHub CLI..."
 	@command -v gh >/dev/null 2>&1 && { echo "✅ GitHub CLI déjà installé."; exit 0; } || true
 	@echo "📦 Installe manuellement GitHub CLI avec ces commandes :"
+	@echo "type -p curl >/dev/null || sudo apt install curl -y"
 	@echo "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg"
 	@echo "sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg"
-	@echo "echo 'deb [arch='$$(dpkg --print-architecture)' signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null"
-	@echo "sudo apt update && sudo apt install gh"
-	@echo "Puis lance 'gh auth login' pour te connecter."
-	@exit 1
+	@echo 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null'
+	@echo "sudo apt update"
+	@echo "sudo apt install gh -y"
 
 # ===============================
 # 3. Build
@@ -117,11 +117,9 @@ airflow-build: ## Build images Airflow
 # ===============================
 # 4. Démarrage services
 # ===============================
-quick-start: prepare-dirs build-all airflow-start ## Build + démarrage complet (Airflow, MLflow, API)
+permission: prepare-dirs install install-gh env-from-gh
 
-quick-start-airflow: build-all airflow-start ## Build + démarrage d'Airflow uniquement
-
-quick-start-test: quick-start dvc-repro-all ## Quick start + exécution complète de DVC
+quick-start-dvc: build-all docker-repro-image-all ## Quick start + exécution complète de DVC
 
 docker-api-run: docker-api-build ## Run image API
 	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
@@ -147,12 +145,24 @@ dvc-add-all: ## Ajoute tous les stages DVC
 	  -d data/merged_sales_data.csv.dvc \
 	  -o data/df_sample.csv \
 	  python mlops/1_import_donnees/import_data.py
+	  
+	  
+docker-repro-image-all: docker-dvc-check dvc-repro-all
+docker-dvc-check:
+	@if [ -z "$$(docker images -q $(DVC_IMAGE):latest)" ]; then \
+		echo "🔧 Build de $(DVC_IMAGE):latest..."; \
+		DOCKER_BUILDKIT=0 docker build --no-cache -t $(DVC_IMAGE):latest -f mlops/2_dvc/Dockerfile .; \
+	else \
+		echo "✅ Image $(DVC_IMAGE) déjà disponible."; \
+	fi
 
-dvc-repro-all: ## dvc repro de tout le pipeline
+dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
 	docker run --rm $(USER_FLAGS) \
 	  --network $(NETWORK) \
 	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
 	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc repro -f
+
+
 
 dvc-pull-all: ## dvc pull
 	docker run --rm $(USER_FLAGS) \
@@ -164,6 +174,7 @@ dvc-pull-all: ## dvc pull
 # ☁️ Secrets depuis GitHub Actions → .env
 # ===============================
 # Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
+
 BRANCH   ?= Auto_github
 WF       ?= permissions
 ART_NAME ?= env-artifact

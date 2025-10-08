@@ -7,7 +7,7 @@
 # 1. Aide & vérifications        : help, lint, check-dependencies
 # 2. Préparation & installation  : prepare-dirs, install
 # 3. Build                      : docker-build, docker-api-build, airflow-build
-# 4. Démarrage services         : quick-start, quick-start-airflow, quick-start-test, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
+# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
 # 5. Tests & CI                 : api-test, ci-test
 # 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
 # 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services
@@ -56,7 +56,7 @@ COLOR_YELLOW := \033[33m
   help lint check-dependencies install-gh\
   prepare-dirs install \
   docker-build docker-api-build airflow-build \
-  quick-start quick-start-airflow quick-start-test docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
+  permission docker-start dvc-all quick-start-dvc docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
   api-test ci-test \
   api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
@@ -102,6 +102,8 @@ install-gh: ## Installe GitHub CLI si absent
 	@echo "sudo apt update"
 	@echo "sudo apt install gh -y"
 
+permission: prepare-dirs install install-gh env-from-gh
+
 # ===============================
 # 3. Build
 # ===============================
@@ -117,7 +119,6 @@ airflow-build: ## Build images Airflow
 # ===============================
 # 4. Démarrage services
 # ===============================
-permission: prepare-dirs install install-gh env-from-gh
 docker-start: docker-network docker-up
 dvc-all: dvc-pull-all docker-repro-image-all
 quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC

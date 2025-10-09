@@ -71,7 +71,13 @@ help: ## Affiche l'aide
 
 lint: ## Vérifie quelques pièges courants
 	@echo "🔍 Vérification du Makefile…"
-	@grep -o '^[a-zA-Z0-9_.-]\+:' Makefile | sort | uniq -d | xargs -r -I{} echo "⚠️  Cible en double: {}" || true
+	@if grep -o '^[a-zA-Z0-9_.-]\+:' Makefile | sort | uniq -d | grep -q .; then \
+		echo "⚠️  Cibles en double trouvées :"; \
+		grep -o '^[a-zA-Z0-9_.-]\+:' Makefile | sort | uniq -d; \
+		exit 1; \
+	else \
+		echo "✅ Aucune cible en double détectée - Makefile propre !"; \
+	fi
 
 check-dependencies: ## Vérifie que les dépendances nécessaires sont installées
 	@command -v docker >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ Docker n'est pas installé.$(COLOR_RESET)"; exit 1; }
@@ -143,7 +149,7 @@ docker-network:
 docker-up: 
 	docker compose up -d 
 
-dvc-use-data: 
+dvc-use-data:
 	docker run --rm \
 	  -v $(pwd):/app \
 	  -w /app \
@@ -156,7 +162,7 @@ dvc-use-data:
 	    --key-columns id_transaction \
 	    --sep ";" \
 	    --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo \
-	    --dvc-path data/merged_sales_data.csv \
+	    --dvc-path data/dvc_data.csv \
 	    --dvc-rev main
 
 
@@ -164,7 +170,7 @@ dvc-use-data:
 #dvc-add-all: ## Ajoute tous les stages DVC
 #	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
 #	  dvc stage add -n import_data \
-#	  -d data/merged_sales_data.csv \
+#	  -d data/dvc_data.csv \
 #	  -o data/df_sample.csv \
 #	  --force \
 #	  python mlops/1_import_donnees/import_data.py

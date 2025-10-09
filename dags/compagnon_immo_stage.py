@@ -17,7 +17,7 @@ default_args = {"retries": 2, "retry_delay": pendulum.duration(minutes=10)}
 
 # --- DVC/Dagshub variables (Airflow Variables) ---
 DVC_REPO_URL = Variable.get("DVC_REPO_URL", default_var=None)      # ex: https://dagshub.com/<user>/<repo>
-DVC_FILE_PATH = Variable.get("DVC_FILE_PATH", default_var=None)    # ex: data/raw/merged_sales_data.csv
+DVC_FILE_PATH = Variable.get("DVC_FILE_PATH", default_var=None)    # ex: data/raw/dvc_data.csv
 DVC_REV = Variable.get("DVC_REV", default_var="main")
 DAGSHUB_USERNAME = Variable.get("DAGSHUB_USERNAME", default_var=None)
 DAGSHUB_TOKEN = Variable.get("DAGSHUB_TOKEN", default_var=None)

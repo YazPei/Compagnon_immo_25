@@ -6,7 +6,7 @@ stages:
       --output-folder data/
     deps:
       - mlops/1_import_donnees/import_data.py
-      - data/merged_sales_data.csv
+      - data/dvc_data.csv
     outs:
       - data/df_sample.csv
   

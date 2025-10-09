@@ -5,16 +5,18 @@ stages:
   import_data:
     cmd: >
       python mlops/1_import_donnees/import_data.py
-      --folder-path data
-      --input-file merged_sales_data.csv
       --output-folder data/incremental
       --cumulative-path data/df_sample.csv
       --checkpoint-path data/state/immo_checkpoint.parquet
       --date-column date_vente
       --key-columns id_transaction
       --sep ';'
+      --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo
+      --dvc-path data/dvc_data.csv
+      --dvc-rev main
+      --dvc-remote dagshub
     deps:
-    - data/merged_sales_data.csv
+    - mlops/1_import_donnees/import_data.py
     outs:
       - data/df_sample.csv
       - data/incremental

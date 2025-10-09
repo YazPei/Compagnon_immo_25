@@ -3,4 +3,4 @@ stages:
     cmd: bash download_raw_data.sh
     outs:
       - data/DVF_donnees_macroeco.csv
-      - data/merged_sales_data.csv
+      - data/dvc_data.csv

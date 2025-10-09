@@ -98,15 +98,19 @@ install: prepare-dirs ## Installe les dépendances Python
 	@$(PIP) install -r requirements.txt
 
 install-gh: ## Installe GitHub CLI si absent
-	@echo "🔧 Vérification/installation de GitHub CLI..."
-	@command -v gh >/dev/null 2>&1 && { echo "✅ GitHub CLI déjà installé."; exit 0; } || true
-	@echo "📦 Installe manuellement GitHub CLI avec ces commandes :"
-	@echo "type -p curl >/dev/null || sudo apt install curl -y"
-	@echo "curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg"
-	@echo "sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg"
-	@echo 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null'
-	@echo "sudo apt update"
-	@echo "sudo apt install gh -y"
+	@if command -v gh >/dev/null 2>&1; then \
+		echo "✅ GitHub CLI déjà installé."; \
+	else \
+		echo "🔧 Vérification/installation de GitHub CLI..."; \
+		echo "📦 Installation automatique de GitHub CLI..."; \
+		type -p curl >/dev/null || sudo apt install curl -y; \
+		curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg; \
+		sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg; \
+		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null; \
+		sudo apt update; \
+		sudo apt install gh -y; \
+		echo "✅ GitHub CLI installé avec succès."; \
+	fi
 
 permission: prepare-dirs install install-gh env-from-gh
 

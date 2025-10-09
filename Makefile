@@ -212,16 +212,13 @@ env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'ins
 	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
 	@echo "🚀 Déclenche les permissions"
 	@if gh auth status >/dev/null 2>&1; then \
-	  gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
+	  RUN_URL=$$(gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
 	else \
 	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
-	  GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null; \
-	fi
-	@sleep 2
-	@echo "⏳ Récupération du dernier run…"
-	@RUN_ID=$$(gh run list --workflow="$(WF)" --limit 30 --json databaseId,headBranch \
-	  -q '.[] | .databaseId' | head -n1); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Aucun run pour '$(WF)' sur toutes les branches"; exit 1; }; \
+	  RUN_URL=$$(GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
+	fi; \
+	RUN_ID=$$(echo "$$RUN_URL" | grep -o '[0-9]\+$$'); \
+	[ -n "$$RUN_ID" ] || { echo "❌ Échec du déclenchement du workflow"; exit 1; }; \
 	BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch); \
 	echo "▶ RUN_ID=$$RUN_ID (branche: $$BRANCH_RUN)"; \
 	echo "🔐 Permissions accordées pour la branche: $$BRANCH_RUN (niveau: workflow '$(WF)')"; \
@@ -240,7 +237,7 @@ env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'ins
 	mv "$$SRC" "$(ENV_DST)"; \
 	rm -rf tmp-$(ART_NAME); \
 	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
-	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***/'
+	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***'
 
 check-permissions:
 	@gh run list --workflow=$(WF) --limit 5

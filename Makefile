@@ -5,12 +5,12 @@
 # SOMMAIRE
 # ===============================
 # 1. Aide & vérifications        : help, lint, check-dependencies
-# 2. Préparation & installation  : prepare-dirs, install
+# 2. Préparation & installation  : prepare-dirs, install, install-gh
 # 3. Build                      : docker-build, docker-api-build, airflow-build
 # 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
-# 5. Tests & CI                 : api-test, ci-test
+# 5. Tests & CI                 : api-test, api-test-docker, ci-test
 # 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
-# 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services
+# 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services, env-from-gh, check-permissions
 
 
 # --- Choix du fichier d'env local ---
@@ -32,7 +32,7 @@ PIP := pip3
 TEST_DIR := app/api/tests
 DVC_TOKEN ?= default_token_securise_ou_vide
 
-MLFLOW_IMAGE := $(IMAGE_PREFIX)-mlflow
+MLFLOW_IMAGE := ghcr.io/mlflow/mlflow:v2.13.1
 DVC_IMAGE := $(IMAGE_PREFIX)-dvc
 USER_FLAGS := --user $(shell id -u):$(shell id -g)
 
@@ -53,13 +53,14 @@ COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
 .PHONY: \
-  help lint check-dependencies install-gh\
-  prepare-dirs install \
+  help lint check-dependencies \
+  prepare-dirs install install-gh \
   docker-build docker-api-build airflow-build \
   permission docker-start dvc-all quick-start-dvc docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
-  api-test ci-test \
+  api-test api-test-docker ci-test \
   api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
+  env-from-gh check-permissions \
   dvc-push-all pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
 
 # ===============================
@@ -138,6 +139,8 @@ docker-api-run: docker-api-build ## Run image API
 	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
 
 mlflow-up: ## Démarre MLflow
+	docker ps -q --filter "name=mlflow" | xargs -r docker stop 2>/dev/null || true
+	docker ps -a -q --filter "name=mlflow" | xargs -r docker rm 2>/dev/null || true
 	docker run -d --rm \
 		--name $(MLFLOW_HOST) \
 		--network $(NETWORK) \
@@ -148,7 +151,7 @@ mlflow-up: ## Démarre MLflow
 		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
 		  --default-artifact-root /mlflow/mlruns
 docker-network:
-	docker network create ml_net
+	docker network create ml_net || echo "Network ml_net already exists"
 
 docker-up: 
 	docker compose up -d 
@@ -190,57 +193,15 @@ docker-dvc-check:
 	fi
 
 dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
-	docker run --rm $(USER_FLAGS) \
+	sudo chmod -R 755 .dvc || true
+	docker run --rm --user root \
 	  --network $(NETWORK) \
 	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app -w /app $(DVC_IMAGE) dvc repro -f
+	  -v $(PWD):/app:Z -w /app $(DVC_IMAGE) sh -c "chown -R root:root .dvc && rm -f .dvc/tmp/rwlock && dvc repro -f"
 
 
 
 
-
-# ===============================
-# ☁️ Secrets depuis GitHub Actions → .env
-# ===============================
-# Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
-
-BRANCH   ?= Auto_github
-WF       ?= permissions
-ART_NAME ?= env-artifact
-
-env-from-gh: ## Déclenche le workflow GH, attend, télécharge env.txt et l'installe en $(ENV_DST)
-	@command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }
-	@echo "🚀 Déclenche les permissions"
-	@if gh auth status >/dev/null 2>&1; then \
-	  RUN_URL=$$(gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
-	else \
-	  : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
-	  RUN_URL=$$(GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
-	fi; \
-	RUN_ID=$$(echo "$$RUN_URL" | grep -o '[0-9]\+$$'); \
-	[ -n "$$RUN_ID" ] || { echo "❌ Échec du déclenchement du workflow"; exit 1; }; \
-	BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch); \
-	echo "▶ RUN_ID=$$RUN_ID (branche: $$BRANCH_RUN)"; \
-	echo "🔐 Permissions accordées pour la branche: $$BRANCH_RUN (niveau: workflow '$(WF)')"; \
-	gh run watch "$$RUN_ID" || true; \
-	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
-	if [ "$$CONC" != "success" ]; then \
-	  echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
-	fi; \
-	echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
-	rm -rf tmp-$(ART_NAME); \
-	gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
-	  || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
-	SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
-	[ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
-	[ -f "$(ENV_DST)" ] && mv "$(ENV_DST)" "$(ENV_DST).bak" || true; \
-	mv "$$SRC" "$(ENV_DST)"; \
-	rm -rf tmp-$(ART_NAME); \
-	echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
-	sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***'
-
-check-permissions:
-	@gh run list --workflow=$(WF) --limit 5
 
 # ===============================
 # 5. Tests & CI
@@ -315,8 +276,8 @@ airflow-logs: ## Logs webserver
 airflow-init: ## Init DB Airflow + user admin
 	mkdir -p logs/airflow
 	sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
-	docker compose run --rm airflow-webserver airflow db upgrade
-	docker compose run --rm airflow-webserver \
+	docker compose --profile airflow run --rm airflow-webserver airflow db upgrade
+	docker compose --profile airflow run --rm airflow-webserver \
 	  airflow users create --username admin --password admin \
 	  --firstname Admin --lastname User --role Admin --email admin@example.com || true
 
@@ -332,5 +293,51 @@ fix-permissions: ## Corrige les permissions des fichiers du projet
 check-services: ## Vérifie l'état des services Docker
 	@echo "🔍 Vérification des services Docker..."
 	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "api|mlflow|airflow|redis"
+
+# ===============================
+# ☁️ Secrets depuis GitHub Actions → .env
+# ===============================
+# Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
+
+BRANCH   ?= Auto_github
+WF       ?= permissions
+ART_NAME ?= env-artifact
+
+env-from-gh: ## Vérifie les permissions, les accorde si nécessaire en déclenchant le workflow GH
+	@if [ -f "$(ENV_DST)" ]; then \
+	  echo "✅ Permissions déjà accordées - $(ENV_DST) existe."; \
+	else \
+	  command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }; \
+	  echo "🚀 Déclenche les permissions"; \
+	  if gh auth status >/dev/null 2>&1; then \
+	    RUN_URL=$$(gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
+	  else \
+	    : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
+	    RUN_URL=$$(GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
+	  fi; \
+	  RUN_ID=$$(echo "$$RUN_URL" | grep -o '[0-9]\+$$'); \
+	  [ -n "$$RUN_ID" ] || { echo "❌ Échec du déclenchement du workflow"; exit 1; }; \
+	  BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch); \
+	  echo "▶ RUN_ID=$$RUN_ID (branche: $$BRANCH_RUN)"; \
+	  echo "🔐 Permissions accordées pour la branche: $$BRANCH_RUN (niveau: workflow '$(WF)')"; \
+	  gh run watch "$$RUN_ID" || true; \
+	  CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
+	  if [ "$$CONC" != "success" ]; then \
+	    echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
+	  fi; \
+	  echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
+	  rm -rf tmp-$(ART_NAME); \
+	  gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
+	    || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
+	  SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
+	  [ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
+	  mv "$$SRC" "$(ENV_DST)"; \
+	  rm -rf tmp-$(ART_NAME); \
+	  echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
+	  sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***'; \
+	fi
+
+check-permissions:
+	@gh run list --workflow=$(WF) --limit 5
 
 # ...autres cibles annexes si besoin (build-all, pipeline-reset, etc.)...

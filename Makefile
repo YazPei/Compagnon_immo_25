@@ -131,13 +131,6 @@ airflow-build: ## Build images Airflow
 # 4. Démarrage services
 # ===============================
 docker-start: docker-network docker-up
-dvc-all: dvc-pull-all docker-repro-image-all
-quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC
-
-docker-api-run: docker-api-build ## Run image API
-	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
-	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
-
 mlflow-up: ## Démarre MLflow
 	docker ps -q --filter "name=mlflow" | xargs -r docker stop 2>/dev/null || true
 	docker ps -a -q --filter "name=mlflow" | xargs -r docker rm 2>/dev/null || true
@@ -150,6 +143,14 @@ mlflow-up: ## Démarre MLflow
 		mlflow server --host 0.0.0.0 --port $(MLFLOW_PORT) \
 		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
 		  --default-artifact-root /mlflow/mlruns
+
+dvc-all: dvc-pull-all docker-repro-image-all
+quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC
+
+docker-api-run: docker-api-build ## Run image API
+	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
+	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
+
 docker-network:
 	docker network create ml_net || echo "Network ml_net already exists"
 
@@ -193,6 +194,13 @@ docker-dvc-check:
 	fi
 
 dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
+	@if ! docker ps --format "{{.Names}}" | grep -q "^$(MLFLOW_HOST)$$"; then \
+		echo "🔧 MLflow non démarré, lancement..."; \
+		$(MAKE) mlflow-up; \
+		echo "⏳ Attente que MLflow soit prêt..."; \
+		timeout 60 bash -c 'until docker run --rm --network $(NETWORK) curlimages/curl -s http://$(MLFLOW_HOST):$(MLFLOW_PORT)/api/2.0/mlflow/experiments/list >/dev/null 2>&1; do sleep 2; done' || { echo "❌ MLflow n'a pas démarré dans les temps"; exit 1; }; \
+		echo "✅ MLflow prêt"; \
+	fi
 	sudo chmod -R 755 .dvc || true
 	docker run --rm --user root \
 	  --network $(NETWORK) \

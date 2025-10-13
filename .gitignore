@@ -50,9 +50,6 @@ archives/
 *.ipynb
 
 # dvc 
-.dvc/config.local
-.dvc/tmp
-.dvc/cache
 
 mlflow_outputs/
 Dockerfile.test

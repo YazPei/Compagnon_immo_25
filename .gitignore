@@ -1,1 +1,56 @@
-/merged_sales_data.csv
+# Fichiers d'environnement (ignorer les fichiers inutiles)
+.env
+.env.*
+.env/*
+*.env
+env/
+.env.bak
+infra/config/dagshub.yaml
+
+
+# Environnements virtuels
+.venv/
+.venv312/
+venv/
+env/
+
+# Fichiers de configuration de l'éditeur
+.vscode/
+.idea/
+
+# Fichiers Python compilés
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers inutiles et lourds
+*.log
+*.tmp
+*.pkl
+*.joblib
+*.db
+*.cfg
+
+# Données et sorties
+outputs/
+mlruns/
+dvc_remote/
+archives/
+
+ Fichiers de données
+*.csv
+*.xlsx
+*.parquet
+*.zip
+*.tar.gz
+*.pt
+
+# Notebooks Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# dvc 
+
+mlflow_outputs/
+Dockerfile.test
+TODO.md

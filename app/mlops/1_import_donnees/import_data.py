@@ -42,7 +42,7 @@ def sample(input_file):
 @click.option("--output-folder", type=click.Path(), prompt="📁 Dossier de sortie")
 def main(folder_path, output_folder):
     with mlflow.start_run(run_name="Import et sample"):
-        input_file = os.path.join(folder_path, "merged_sales_data.csv")
+        input_file = os.path.join(folder_path, "dvc_data.csv")
         df_sample = sample(input_file)
 
         # Tracking

@@ -307,43 +307,79 @@ check-services: ## Vérifie l'état des services Docker
 # ===============================
 # Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
 
-BRANCH   ?= Auto_github
-WF       ?= permissions
-ART_NAME ?= env-artifact
 
-env-from-gh: ## Vérifie les permissions, les accorde si nécessaire en déclenchant le workflow GH
-	@if [ -f "$(ENV_DST)" ]; then \
-	  echo "✅ Permissions déjà accordées - $(ENV_DST) existe."; \
-	else \
-	  command -v gh >/dev/null || { echo "❌ 'gh' (GitHub CLI) introuvable"; exit 127; }; \
-	  echo "🚀 Déclenche les permissions"; \
-	  if gh auth status >/dev/null 2>&1; then \
-	    RUN_URL=$$(gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
-	  else \
-	    : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}"; \
-	    RUN_URL=$$(GITHUB_TOKEN="$$GH_TOKEN" gh workflow run "$(WF)" --ref "$(BRANCH)" 2>&1 | grep -o 'https://github.com/[^/]\+/[^/]\+/actions/runs/[0-9]\+' | head -n1); \
-	  fi; \
-	  RUN_ID=$$(echo "$$RUN_URL" | grep -o '[0-9]\+$$'); \
-	  [ -n "$$RUN_ID" ] || { echo "❌ Échec du déclenchement du workflow"; exit 1; }; \
-	  BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch); \
-	  echo "▶ RUN_ID=$$RUN_ID (branche: $$BRANCH_RUN)"; \
-	  echo "🔐 Permissions accordées pour la branche: $$BRANCH_RUN (niveau: workflow '$(WF)')"; \
-	  gh run watch "$$RUN_ID" || true; \
-	  CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion); \
-	  if [ "$$CONC" != "success" ]; then \
-	    echo "❌ Run $$RUN_ID = $$CONC"; gh run view "$$RUN_ID" --web || true; exit 1; \
-	  fi; \
-	  echo "📦 Télécharge l’artefact '$(ART_NAME)'…"; \
-	  rm -rf tmp-$(ART_NAME); \
-	  gh run download "$$RUN_ID" -n "$(ART_NAME)" -D tmp-$(ART_NAME) \
-	    || { echo "❌ Artefact '$(ART_NAME)' introuvable"; exit 1; }; \
-	  SRC=$$(find tmp-$(ART_NAME) -type f -name "env.txt" -print -quit); \
-	  [ -n "$$SRC" ] || { echo "❌ 'env.txt' introuvable. Contenu :" ; find tmp-$(ART_NAME) -maxdepth 3 -type f -print ; exit 1; }; \
-	  mv "$$SRC" "$(ENV_DST)"; \
-	  rm -rf tmp-$(ART_NAME); \
-	  echo "✅ $(ENV_DST) mis à jour (aperçu) :"; \
-	  sed -n '1,16p' "$(ENV_DST)" | sed 's/=.*$$/=***redacted***'; \
-	fi
+
+# path: Makefile
+# path: Makefile  (cible robuste + valeurs par défaut)
+
+
+# Makefile — cibles robustes et ASCII only
+
+# -------- Defaults (écrasables à l'appel: make env-from-gh VAR=val) --------
+# --- en haut du Makefile ---
+WF       ?= permissions.yml
+BRANCH   ?= main
+ART_NAME ?= env-artifact
+ENV_DST  ?= .env
+
+export WF
+export BRANCH
+export ART_NAME
+export ENV_DST
+
+
+.PHONY: env-from-gh.vars
+env-from-gh.vars:
+	@printf "WF=%s\nBRANCH=%s\nART_NAME=%s\nENV_DST=%s\n" "$(WF)" "$(BRANCH)" "$(ART_NAME)" "$(ENV_DST)"
+
+.PHONY: env-from-gh
+env-from-gh:
+	@set -eu ; \
+	# Tips: décommente pour forcer UTF-8 si mojibake.
+	# export LC_ALL=C.UTF-8 LANG=C.UTF-8 ; \
+	if [ -f "$(ENV_DST)" ]; then echo "OK: $(ENV_DST) already exists."; exit 0; fi ; \
+	: "$${WF:?Var WF requise (ex: permissions.yml)}" ; \
+	: "$${BRANCH:?Var BRANCH requise (ex: main)}" ; \
+	: "$${ART_NAME:?Var ART_NAME requise (ex: env-artifact)}" ; \
+	: "$${ENV_DST:?Var ENV_DST requise (ex: .env)}" ; \
+	command -v gh >/dev/null 2>&1 || { echo "ERR: GitHub CLI 'gh' introuvable."; exit 127; } ; \
+	echo "Start: trigger workflow='$(WF)' on branch='$(BRANCH)'." ; \
+	if gh auth status >/dev/null 2>&1 ; then echo "Auth: gh auth status OK." ; \
+	else : "$${GH_TOKEN:?Set GH_TOKEN (export GH_TOKEN=<PAT>)}" ; echo "Auth: using GH_TOKEN."; fi ; \
+	gh workflow run "$(WF)" --ref "$(BRANCH)" >/dev/null ; \
+	ATTEMPTS=0 ; MAX_ATTEMPTS=30 ; RUN_ID="" ; \
+	while [ $$ATTEMPTS -lt $$MAX_ATTEMPTS ] ; do \
+	  RUN_ID=$$(gh run list --workflow "$(WF)" --branch "$(BRANCH)" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true) ; \
+	  [ -n "$$RUN_ID" ] && break ; ATTEMPTS=$$((ATTEMPTS+1)) ; sleep 1 ; \
+	done ; \
+	[ -n "$$RUN_ID" ] || { echo "ERR: aucun run trouvé pour workflow='$(WF)' sur branch='$(BRANCH)'."; exit 1; } ; \
+	BRANCH_RUN=$$(gh run view "$$RUN_ID" --json headBranch -q .headBranch) ; \
+	echo "RUN_ID=$$RUN_ID (branch=$$BRANCH_RUN)" ; \
+	gh run watch "$$RUN_ID" || true ; \
+	CONC=$$(gh run view "$$RUN_ID" --json conclusion -q .conclusion) ; \
+	[ "$$CONC" = "success" ] || { echo "ERR: run $$RUN_ID = $$CONC" ; gh run view "$$RUN_ID" --web || true ; exit 1 ; } ; \
+	echo "Download: artifact '$(ART_NAME)'." ; \
+	TMPDIR=$$(mktemp -d "tmp-$(ART_NAME)-XXXXXX") ; \
+	trap 'rm -rf "$$TMPDIR"' EXIT INT HUP TERM ; \
+	if ! gh run download "$$RUN_ID" -n "$(ART_NAME)" -D "$$TMPDIR" ; then \
+	  echo "ERR: artifact '$(ART_NAME)' introuvable. Liste:" ; \
+	  gh run view "$$RUN_ID" --json artifacts -q '.artifacts[].name' || true ; \
+	  exit 1 ; \
+	fi ; \
+	SRC=$$(find "$$TMPDIR" -type f -name "env.txt" -print -quit) ; \
+	[ -n "$$SRC" ] || { echo "ERR: 'env.txt' introuvable. Contenu:" ; find "$$TMPDIR" -maxdepth 3 -type f -print ; exit 1 ; } ; \
+	mkdir -p "$$(dirname -- "$(ENV_DST)")" ; \
+	mv "$$SRC" "$(ENV_DST)" ; \
+	echo "OK: $(ENV_DST) updated (preview, redacted):" ; \
+	n=0 ; while IFS='' read -r line && [ $$n -lt 16 ]; do \
+	  case $$line in *"="*) key=$${line%%=*}; printf "%s=***redacted***\n" "$$key" ;; *) printf "%s\n" "$$line" ;; esac ; \
+	  n=$$((n+1)) ; done <"$(ENV_DST)"
+
+# -------- Raccourci local (écrase tout via valeurs sûres) --------
+.PHONY: env-from-gh.local
+env-from-gh.local:
+	@$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
+
 
 check-permissions:
 	@gh run list --workflow=$(WF) --limit 5

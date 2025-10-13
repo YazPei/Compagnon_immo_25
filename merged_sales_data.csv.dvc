@@ -1,0 +1,5 @@
+outs:
+- md5: d2c82e895cfee9b561012272c889d2d7
+  size: 1117624509
+  hash: md5
+  path: merged_sales_data.csv

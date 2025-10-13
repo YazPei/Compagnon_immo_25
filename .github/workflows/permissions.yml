@@ -64,7 +64,7 @@ jobs:
             echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
             echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
             echo "AIRFLOW__WEBSERVER__SECRET_KEY=${{ secrets.AIRFLOW__WEBSERVER__SECRET_KEY }}"
-            echo "GH_TOKEN: ${{ secrets.GH_SECRET }}"
+            echo "GH_TOKEN= ${{ secrets.GH_SECRET }}"
           } >> artifacts/env.txt
           echo "[debug] wrote $(pwd)/artifacts/env.txt"
           wc -c artifacts/env.txt; head -n 3 artifacts/env.txt

@@ -26,7 +26,7 @@ def test_health_check():
 def test_estimation_endpoint():
     """Vérifie que l'endpoint d'estimation retourne une réponse valide."""
     payload = {"surface": 100, "nb_pieces": 4, "code_postal": "75001"}
-    api_key = os.getenv("API_SECRET_KEY", "yasmineketsia")
+    api_key = os.getenv("API_SECRET_KEY", "test_api_key")
     headers = {"X-API-Key": api_key}
     response = client.post("/api/v1/estimation", json=payload, headers=headers)
     assert response.status_code == 200

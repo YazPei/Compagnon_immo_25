@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # --- DVC / DagsHub ---
     DVC_REMOTE: str = "origin"
-    DAGSHUB_URL: str = "https://dagshub.com/YazPei/compagnon_immo.dvc"
+    DAGSHUB_URL: str = "https://dagshub.com/YazPei/compagnon_immo_25.dvc"
     DAGSHUB_USERNAME: Optional[str] = None
     DAGSHUB_PASSWORD: Optional[str] = None
 
@@ -106,7 +106,7 @@ class Settings(BaseSettings):
 
     # --- Airflow ---
     AIRFLOW_HOME: Optional[str] = None
-    AIRFLOW_CONN_ID: str = "compagnon_immo_api"
+    AIRFLOW_CONN_ID: str = "compagnon_immo_25_api"
 
     # Note: Ne pas déclarer de classe Config (pydantic v1) en même temps que
     # model_config (pydantic v2). Les options nécessaires sont déjà dans

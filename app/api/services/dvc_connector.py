@@ -28,10 +28,10 @@ class DVCConnector:
         else:
             # Développement local - détection automatique
             current_path = Path.cwd()
-            if "Compagnon_immo" in str(current_path):
+            if "Compagnon_immo_25" in str(current_path):
                 self.repo_path = current_path
             else:
-                self.repo_path = Path("/home/ketsiapedro/Bureau/MLE/Compagnon_immo")
+                self.repo_path = Path("/home/ketsiapedro/Bureau/Compagnon_immo_25")
 
         self.models_dir = self.repo_path / "app/api/models"
         self.dvc_file = self.repo_path / "dvc.yaml"

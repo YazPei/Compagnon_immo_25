@@ -37,10 +37,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get -y dist-upgrade && rm -rf /var/lib/apt/lists/*
 
 # Labels d'information (OCI)
-LABEL org.opencontainers.image.title="Compagnon_immo dvc image" \
+LABEL org.opencontainers.image.title="Compagnon_immo_25 dvc image" \
     org.opencontainers.image.description="Image optimisée et durcie pour le pipeline DVC / API" \
-    org.opencontainers.image.vendor="Compagnon_immo" \
-    org.opencontainers.image.source="https://github.com/YazPei/Compagnon_immo"
+    org.opencontainers.image.vendor="Compagnon_immo_25" \
+    org.opencontainers.image.source="https://github.com/YazPei/Compagnon_immo_25"
 
 # Utilisateur sécurisé non-root
 ARG USER_ID=1000

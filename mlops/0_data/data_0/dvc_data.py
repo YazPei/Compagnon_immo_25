@@ -2,7 +2,7 @@
 import os
 from dagshub.upload import Repo
 
-repo = Repo(owner="YazPei", name="Compagnon_immo", branch="main")
+repo = Repo(owner="YazPei", name="Compagnon_immo_25", branch="main")
 
 repo.upload(
     local_path="data/dvc_data.csv",       # fichier local à envoyer

@@ -34,7 +34,7 @@ dvc init --quiet
 
 # === 🔐 Configuration du remote vers DagsHub ===
 echo "🔗 Configuration du remote DVC vers DagsHub..."
-dvc remote add -d origin "https://dagshub.com/${DVC_USER}/compagnon_immo.dvc.git"
+dvc remote add -d origin "https://dagshub.com/${DVC_USER}/compagnon_immo_25.dvc.git"
 dvc remote modify origin --local auth basic
 dvc remote modify origin --local user "$DVC_USER"
 dvc remote modify origin --local password "$DVC_TOKEN"

@@ -11,7 +11,7 @@ stages:
       --date-column date_vente
       --key-columns id_transaction
       --sep ';'
-      --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo
+      --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo_25
       --dvc-path data/dvc_data.csv
       --dvc-rev main
       --dvc-remote dagshub

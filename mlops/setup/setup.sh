@@ -6,7 +6,7 @@ echo "🔐 Configuration du remote DVC avec DagsHub"
 REMOTE_NAME="origin"
 
 # URL DagsHub (adapter si nécessaire)
-REMOTE_URL="https://dagshub.com/YazPei/Compagnon_immo.dvc"
+REMOTE_URL="https://dagshub.com/YazPei/Compagnon_immo_25.dvc"
 
 # Demande les infos personnelles
 read -p "👤 DagsHub username : " DAGSHUB_USER

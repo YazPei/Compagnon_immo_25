@@ -132,8 +132,8 @@ jobs:
           file: ./infrastructure/docker/Dockerfile.api
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/compagnon-immo-25-api:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/compagnon-immo-25-api:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -144,8 +144,8 @@ jobs:
           file: ./infrastructure/docker/Dockerfile.mlflow
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-mlflow:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/compagnon-immo-mlflow:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/compagnon-immo-25-mlflow:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/compagnon-immo-25-mlflow:${{ github.ref_name }}
 
   integration-test:
     name: Integration Tests
@@ -208,7 +208,7 @@ jobs:
           username: ${{ secrets.STAGING_USERNAME }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
-            cd /opt/compagnon-immo
+            cd /opt/compagnon-immo-25
             docker-compose -f infrastructure/docker/docker-compose.yml pull
             docker-compose -f infrastructure/docker/docker-compose.yml up -d
             docker image prune -f
@@ -235,7 +235,7 @@ jobs:
           username: ${{ secrets.PRODUCTION_USERNAME }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
-            cd /opt/compagnon-immo
+            cd /opt/compagnon-immo-25
             
             # Backup current version
             docker-compose -f infrastructure/docker/docker-compose.deployment.yml down
@@ -296,5 +296,5 @@ jobs:
           username: ${{ secrets.PRODUCTION_USERNAME }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
-            cd /opt/compagnon-immo
+            cd /opt/compagnon-immo-25
             docker-compose -f infrastructure/docker/docker-compose.monitoring.yml up -d prometheus grafana

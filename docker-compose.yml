@@ -235,7 +235,7 @@ services:
     build:
       context: .
       dockerfile: mlops/preprocessing_4/Dockerfile.preprocessing
-    image: compagnon_immo-preprocessing
+    image: compagnon_immo_25-preprocessing
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app

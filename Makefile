@@ -96,8 +96,12 @@ prepare-dirs: ## Prépare les répertoires nécessaires
 	@touch data/.gitkeep
 
 install: prepare-dirs ## Installe les dépendances Python
-	@$(PIP) install --upgrade pip
-	@$(PIP) install -r requirements.txt
+	@if $(PIP) install --dry-run -r requirements.txt 2>&1 | grep -q "Would install"; then \
+		$(PIP) install --upgrade pip; \
+		$(PIP) install -r requirements.txt; \
+	else \
+		echo "Les dépendances sont déjà installées pour lancer le projet"; \
+	fi
 
 install-gh: ## Installe GitHub CLI si absent
 	@if command -v gh >/dev/null 2>&1; then \
@@ -114,7 +118,14 @@ install-gh: ## Installe GitHub CLI si absent
 		echo "✅ GitHub CLI installé avec succès."; \
 	fi
 
-permission: prepare-dirs install install-gh
+permission: prepare-dirs install ## Accord permissions rwx au profil utilisateur sur les services du projet
+	@if ! command -v gh >/dev/null 2>&1; then \
+		$(MAKE) install-gh; \
+	fi
+	@echo "$(COLOR_YELLOW)🔧 Attribution des permissions rwx au profil $(shell whoami)...$(COLOR_RESET)"
+	@sudo chown -R $(shell whoami):$(shell whoami) . || true
+	@chmod -R u+rwx . || true
+	@echo "$(COLOR_GREEN)✅ Permissions rwx attribuées.$(COLOR_RESET)"
 
 # ===============================
 # 3. Build
@@ -357,7 +368,11 @@ env-from-gh: ## Récupère les secrets depuis GitHub Actions
 env-from-gh.local: ## Raccourci pour récupérer .env depuis GitHub Actions
 	@$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
 
-check-permissions:
-	@gh run list --workflow=$(WF) --limit 5
+check-permissions: ## Vérifie les permissions du profil utilisateur sur les services du projet
+	@echo "🔍 Vérification des permissions pour le profil $(shell whoami):"
+	@ls -ld . | awk '{print "Répertoire racine:", $$1, $$3, $$4}'
+	@ls -ld data/ exports/ mlruns/ logs/ 2>/dev/null || echo "Certains répertoires n'existent pas encore."
+	@echo "Permissions détaillées:"
+	@find . -maxdepth 2 -type d -exec ls -ld {} \; | head -10
 
 # ...autres cibles annexes si besoin (build-all, pipeline-reset, etc.)...

@@ -54,14 +54,15 @@ COLOR_YELLOW := \033[33m
 
 .PHONY: \
   help lint check-dependencies \
-  prepare-dirs install install-gh \
+  prepare-dirs install install-gh env-from-gh check-permissions \
+  permission \
   docker-build docker-api-build airflow-build \
-  permission docker-start dvc-all quick-start-dvc docker-api-run mlflow-up airflow-up dvc-add-all dvc-repro-all dvc-pull-all \
+  docker-network docker-up docker-start mlflow-up airflow-up docker-api-run \
+  dvc-all quick-start-dvc dvc-repro-all dvc-pull-all \
   api-test api-test-docker ci-test \
   api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
-  env-from-gh check-permissions \
-  dvc-push-all pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
+  pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
 
 # ===============================
 # 1. Aide & vérifications
@@ -113,7 +114,7 @@ install-gh: ## Installe GitHub CLI si absent
 		echo "✅ GitHub CLI installé avec succès."; \
 	fi
 
-permission: prepare-dirs install install-gh env-from-gh
+permission: prepare-dirs install install-gh
 
 # ===============================
 # 3. Build
@@ -145,7 +146,7 @@ mlflow-up: ## Démarre MLflow
 		  --default-artifact-root /mlflow/mlruns
 
 dvc-all: dvc-pull-all docker-repro-image-all
-quick-start-dvc: docker-api-run mlflow-up docker-network docker-up dvc-add-all docker-repro-image-all ## Quick start + exécution complète de DVC
+quick-start-dvc: docker-api-run mlflow-up docker-network docker-up docker-repro-image-all ## Quick start + exécution complète de DVC
 
 docker-api-run: docker-api-build ## Run image API
 	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
@@ -175,15 +176,6 @@ dvc-use-data:
 
 
 
-#dvc-add-all: ## Ajoute tous les stages DVC
-#	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) \
-#	  dvc stage add -n import_data \
-#	  -d data/dvc_data.csv \
-#	  -o data/df_sample.csv \
-#	  --force \
-#	  python mlops/1_import_donnees/import_data.py
-	  
-	  
 docker-repro-image-all: docker-dvc-check dvc-repro-all
 docker-dvc-check:
 	@if [ -z "$$(docker images -q $(DVC_IMAGE):latest)" ]; then \
@@ -307,16 +299,7 @@ check-services: ## Vérifie l'état des services Docker
 # ===============================
 # Paramètres overridables : make env-from-gh BRANCH=Auto_github WF=permissions ART_NAME=env-artifact ENV_DST=.env
 
-
-
-# path: Makefile
-# path: Makefile  (cible robuste + valeurs par défaut)
-
-
-# Makefile — cibles robustes et ASCII only
-
 # -------- Defaults (écrasables à l'appel: make env-from-gh VAR=val) --------
-# --- en haut du Makefile ---
 WF       ?= permissions.yml
 BRANCH   ?= main
 ART_NAME ?= env-artifact
@@ -327,16 +310,11 @@ export BRANCH
 export ART_NAME
 export ENV_DST
 
-
-.PHONY: env-from-gh.vars
-env-from-gh.vars:
+env-from-gh.vars: ## Affiche les variables pour env-from-gh
 	@printf "WF=%s\nBRANCH=%s\nART_NAME=%s\nENV_DST=%s\n" "$(WF)" "$(BRANCH)" "$(ART_NAME)" "$(ENV_DST)"
 
-.PHONY: env-from-gh
-env-from-gh:
+env-from-gh: ## Récupère les secrets depuis GitHub Actions
 	@set -eu ; \
-	# Tips: décommente pour forcer UTF-8 si mojibake.
-	# export LC_ALL=C.UTF-8 LANG=C.UTF-8 ; \
 	if [ -f "$(ENV_DST)" ]; then echo "OK: $(ENV_DST) already exists."; exit 0; fi ; \
 	: "$${WF:?Var WF requise (ex: permissions.yml)}" ; \
 	: "$${BRANCH:?Var BRANCH requise (ex: main)}" ; \
@@ -376,10 +354,8 @@ env-from-gh:
 	  n=$$((n+1)) ; done <"$(ENV_DST)"
 
 # -------- Raccourci local (écrase tout via valeurs sûres) --------
-.PHONY: env-from-gh.local
-env-from-gh.local:
+env-from-gh.local: ## Raccourci pour récupérer .env depuis GitHub Actions
 	@$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
-
 
 check-permissions:
 	@gh run list --workflow=$(WF) --limit 5

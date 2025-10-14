@@ -1,4 +1,4 @@
-FROM compagnon_immo-dvc  # Ton image de base DVC déjà configurée
+FROM compagnon_immo_25-dvc  # Ton image de base DVC déjà configurée
 
 WORKDIR /app
 

@@ -166,8 +166,10 @@ docker-api-run: docker-api-build ## Run image API
 docker-network:
 	docker network create ml_net || echo "Network ml_net already exists"
 
-docker-up: 
-	docker compose up -d 
+docker-up:
+	@echo "🛑 Arrêt et suppression des conteneurs existants..."
+	-$(DOCKER_COMPOSE_CMD) down --remove-orphans || true
+	docker compose up -d
 
 dvc-use-data:
 	docker run --rm \

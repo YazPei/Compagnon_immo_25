@@ -52,7 +52,7 @@ fi
 
 # === 🔗 Configurer le remote DVC (DagsHub) ===
 # ⚠️ Ajuste DAGSHUB_DVC_URL à la bonne URL de TON repo data (ex: https://dagshub.com/<user>/<repo>.dvc)
-DAGSHUB_DVC_URL="${DAGSHUB_DVC_URL:-https://dagshub.com/${DVC_USER:-user}/compagnon_immo.dvc}"
+DAGSHUB_DVC_URL="${DAGSHUB_DVC_URL:-https://dagshub.com/${DVC_USER:-user}/compagnon_immo_25.dvc}"
 
 echo "🔗 Configuration du remote DVC par défaut -> $DAGSHUB_DVC_URL"
 if ! dvc remote list | grep -q '^origin\b'; then

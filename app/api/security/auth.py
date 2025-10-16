@@ -2,35 +2,20 @@
 """Module de gestion de l'authentification par clé API et JWT."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-
-# Importation plus sûre de passlib
-try:
-    from passlib.hash import bcrypt
-
-    PWD_HASHER = bcrypt
-except ImportError:
-    from passlib.hash import sha256_crypt
-
-    PWD_HASHER = sha256_crypt
-    logging.warning(
-        "⚠️ bcrypt non disponible, utilisation de sha256_crypt comme fallback"
-    )
 
 from app.api.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 # Configuration des clés API valides (à ajuster / externaliser si besoin)
-VALID_API_KEYS = {
-    "test-key-123": {"name": "Test Key", "permissions": ["read", "write"]},
+VALID_API_KEYS: Dict[str, Dict[str, Any]] = {
     "test_api_key": {"name": "Test API Key", "permissions": ["read", "write"]},
-    "dev-key": {"name": "Development Key", "permissions": ["read", "write"]},
 }
 
 security = HTTPBearer()
@@ -57,7 +42,8 @@ class AuthManager:
         try:
             # Tronquer explicitement à 72 octets pour bcrypt
             truncated_password = plain_password[:72]
-            return PWD_HASHER.verify(truncated_password, hashed_password)
+            from passlib.hash import bcrypt
+            return bcrypt.verify(truncated_password, hashed_password)
         except Exception as e:
             logger.error(f"Erreur lors de la vérification du mot de passe : {e}")
             return False
@@ -71,7 +57,8 @@ class AuthManager:
         try:
             # Tronquer explicitement à 72 octets pour bcrypt
             truncated_password = password[:72]
-            return PWD_HASHER.hash(truncated_password)
+            from passlib.hash import bcrypt
+            return bcrypt.hash(truncated_password)
         except Exception as e:
             logger.error(f"Erreur lors du hashage du mot de passe : {e}")
             # Pour les tests, on renvoie un hash statique au lieu de lever une exception
@@ -83,7 +70,7 @@ class AuthManager:
     ) -> str:
         """Crée un token JWT."""
         to_encode = data.copy()
-        expire = datetime.utcnow() + (
+        expire = datetime.now(timezone.utc) + (
             expires_delta or timedelta(minutes=self.access_token_expire_minutes)
         )
         to_encode.update({"exp": expire})

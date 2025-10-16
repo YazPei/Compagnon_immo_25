@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # --- Sécurité ---
     # IMPORTANT: Les tests attendent X-API-Key == "test_api_key"
     API_KEY: str = "test_api_key"
+    API_SECRET_KEY: str = (  # type: ignore[assignment]
+        "production-secret-key-change-in-production"
+    )
 
     # --- DB ---
     DATABASE_URL: str = "sqlite:///./app.db"
@@ -63,7 +66,6 @@ class Settings(BaseSettings):
     DAGSHUB_PASSWORD: Optional[str] = None
 
     # --- JWT ---
-    API_SECRET_KEY: str = "development-secret-key-change-in-production"
     JWT_SECRET_KEY: Optional[str] = None
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
@@ -183,8 +185,8 @@ class Settings(BaseSettings):
             except PermissionError:
                 pass
 
-        if self.ENVIRONMENT == "production" and (
-            self.API_SECRET_KEY == "development-secret-key-change-in-production"
+        if self.ENVIRONMENT in {"production", "test"} and (
+            self.API_SECRET_KEY == "production-secret-key-change-in-production"
         ):
             raise ValueError("API_SECRET_KEY doit être changée en production")
 

@@ -116,7 +116,6 @@ services:
       - redis
     networks:
       - ml_net
-    profiles: ["regression", "series", "test"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -149,7 +148,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    user: "${UID:-1000}:${GID:-1000}"
+    user: root
     volumes:
       - ./app:/app/app
       - ./params.yaml:/app/params.yaml
@@ -168,7 +167,7 @@ services:
         condition: service_started
     networks:
       - ml_net
-    command: python -m pytest app/api/tests -v
+    command: bash -c "cd /app && ls -la app/api/tests && python -m pytest app/api/tests -v"
     profiles: ["test", "regression", "series"]
 
   # Service CI pour tests et linting

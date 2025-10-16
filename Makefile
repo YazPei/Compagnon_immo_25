@@ -245,9 +245,7 @@ ci-test: ## Exécute les tests CI dans Docker
 # ===============================
 api-stop: ## Stoppe le conteneur Docker de l'API
 	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
-
-docker-api-stop: ## Stop & rm API container
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
+	@echo "🟢 Conteneur API arrêté et supprimé."
 
 mlflow-down: ## Stoppe MLflow
 	docker stop $(MLFLOW_HOST) || true

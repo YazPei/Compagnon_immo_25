@@ -1,0 +1,147 @@
+# path: Makefile.s3
+
+SHELL := /usr/bin/env bash
+.RECIPEPREFIX := >
+
+S3_VENV := .s3venv
+S3_PY   := $(if $(wildcard $(S3_VENV)/bin/python),$(S3_VENV)/bin/python,python3)
+S3_PIP  := $(if $(wildcard $(S3_VENV)/bin/pip),$(S3_VENV)/bin/pip,pip3)
+
+# Par défaut: fichier/clé à la racine
+S3_FILE  ?= merged_sales_data.csv
+S3_KEY   ?= merged_sales_data.csv
+S3_DIR   ?= data/                 # dossier local à synchroniser (upload)
+S3_PREFIX?= data/                 # préfixe S3 (dans le bucket)
+S3_OUT   ?= downloads/            # dossier local pour les téléchargements
+S3_EXP   ?= 3600                  # secondes pour presign URL
+
+.PHONY: s3-help s3-venv s3-install s3-env s3-sanity s3-upload s3-upload-mp s3-list s3-download s3-sync-up s3-sync-down s3-presign s3-cat s3-rm s3-clean
+
+s3-help: ## Aide section S3 (DagsHub)
+> echo "S3 targets:"
+> echo "  s3-install     : crée venv .s3venv + installe boto3/botocore"
+> echo "  s3-sanity      : vérifie l'accès (list 1 objet)"
+> echo "  s3-upload      : upload single-part (fiable)"
+> echo "  s3-upload-mp   : upload multipart doux"
+> echo "  s3-list        : liste un préfixe"
+> echo "  s3-download    : télécharge une clé vers S3_OUT"
+> echo "  s3-sync-up     : envoie un dossier local vers un préfixe S3"
+> echo "  s3-sync-down   : récupère un préfixe S3 vers un dossier local"
+> echo "  s3-presign     : URL temporaire de téléchargement"
+> echo "  s3-cat         : affiche le début d'un objet"
+> echo "  s3-rm          : supprime une clé ou un préfixe"
+> echo "Vars utiles: S3_FILE S3_KEY S3_DIR S3_PREFIX S3_OUT S3_EXP"
+
+s3-venv:
+> python3 -m venv $(S3_VENV)
+> $(S3_PIP) -q install --upgrade pip
+
+
+s3-install: s3-venv
+> $(S3_PIP) -q install boto3 botocore pandas click mlflow pyarrow fastparquet
+
+# Vars parquet
+PARQ_LOCAL ?= data/merged_sales_data.parquet
+CSV_LOCAL  ?= merged_sales_data.csv
+PARQ_KEY   ?= $(PARQ_LOCAL)      # même chemin côté S3
+CSV_SEP    ?= ;
+
+# Convert CSV(;) -> Parquet (streaming)
+.PHONY: s3-csv2parquet-stream
+s3-csv2parquet-stream: s3-install
+> $(S3_PY) tools/csv_to_parquet.py --src "$(CSV_LOCAL)" --dst "$(PARQ_LOCAL)" --sep "$(CSV_SEP)"
+
+# Upload le Parquet sous data/
+.PHONY: s3-upload-parquet
+s3-upload-parquet: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py upload --file "$(PARQ_LOCAL)" --key "$(PARQ_KEY)" --force-single --verbose
+
+# Pipeline parquet: convert -> upload -> postcheck -> list data/
+.PHONY: s3-pipeline-parquet
+s3-pipeline-parquet: s3-csv2parquet-stream s3-upload-parquet s3-list
+> @echo "✅ Parquet uploadé. Dans DagsHub → Datasets → Repository Storage: mets prefix= data/ → Build/Index."
+
+
+s3-env:
+> test -f $$HOME/.dagshub.env || (echo "Missing $$HOME/.dagshub.env"; exit 1)
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> echo "Endpoint: $$AWS_S3_ENDPOINT"; \
+> echo "Bucket  : $$DAGSHUB_BUCKET"; \
+> echo "Region  : $$AWS_DEFAULT_REGION"
+
+s3-sanity: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py sanity
+
+s3-upload: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py upload --file "$(S3_FILE)" --key "$(S3_KEY)" --force-single --verbose
+
+s3-upload-mp: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py upload --file "$(S3_FILE)" --key "$(S3_KEY)" \
+>   --chunk-size-mb 8 --multipart-threshold-mb 16 --max-concurrency 2 --verbose
+
+s3-list: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py list --prefix "$(S3_PREFIX)" --max-keys 50
+
+s3-download: s3-env
+> mkdir -p "$(S3_OUT)"
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py download --key "$(S3_KEY)" --out "$(S3_OUT)"
+
+s3-sync-up: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py sync-up --dir "$(S3_DIR)" --prefix "$(S3_PREFIX)" --force-single
+
+s3-sync-down: s3-env
+> mkdir -p "$(S3_OUT)"
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py sync-down --prefix "$(S3_PREFIX)" --out "$(S3_OUT)"
+
+s3-presign: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py presign --key "$(S3_KEY)" --expires "$(S3_EXP)"
+
+s3-cat: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py cat --key "$(S3_KEY)" --lines 20
+
+s3-rm: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) tools/dagshub_s3.py rm --key "$(S3_KEY)" --prefix "$(S3_PREFIX)"
+
+s3-clean:
+> rm -rf $(S3_VENV) __pycache__ .pytest_cache
+
+
+# Deps supplémentaires pour import_data.py
+# (pandas/click/mlflow/pyarrow pour CSV/Parquet; boto3/botocore déjà installés)
+s3-install-imp: s3-venv
+> $(S3_PIP) -q install boto3 botocore pandas click mlflow pyarrow fastparquet
+
+# Paramètres par défaut de l'import (override à l'appel si besoin)
+
+# Lance l'import incrémental directement depuis DagsHub (source S3)
+# Utilise l'env ~/.dagshub.env déjà chargé par s3-env
+.PHONY: s3-import-imp
+s3-import: s3-env
+> set -a; source $$HOME/.dagshub.env; set +a; \
+> $(S3_PY) import_data.py \
+>   --source-mode s3 \
+>   --output-folder "$(IMP_OUT_DIR)" \
+>   --cumulative-path "$(IMP_CUMUL_PATH)" \
+>   --checkpoint-path "$(IMP_CHECKPOINT)" \
+>   --sep "$(IMP_SEP)" \
+>   --s3-key "$(IMP_S3_KEY)" \
+>   $(if $(IMP_DATE_COL),--date-column "$(IMP_DATE_COL)",) \
+>   $(if $(IMP_KEY_COLS),--key-columns "$(IMP_KEY_COLS)",)
+
+# Chaîne complète: upload => import => list (vérif)
+.PHONY: s3-pipeline
+s3-pipeline: s3-upload s3-import s3-list
+> @echo "✅ Pipeline S3 terminé."
+# ============================================================================ 
+

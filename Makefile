@@ -32,6 +32,7 @@ PIP := pip3
 TEST_DIR := app/api/tests
 DVC_TOKEN ?= default_token_securise_ou_vide
 
+
 MLFLOW_IMAGE := ghcr.io/mlflow/mlflow:v2.13.1
 DVC_IMAGE := $(IMAGE_PREFIX)-dvc
 USER_FLAGS := --user $(shell id -u):$(shell id -g)
@@ -145,6 +146,7 @@ api-build: ## Build image API
 api-start: docker-api-run ## Démarre l'API (build + run)
 api-stop: ## Stoppe l'API
 	$(DOCKER_COMPOSE_CMD) down api
+
 
 # ===============================
 # 4. Démarrage services
@@ -368,3 +370,79 @@ check-permissions: ## Vérifie les permissions du profil utilisateur sur les ser
 	@find . -maxdepth 2 -type d -exec ls -ld {} \; | head -10
 
 # ...autres cibles annexes si besoin (build-all, pipeline-reset, etc.)...
+
+
+# DagsHub S3 section — noms isolés pour éviter les collisions avec MLOps
+
+# Vars dédiées S3 (ne pas réutiliser FILE/KEY déjà déclarées plus haut)
+S3_VENV := .s3venv
+S3_PY   := $(S3_VENV)/bin/python
+S3_PIP  := $(S3_VENV)/bin/pip
+
+S3_FILE ?= merged_sales_data.csv         
+S3_KEY  ?= merged_sales_data.csv         # clé objet par défaut (racine du bucket)
+
+.PHONY: s3-help s3-venv s3-install s3-env s3-sanity s3-upload s3-upload-mp s3-list s3-clean
+
+s3-help: ## Aide section S3 (DagsHub)
+	@echo "S3 targets: s3-venv s3-install s3-env s3-sanity s3-upload s3-upload-mp s3-list s3-clean"
+
+s3-venv:
+	python3 -m venv $(S3_VENV)
+	$(S3_PIP) -q install --upgrade pip
+
+s3-install: s3-venv
+	$(S3_PIP) -q install boto3 botocore
+
+s3-env:
+	@test -f $$HOME/.dagshub.env || (echo "Missing $$HOME/.dagshub.env"; exit 1)
+	@set -a; source $$HOME/.dagshub.env; set +a; \
+	echo "Endpoint: $$AWS_S3_ENDPOINT"; \
+	echo "Bucket  : $$DAGSHUB_BUCKET"; \
+	echo "Region  : $$AWS_DEFAULT_REGION"
+
+s3-sanity: s3-env
+	@set -a; source $$HOME/.dagshub.env; set +a; \
+	$(S3_PY) - <<'PY' || { echo "Sanity FAIL"; exit 3; }
+	import os, boto3
+	s3=boto3.client("s3",
+	endpoint_url=os.environ["AWS_S3_ENDPOINT"],
+	aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+	aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+	region_name=os.environ.get("AWS_DEFAULT_REGION","us-east-1"))
+	b=os.environ["DAGSHUB_BUCKET"]
+	resp=s3.list_objects_v2(Bucket=b, MaxKeys=5)
+	print("Sanity OK. KeyCount:", resp.get("KeyCount",0))
+	PY
+
+# Uploader Python requis: tools/upload_s3_resilient.py
+s3-upload: s3-env
+	@set -a; source $$HOME/.dagshub.env; set +a; \
+	$(S3_PY) tools/upload_s3_resilient.py "$(S3_FILE)" "$$DAGSHUB_BUCKET" "$(S3_KEY)" \
+	  --endpoint-url "$$AWS_S3_ENDPOINT" --path-style --force-single --verbose
+
+s3-upload-mp: s3-env
+	@set -a; source $$HOME/.dagshub.env; set +a; \
+	$(S3_PY) tools/upload_s3_resilient.py "$(S3_FILE)" "$$DAGSHUB_BUCKET" "$(S3_KEY)" \
+	  --endpoint-url "$$AWS_S3_ENDPOINT" --path-style \
+	  --chunk-size-mb 8 --multipart-threshold-mb 16 --max-concurrency 2 --verbose
+
+s3-list: s3-env
+	@set -a; source $$HOME/.dagshub.env; set +a; \
+	$(S3_PY) - <<'PY'
+	import os, boto3
+	s3=boto3.client("s3",
+	endpoint_url=os.environ["AWS_S3_ENDPOINT"],
+	aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+	aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+	region_name=os.environ.get("AWS_DEFAULT_REGION","us-east-1"))
+	b=os.environ["DAGSHUB_BUCKET"]
+	resp=s3.list_objects_v2(Bucket=b, MaxKeys=50)
+	for o in resp.get("Contents",[]) or []:
+		print(o["Key"])
+		PY
+
+s3-clean:
+	rm -rf $(S3_VENV) __pycache__ .pytest_cache
+
+

@@ -30,10 +30,12 @@ RUN chmod -R 755 /app  # Assure les permissions correctes
 COPY app ./app
 COPY params.yaml ./params.yaml
 COPY .dvc ./.dvc
+COPY pytest.ini ./pytest.ini
 
 # Utilisateur non-root
 RUN useradd -m appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod 644 pytest.ini
 USER appuser
 
 EXPOSE 8000

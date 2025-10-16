@@ -19,6 +19,7 @@ services:
       - "6380:6379"  # Port hôte changé pour éviter le conflit
     networks:
       - ml_net
+    profiles: ["regression", "series", "test"]
 
   # MLflow pour le suivi des expériences
   mlflow:
@@ -35,6 +36,7 @@ services:
       - mlflow_artifacts:/mlflow/artifacts
     networks:
       - ml_net
+    profiles: ["regression", "series", "test"]
 
   # Airflow Webserver
   airflow-webserver:
@@ -108,6 +110,7 @@ services:
       - "8000:8000"
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
+      - ENVIRONMENT=development
     depends_on:
       - mlflow
       - redis
@@ -125,7 +128,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    user: root
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
       - ./data:/app/data
@@ -145,8 +148,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: root
     volumes:
-      - .:/app
+      - ./app:/app/app
+      - ./params.yaml:/app/params.yaml
+      - ./app/api/tests:/app/app/api/tests
     working_dir: /app
     environment:
       - API_BASE_URL=http://api:8000/api/v1
@@ -157,10 +163,32 @@ services:
         condition: service_healthy
       mlflow:
         condition: service_started
+      redis:
+        condition: service_started
     networks:
       - ml_net
-    command: python -m pytest app/api/tests -v
-    profiles: ["test"]
+    command: bash -c "cd /app && ls -la app/api/tests && python -m pytest app/api/tests -v"
+    profiles: ["test", "regression", "series"]
+
+  # Service CI pour tests et linting
+  ci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - ml_net
+    command: >
+      bash -c "
+        python -m pytest app/api/tests -v &&
+        python -m flake8 app/ --max-line-length=88 --ignore=E203,W503
+      "
+    profiles: ["ci"]
 
   # Prometheus pour la collecte de métriques
   prometheus:

@@ -6,10 +6,10 @@
 # ===============================
 # 1. Aide & vérifications        : help, lint, check-dependencies
 # 2. Préparation & installation  : prepare-dirs, install, install-gh
-# 3. Build                      : docker-build, docker-api-build, airflow-build
-# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
+# 3. Build                      : docker-build, airflow-build
+# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, api-start, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
 # 5. Tests & CI                 : api-test, api-test-docker, ci-test
-# 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
+# 6. Arrêt & nettoyage          : api-stop, mlflow-down, airflow-down, stop-all, clean
 # 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services, env-from-gh, check-permissions
 
 
@@ -56,11 +56,11 @@ COLOR_YELLOW := \033[33m
   help lint check-dependencies \
   prepare-dirs install install-gh env-from-gh check-permissions \
   permission \
-  docker-build docker-api-build airflow-build \
-  docker-network docker-up docker-start mlflow-up airflow-up docker-api-run \
+  docker-build airflow-build \
+  docker-network docker-up docker-start mlflow-up airflow-up api-start \
   dvc-all quick-start-dvc dvc-repro-all dvc-pull-all \
   api-test api-test-docker ci-test \
-  api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
+  api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
   pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
 
@@ -133,11 +133,18 @@ permission: prepare-dirs install ## Accord permissions rwx au profil utilisateur
 docker-build: prepare-dirs ## Build via compose
 	@$(DOCKER_COMPOSE_CMD) build
 
-docker-api-build: ## Build image API
-	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
-
 airflow-build: ## Build images Airflow
 	docker compose build airflow-webserver airflow-scheduler
+
+# ===============================
+# API Management
+# ===============================
+api-build: ## Build image API
+	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
+
+api-start: docker-api-run ## Démarre l'API (build + run)
+api-stop: ## Stoppe l'API
+	$(DOCKER_COMPOSE_CMD) down api
 
 # ===============================
 # 4. Démarrage services
@@ -159,9 +166,8 @@ mlflow-up: ## Démarre MLflow
 dvc-all: dvc-pull-all docker-repro-image-all
 quick-start-dvc: docker-api-run mlflow-up docker-network docker-up docker-repro-image-all ## Quick start + exécution complète de DVC
 
-docker-api-run: docker-api-build ## Run image API
-	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
-	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
+docker-api-run: ## Run API via Docker Compose (sans profil)
+	$(DOCKER_COMPOSE_CMD) up api --build -d
 
 docker-network:
 	docker network create ml_net || echo "Network ml_net already exists"
@@ -219,44 +225,30 @@ dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
 # ===============================
 # 5. Tests & CI
 # ===============================
-api-test: ## Lancer les tests de l'API avec démarrage automatique des services
-	@echo "🧪 Tests de l'API…"
-	@test -d $(TEST_DIR) || { echo "❌ Dossier de tests introuvable: $(TEST_DIR)"; exit 4; }
-	@echo "🚀 Démarrage des services pour les tests..."
-	@$(DOCKER_COMPOSE_CMD) up -d api mlflow redis
-	@echo "⏳ Attente que l'API soit prête..."
-	@timeout 60 bash -c 'until curl -f http://localhost:8000/api/v1/health >/dev/null 2>&1; do sleep 2; done' || { echo "❌ L'API n'a pas démarré dans les temps"; $(DOCKER_COMPOSE_CMD) logs api; exit 1; }
-	@echo "✅ API prête, lancement des tests..."
-	@API_BASE_URL=http://localhost:8000/api/v1 PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v
-	@echo "🛑 Arrêt des services de test..."
-	@$(DOCKER_COMPOSE_CMD) stop api mlflow redis
-
-api-test-docker: ## Lancer les tests de l'API dans un environnement Docker complet
+api-test: ## Lancer les tests de l'API dans un environnement Docker complet
 	@echo "🐳 Tests de l'API avec Docker…"
 	@echo "🚀 Démarrage de l'environnement de test complet..."
-	@$(DOCKER_COMPOSE_CMD) --profile test up --build --abort-on-container-exit --exit-code-from api-test
+	@$(DOCKER_COMPOSE_CMD) --profile test up --build --abort-on-container-exit --exit-code-from api-test --quiet-pull
 	@echo "🛑 Nettoyage de l'environnement de test..."
 	@$(DOCKER_COMPOSE_CMD) --profile test down -v
 
-ci-test: install ## Exécute les tests CI localement
-	@echo "🔍 Lancement des tests CI..."
-	@make check-services
-	@echo "$(COLOR_YELLOW)🧪 Exécution des tests unitaires...$(COLOR_RESET)"
-	@PYTHONPATH=. $(PYTHON_BIN) -m pytest $(TEST_DIR) -v || { echo "$(COLOR_RED)❌ Tests unitaires échoués$(COLOR_RESET)"; exit 1; }
-	@echo "$(COLOR_YELLOW)🔍 Vérification du linting...$(COLOR_RESET)"
-	@$(PIP) install flake8 --quiet || true
-	@$(PYTHON_BIN) -m flake8 app/ --max-line-length=88 --ignore=E203,W503 || { echo "$(COLOR_RED)❌ Linting échoué$(COLOR_RESET)"; exit 1; }
+api-test-fast: ## Lancer les tests de l'API rapidement (sans rebuild si images existent)
+	@echo "⚡ Tests de l'API rapides avec Docker…"
+	@echo "🚀 Démarrage de l'environnement de test (utilise les images existantes)..."
+	@$(DOCKER_COMPOSE_CMD) --profile test up --abort-on-container-exit --exit-code-from api-test --quiet-pull
+	@echo "🛑 Nettoyage de l'environnement de test..."
+	@$(DOCKER_COMPOSE_CMD) --profile test down -v
+
+ci-test: ## Exécute les tests CI dans Docker
+	@echo "🔍 Lancement des tests CI dans Docker..."
+	@$(DOCKER_COMPOSE_CMD) --profile ci up --build --abort-on-container-exit --exit-code-from ci --quiet-pull
+	@echo "🛑 Nettoyage de l'environnement CI..."
+	@$(DOCKER_COMPOSE_CMD) --profile ci down -v
 	@echo "$(COLOR_GREEN)✅ Tous les tests CI ont réussi !$(COLOR_RESET)"
 
 # ===============================
 # 6. Arrêt & nettoyage
 # ===============================
-api-stop: ## Stoppe l'API dev (process uvicorn en arrière-plan) et le conteneur Docker
-	@pkill -f "uvicorn app.api.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
-
-docker-api-stop: ## Stop & rm API container
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
 
 mlflow-down: ## Stoppe MLflow
 	docker stop $(MLFLOW_HOST) || true
@@ -266,8 +258,6 @@ airflow-down: ## Stoppe Airflow
 	docker compose rm -f $(AIRFLOW_SERVICES) || true
 
 stop-all: ## Stoppe tous les services, conteneurs, réseaux et processus liés au projet
-	@echo "🔴 Arrêt de tous les processus uvicorn locaux..."
-	-pkill -f "uvicorn app.api.main:app" 2>/dev/null || echo "Aucun uvicorn local à stopper"
 	@echo "🔴 Suppression des conteneurs Docker nommés compagnon_immo-* ..."
 	-docker ps -a --filter "name=compagnon_immo" -q | xargs -r docker rm -f || echo "Aucun conteneur compagnon_immo à supprimer"
 	@echo "🔴 Arrêt et suppression des services Docker Compose..."

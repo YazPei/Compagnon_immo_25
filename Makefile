@@ -6,10 +6,10 @@
 # ===============================
 # 1. Aide & vérifications        : help, lint, check-dependencies
 # 2. Préparation & installation  : prepare-dirs, install, install-gh
-# 3. Build                      : docker-build, docker-api-build, airflow-build
-# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, docker-api-run, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
+# 3. Build                      : docker-build, airflow-build
+# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, api-start, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
 # 5. Tests & CI                 : api-test, api-test-docker, ci-test
-# 6. Arrêt & nettoyage          : api-stop, docker-api-stop, mlflow-down, airflow-down, stop-all, clean
+# 6. Arrêt & nettoyage          : api-stop, mlflow-down, airflow-down, stop-all, clean
 # 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services, env-from-gh, check-permissions
 
 
@@ -56,11 +56,11 @@ COLOR_YELLOW := \033[33m
   help lint check-dependencies \
   prepare-dirs install install-gh env-from-gh check-permissions \
   permission \
-  docker-build docker-api-build airflow-build \
-  docker-network docker-up docker-start mlflow-up airflow-up docker-api-run \
+  docker-build airflow-build \
+  docker-network docker-up docker-start mlflow-up airflow-up api-start \
   dvc-all quick-start-dvc dvc-repro-all dvc-pull-all \
   api-test api-test-docker ci-test \
-  api-stop docker-api-stop mlflow-down airflow-down stop-all clean \
+  api-stop mlflow-down airflow-down stop-all clean \
   docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
   pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
 
@@ -133,11 +133,18 @@ permission: prepare-dirs install ## Accord permissions rwx au profil utilisateur
 docker-build: prepare-dirs ## Build via compose
 	@$(DOCKER_COMPOSE_CMD) build
 
-docker-api-build: ## Build image API
-	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
-
 airflow-build: ## Build images Airflow
 	docker compose build airflow-webserver airflow-scheduler
+
+# ===============================
+# API Management
+# ===============================
+api-build: ## Build image API
+	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
+
+api-start: docker-api-run ## Démarre l'API (build + run)
+api-stop: ## Stoppe l'API
+	$(DOCKER_COMPOSE_CMD) down api
 
 # ===============================
 # 4. Démarrage services
@@ -159,9 +166,8 @@ mlflow-up: ## Démarre MLflow
 dvc-all: dvc-pull-all docker-repro-image-all
 quick-start-dvc: docker-api-run mlflow-up docker-network docker-up docker-repro-image-all ## Quick start + exécution complète de DVC
 
-docker-api-run: docker-api-build ## Run image API
-	- docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || true
-	docker run -d -p 8000:8000 --name $(IMAGE_PREFIX)-api --env-file .env $(IMAGE_PREFIX)-api
+docker-api-run: ## Run API via Docker Compose (sans profil)
+	$(DOCKER_COMPOSE_CMD) up api --build -d
 
 docker-network:
 	docker network create ml_net || echo "Network ml_net already exists"
@@ -243,9 +249,6 @@ ci-test: ## Exécute les tests CI dans Docker
 # ===============================
 # 6. Arrêt & nettoyage
 # ===============================
-api-stop: ## Stoppe le conteneur Docker de l'API
-	docker rm -f $(IMAGE_PREFIX)-api 2>/dev/null || echo "Aucun conteneur $(IMAGE_PREFIX)-api à supprimer"
-	@echo "🟢 Conteneur API arrêté et supprimé."
 
 mlflow-down: ## Stoppe MLflow
 	docker stop $(MLFLOW_HOST) || true

@@ -5,11 +5,9 @@ from fastapi import Header, HTTPException, status
 
 from app.api.config.settings import settings
 
-TEST_KEY = "test_api_key"
-
 
 def _is_valid(key: str) -> bool:
-    return key in {TEST_KEY, settings.API_SECRET_KEY}
+    return key in {settings.API_KEY, settings.API_SECRET_KEY}
 
 
 async def verify_api_key(

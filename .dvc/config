@@ -12,6 +12,6 @@
     user = ""
     password = ""
 ['remote "dagshub-s3"']
-    url = s3://Compagnon_immo_25
+    url = s3://Comp_sales_immo
     endpointurl = https://dagshub.com/api/v1/repo-buckets/s3/yazpei
     region = us-east-1

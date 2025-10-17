@@ -51,7 +51,8 @@ archives/
 *.ipynb
 
 # dvc 
-
+.dvc/config.local
+.dvc
 mlflow_outputs/
 Dockerfile.test
 TODO.md

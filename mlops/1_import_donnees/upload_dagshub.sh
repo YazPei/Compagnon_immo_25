@@ -15,7 +15,7 @@ if [[ ! -f "$LOCAL_FILE" ]]; then
 fi
 
 echo "Endpoint: $AWS_S3_ENDPOINT"
-echo "Bucket  : $DAGSHUB_BUCKET"
+echo "Bucket  : Comp_sales_immo"
 echo "Fichier : $LOCAL_FILE"
 echo "Clé     : $DEST_KEY"
 

@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-"""
-DagsHub S3 helper CLI (avec normalisation CSV/TSV optionnelle).
-- Auth via env: AWS_* + DAGSHUB_BUCKET (+ AWS_S3_ENDPOINT pour DagsHub).
-- Sous-commandes: sanity, upload, list, download, sync-up, sync-down, presign, cat, rm.
-- Flags nouveaux: --normalize-csv, --to {csv,tsv}, --decimal-fr, --encoding.
-"""
+
 import argparse, os, sys, time, mimetypes, pathlib, tempfile, csv, re, shutil
 from typing import Optional, List, Tuple
 import boto3

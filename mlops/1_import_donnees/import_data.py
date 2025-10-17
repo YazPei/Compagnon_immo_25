@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 # path: import_data.py
-"""
-Import incrémental multi-sources (DVC/HTTP/S3/local) avec watermark & anti-join.
-- DVC: lecture streaming via dvc.api.open (comme avant).
-- HTTP(S): télécharge en tempfile avec retries.
-- S3/DagsHub: télécharge en tempfile via boto3 (endpoint+token possibles).
-- Local: lit un fichier local.
-- Entrée CSV ou Parquet (détection par extension).
-- Sorties: delta df_new.csv + cumul df_sample.csv + checkpoint parquet/json.
-"""
+
 
 from __future__ import annotations
 import os
@@ -96,12 +88,6 @@ def _is_parquet_path(p: Union[str, Path]) -> bool:
 
 # ============= Source opening (multi modes) =============
 class SourceHandle:
-    """
-    wrap => (handle_or_path, is_stream, cleanup)
-    - is_stream=True => passer un objet fichier texte/binaire à pandas.
-    - is_stream=False => passer Path à pandas.
-    - cleanup(): supprimer le tempfile si créé.
-    """
     def __init__(self, handle_or_path: Union[IO[str], IO[bytes], Path], is_stream: bool, cleanup=lambda: None):
         self.handle_or_path = handle_or_path
         self.is_stream = is_stream

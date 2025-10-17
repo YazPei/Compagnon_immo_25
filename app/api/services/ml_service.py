@@ -1,5 +1,5 @@
 """
-Service ML utilisant les métriques centralisées.
+Service ML utilisant les métriques centralisées et l'intégration MLflow.
 """
 
 import asyncio
@@ -20,6 +20,7 @@ from app.api.monitoring.prometheus_registry import (MODEL_LOAD_TIME,
                                                     MODELS_LOADED,
                                                     metrics_collector)
 from app.api.services.dvc_connector import dvc_service
+from app.api.services.mlflow_service import mlflow_service
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ class MLService:
         )
 
     def predict(self, features: Dict[str, Any]) -> Dict[str, Any]:
-        """Effectuer une prédiction avec les modèles chargés."""
+        """Effectuer une prédiction avec les modèles chargés et logging MLflow."""
         if not self.is_loaded:
             raise RuntimeError(
                 "Aucun modèle chargé. Appelez load_models_from_dvc() d'abord."
@@ -155,6 +156,9 @@ class MLService:
 
         if not self.models:
             raise RuntimeError("Aucun modèle de prédiction disponible.")
+
+        start_time = time.time()
+        success = False
 
         try:
             model_key = self._select_best_model()
@@ -179,8 +183,10 @@ class MLService:
                 raise ValueError("Le modèle n'a pas de méthode predict")
 
             confidence_margin = float(prediction) * 0.15  # ±15%
+            prediction_time = time.time() - start_time
+            success = True
 
-            return {
+            result = {
                 "prediction": float(prediction),
                 "confidence_interval": {
                     "lower": float(prediction) - confidence_margin,
@@ -190,10 +196,41 @@ class MLService:
                 "preprocessor_used": preprocessor_key,
                 "last_sync": self.last_sync.isoformat() if self.last_sync else None,
                 "features_count": len(features),
+                "prediction_time": prediction_time,
             }
 
+            # Logger la prédiction dans MLflow
+            try:
+                mlflow_service.log_prediction(
+                    model_name=model_key,
+                    model_version="dvc_loaded",  # Version depuis DVC
+                    input_data=features,
+                    prediction=float(prediction),
+                    prediction_time=prediction_time,
+                    success=True
+                )
+            except Exception as log_error:
+                logger.warning(f"Erreur logging MLflow: {log_error}")
+
+            return result
+
         except Exception as e:
+            prediction_time = time.time() - start_time
             logger.error(f"Erreur lors de la prédiction: {e}")
+
+            # Logger l'échec dans MLflow
+            try:
+                mlflow_service.log_prediction(
+                    model_name=self._select_best_model() if self.models else "unknown",
+                    model_version="dvc_loaded",
+                    input_data=features,
+                    prediction=None,
+                    prediction_time=prediction_time,
+                    success=False
+                )
+            except Exception as log_error:
+                logger.warning(f"Erreur logging échec MLflow: {log_error}")
+
             raise RuntimeError(f"Erreur prédiction: {e}")
 
     def _select_best_model(self) -> str:
@@ -249,6 +286,7 @@ class MLService:
             "last_sync": self.last_sync.isoformat() if self.last_sync else None,
             "load_errors": self.load_errors[-5:],  # Dernières 5 erreurs
             "dvc_integration": dvc_service.get_comprehensive_status()["environment"],
+            "mlflow_integration": mlflow_service.get_health_status(),
         }
 
     def get_models_info(self) -> Dict[str, Any]:

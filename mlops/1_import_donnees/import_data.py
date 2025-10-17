@@ -184,10 +184,41 @@ def open_source_local(path: Path) -> SourceHandle:
 
 # ============= Chunk reader (CSV/Parquet) =============
 def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chunksize: int = 200_000):
+    cs_env = os.getenv("IMPORT_CHUNKSIZE")
+    cs = chunksize if not (cs_env and cs_env.isdigit()) else int(cs_env)
     if is_stream:
-        yield from pd.read_csv(handle, sep=sep, chunksize=chunksize, on_bad_lines="skip", low_memory=False)
+        yield from pd.read_csv(handle, sep=sep, chunksize=cs, on_bad_lines="skip", low_memory=False)
     else:
-        yield from pd.read_csv(str(handle), sep=sep, chunksize=chunksize, on_bad_lines="skip", low_memory=False)
+        yield from pd.read_csv(str(handle), sep=sep, chunksize=cs, on_bad_lines="skip", low_memory=False)
+
+# --- append disque pour éviter la concat RAM ---
+def _append_csv(dst: Path, delta: Path, sep: str) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    has_header = dst.exists() and dst.stat().st_size > 0
+    for chunk in pd.read_csv(delta, sep=sep, chunksize=200_000, low_memory=False):
+        chunk.to_csv(dst, sep=sep, index=False, mode="a", header=not has_header)
+        has_header = True
+
+# --- (optionnel) dedup disque avec DuckDB ---
+def _dedup_with_duckdb(csv_path: Path, key_cols: list[str], date_col: Optional[str], sep: str) -> None:
+    try:
+        import duckdb
+    except Exception:
+        return
+    con = duckdb.connect()
+    con.execute("CREATE OR REPLACE TABLE _all AS SELECT * FROM read_csv_auto(?, delim=?, header=True);",
+                [str(csv_path), sep])
+    if key_cols:
+        order = f"ORDER BY {date_col} NULLS LAST" if date_col else "ORDER BY rowid() DESC"
+        part = ", ".join(key_cols)
+        con.execute(f"""
+            CREATE OR REPLACE TABLE _dedup AS
+            SELECT * FROM (
+              SELECT *, row_number() OVER(PARTITION BY {part} {order}) AS _rn
+              FROM _all
+            ) WHERE _rn = 1;
+        """)
+        con.execute("COPY _dedup TO ? (FORMAT CSV, HEADER, DELIMITER ?);", [str(csv_path), sep])
 
 def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_rows: int = 200_000):
     # pandas ne stream pas les Parquet; on charge puis on “chunk” en mémoire.
@@ -315,18 +346,26 @@ def incremental_extract(
 
         df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=";", index=False)
 
-        if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
-            df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
-            df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
+        if os.getenv("IMP_APPEND_ONLY", "0") == "1":
+            # évite la lecture complète du cumul en RAM
+            _append_csv(cumulative_csv, delta_path, sep)
+            if os.getenv("IMP_DEDUP_DUCKDB", "0") == "1" and key_cols:
+                try:
+                    _dedup_with_duckdb(cumulative_csv, key_cols, date_col, sep)
+                except Exception:
+                    pass
         else:
-            df_all = df_new.drop(columns=["__key_hash__"], errors="ignore")
-
-        if key_cols:
-            df_all = df_all.drop_duplicates(subset=key_cols, keep="last")
-        else:
-            df_all = df_all.drop_duplicates(keep="last")
-
-        df_all.to_csv(cumulative_csv, sep=sep, index=False)
+            # mode legacy (RAM)
+            if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
+                df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
+                df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
+            else:
+                df_all = df_new.drop(columns=["__key_hash__"], errors="ignore")
+            if key_cols:
+                df_all = df_all.drop_duplicates(subset=key_cols, keep="last")
+            else:
+                df_all = df_all.drop_duplicates(keep="last")
+            df_all.to_csv(cumulative_csv, sep=sep, index=False)
 
         # checkpoint
         seen_keys.update(make_key_hash(df_new, key_cols).astype(str).tolist())

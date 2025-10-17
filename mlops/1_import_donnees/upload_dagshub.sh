@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${HOME:?}"
-: "${1:?Usage: scripts/upload_dagshub.sh <local_file> [dest_key]}"
-
 LOCAL_FILE="$1"
 DEST_KEY="${2:-path/in/bucket/$(basename "$LOCAL_FILE")}"
 
 # charge l'env
-source "$HOME/.dagshub.env"
+source "../.dagshub.env"
 
 if [[ ! -f "$LOCAL_FILE" ]]; then
   echo "Fichier introuvable: $LOCAL_FILE" >&2; exit 2
 fi
 
 echo "Endpoint: $AWS_S3_ENDPOINT"
-echo "Bucket  : Comp_sales_immo"
+echo "Bucket  : $DAGSHUB_BUCKET"
 echo "Fichier : $LOCAL_FILE"
 echo "Clé     : $DEST_KEY"
 

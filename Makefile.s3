@@ -25,10 +25,10 @@ S3_EXP    ?= 3600                          # presign TTL (s)
 IMP_OUT_DIR    ?= data/incremental
 IMP_CUMUL_PATH ?= data/df_sample.csv
 IMP_CHECKPOINT ?= data/checkpoint.parquet
-IMP_DATE_COL   ?=
-IMP_KEY_COLS   ?=
+IMP_DATE_COL   ?= 
+IMP_KEY_COLS   ?= idannonce
 IMP_SEP        ?= ;
-IMP_S3_KEY     ?= $(S3_KEY)                # par défaut: importer le CSV que tu viens d'uploader
+IMP_S3_KEY     ?= data/merged_sales_data.csv
 
 # ---------- Helpers ----------
 S3_UPLOAD_FLAGS_SINGLE   := --force-single --verbose
@@ -153,15 +153,21 @@ s3-verify-csv: s3-install
 # ---------- Import (ton script existant) ----------
 s3-import: s3-env
 > set -a; . $$HOME/.dagshub.env; set +a
-> $(S3_PY) /home/vboxuser/Compagnon_new/Compagnon_immo_25/mlops/1_import_donnees/import_data.py \
+> $(S3_PY) mlops/1_import_donnees/import_data.py \
 >   --source-mode s3 \
+>   --s3-key "$(IMP_S3_KEY)" \
 >   --output-folder "$(IMP_OUT_DIR)" \
 >   --cumulative-path "$(IMP_CUMUL_PATH)" \
 >   --checkpoint-path "$(IMP_CHECKPOINT)" \
->   --sep "$(IMP_SEP)" \
->   --s3-key "$(IMP_S3_KEY)" \
->   $(if $(IMP_DATE_COL),--date-column "$(IMP_DATE_COL)",) \
->   $(if $(IMP_KEY_COLS),--key-columns "$(IMP_KEY_COLS)",)
+>   --date-column "$(IMP_DATE_COL)" \
+>   --key-columns "$(IMP_KEY_COLS)" \
+>   --sep "$(IMP_SEP)"
+
+.PHONY: s3-import-lowmem
+s3-import-lowmem: s3-env
+> IMPORT_CHUNKSIZE?=100000 IMP_APPEND_ONLY=1 IMP_DEDUP_DUCKDB?=0 \
+> IMP_SEP="$(IMP_SEP)" IMP_S3_KEY="$(IMP_S3_KEY)" \
+> make -f Makefile.s3 s3-import
 
 # ---------- Pipeline CSV ----------
 s3-pipeline-csv: s3-upload s3-import s3-list

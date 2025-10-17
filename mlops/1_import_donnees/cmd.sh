@@ -1,4 +1,6 @@
-# 1) Charger tes variables DagsHub (à faire dans ce terminal)
+# &; ENV DAGSHUB 
+
+# 1) Charger tes variables DagsHub 
 source /home/vboxuser/Compagnon_new/.dagshub.env
 
 # 2) Test direct Étape 4 (single-part)

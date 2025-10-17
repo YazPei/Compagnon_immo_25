@@ -1,3 +1,4 @@
+# Credentials must NOT be committed. Configure auth via environment variables or DVC credential helper.
 [core]
     remote = dagshub
     autostage = true
@@ -9,6 +10,4 @@
     url = https://dagshub.com/YazPei/compagnon_immo.dvc
 ['remote "dagshub"']
     url = https://dagshub.com/YazPei/Compagnon_immo.dvc
-    auth = basic
-    user = YazPei
-    password = 498deaaa08744bd6c49aac6f5f22b875f5f0c3d1
+

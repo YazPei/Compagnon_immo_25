@@ -3,4 +3,3 @@ outs:
   size: 1117624509
   hash: md5
   path: merged_sales_data.csv
-  isexec: true

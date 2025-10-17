@@ -11,3 +11,7 @@
     url = webdavs://dagshub.com/yazpei/Compagnon_immo_25.dvc
     user = ""
     password = ""
+['remote "dagshub-s3"']
+    url = s3://Compagnon_immo_25
+    endpointurl = https://dagshub.com/api/v1/repo-buckets/s3/yazpei
+    region = us-east-1

@@ -13,6 +13,7 @@ infra/config/dagshub.yaml
 .venv312/
 venv/
 env/
+.s3venv/
 
 # Fichiers de configuration de l'éditeur
 .vscode/

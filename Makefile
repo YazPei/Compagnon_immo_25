@@ -1,49 +1,13 @@
 # ========== Makefile MLOps - Compagnon Immo ==========
 # Gestion des pipelines avec Airflow, MLflow, DVC et Docker
 
-# ===============================
-# SOMMAIRE
-# ===============================
-# 1. Aide & vérifications        : help, lint, check-dependencies
-# 2. Préparation & installation  : prepare-dirs, install, install-gh
-# 3. Build                      : docker-build, airflow-build
-# 4. Démarrage services         : permission, docker-start, dvc-all, quick-start-dvc, api-start, mlflow-up, airflow-up, dvc-add-all, dvc-repro-all, dvc-pull-all
-# 5. Tests & CI                 : api-test, api-test-docker, ci-test
-# 6. Arrêt & nettoyage          : api-stop, mlflow-down, airflow-down, stop-all, clean
-# 7. Utilitaires                : docker-logs, airflow-logs, airflow-init, airflow-smoke, fix-permissions, check-services, env-from-gh, check-permissions
-
-
-# --- Choix du fichier d'env local ---
-# Si tu veux garder env.txt en local, mets: ENV_DST ?= env.txt
-ENV_DST  ?= .env
-ENV_FILE ?= $(ENV_DST)
-
-# Auto-load variables d'environnement (si fichier présent)
-ifneq ("$(wildcard $(ENV_FILE))","")
-include $(ENV_FILE)
-export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
-endif
-
-# ===== Variables =====
+# Variables
 IMAGE_PREFIX := compagnon_immo
 NETWORK := ml_net
-PYTHON_BIN := python3
-PIP := pip3
-TEST_DIR := app/api/tests
-DVC_TOKEN ?= default_token_securise_ou_vide
-
-MLFLOW_IMAGE := ghcr.io/mlflow/mlflow:v2.13.1
-DVC_IMAGE := $(IMAGE_PREFIX)-dvc
-USER_FLAGS := --user $(shell id -u):$(shell id -g)
-
 MLFLOW_PORT := 5050
 MLFLOW_HOST := $(IMAGE_PREFIX)-mlflow
 MLFLOW_URI_DCK := http://$(MLFLOW_HOST):$(MLFLOW_PORT)
-
 AIRFLOW_SERVICES := postgres-airflow airflow-webserver airflow-scheduler
-AIRFLOW_UID ?= 50000
-AIRFLOW_URL ?= http://localhost:8081
-
 DOCKER_COMPOSE_CMD := docker compose
 
 # Couleurs
@@ -52,171 +16,42 @@ COLOR_GREEN := \033[32m
 COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
-.PHONY: \
-  help lint check-dependencies \
-  prepare-dirs install install-gh env-from-gh check-permissions \
-  permission \
-  docker-build airflow-build \
-  docker-network docker-up docker-start mlflow-up airflow-up api-start \
-  dvc-all quick-start-dvc dvc-repro-all dvc-pull-all \
-  api-test api-test-docker ci-test \
-  api-stop mlflow-down airflow-down stop-all clean \
-  docker-logs airflow-logs airflow-init airflow-smoke fix-permissions check-services \
-  pipeline-reset build-all run-all-docker run_dvc check-ports rebuild
+.PHONY: help build start stop test clean logs setup
 
-# ===============================
-# 1. Aide & vérifications
-# ===============================
+# Commandes principales
 help: ## Affiche l'aide
 	@echo "========== Compagnon Immo - Commandes disponibles =========="
-	@grep -E '^[a-zA-Z0-9_.-]+:.*?##.*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_.-]+:.*?##.*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-lint: ## Vérifie quelques pièges courants
-	@echo "🔍 Vérification du Makefile…"
-	@if grep -o '^[a-zA-Z0-9_.-]\+:' Makefile | sort | uniq -d | grep -q .; then \
-		echo "⚠️  Cibles en double trouvées :"; \
-		grep -o '^[a-zA-Z0-9_.-]\+:' Makefile | sort | uniq -d; \
-		exit 1; \
-	else \
-		echo "✅ Aucune cible en double détectée - Makefile propre !"; \
-	fi
-
-check-dependencies: ## Vérifie que les dépendances nécessaires sont installées
-	@command -v docker >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ Docker n'est pas installé.$(COLOR_RESET)"; exit 1; }
-	@command -v python3 >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ Python3 n'est pas installé.$(COLOR_RESET)"; exit 1; }
-	@command -v dvc >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ DVC n'est pas installé.$(COLOR_RESET)"; exit 1; }
-	@command -v gh >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ 'gh' (GitHub CLI) introuvable.$(COLOR_RESET)"; echo "$(COLOR_YELLOW)💡 Lance 'make install-gh' pour l'installer.$(COLOR_RESET)"; exit 1; }
-	@echo "$(COLOR_GREEN)✅ Toutes les dépendances sont installées.$(COLOR_RESET)"
-
-# ===============================
-# 2. Préparation & installation
-# ===============================
-prepare-dirs: ## Prépare les répertoires nécessaires
+setup: ## Installation complète (dépendances + permissions)
 	@mkdir -p data exports mlruns logs/airflow
-	@touch data/.gitkeep
-
-install: prepare-dirs ## Installe les dépendances Python
-	@if $(PIP) install --dry-run -r requirements.txt 2>&1 | grep -q "Would install"; then \
-		$(PIP) install --upgrade pip; \
-		$(PIP) install -r requirements.txt; \
-	else \
-		echo "Les dépendances sont déjà installées pour lancer le projet"; \
-	fi
-
-install-gh: ## Installe GitHub CLI si absent
-	@if command -v gh >/dev/null 2>&1; then \
-		echo "✅ GitHub CLI déjà installé."; \
-	else \
-		echo "🔧 Vérification/installation de GitHub CLI..."; \
-		echo "📦 Installation automatique de GitHub CLI..."; \
-		type -p curl >/dev/null || sudo apt install curl -y; \
-		curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg; \
-		sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg; \
-		echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null; \
-		sudo apt update; \
-		sudo apt install gh -y; \
-		echo "✅ GitHub CLI installé avec succès."; \
-	fi
-
-permission: prepare-dirs install ## Accord permissions rwx au profil utilisateur sur les services du projet
-	@if ! command -v gh >/dev/null 2>&1; then \
-		$(MAKE) install-gh; \
-	fi
-	@echo "$(COLOR_YELLOW)🔧 Attribution des permissions rwx au profil $(shell whoami)...$(COLOR_RESET)"
+	@pip install -r requirements.txt
 	@sudo chown -R $(shell whoami):$(shell whoami) . || true
 	@chmod -R u+rwx . || true
-	@echo "$(COLOR_GREEN)✅ Permissions rwx attribuées.$(COLOR_RESET)"
+	@echo "$(COLOR_GREEN)✅ Setup terminé$(COLOR_RESET)"
 
-# ===============================
-# 3. Build
-# ===============================
-docker-build: prepare-dirs ## Build via compose
+build: ## Build toutes les images Docker
+	@echo "$(COLOR_YELLOW)🔨 Building images...$(COLOR_RESET)"
 	@$(DOCKER_COMPOSE_CMD) build
+	@echo "$(COLOR_GREEN)✅ Build terminé$(COLOR_RESET)"
 
-airflow-build: ## Build images Airflow
-	docker compose build airflow-webserver airflow-scheduler
+start: ## Démarre tous les services
+	@echo "$(COLOR_YELLOW)🚀 Starting services...$(COLOR_RESET)"
+	@docker network create $(NETWORK) || true
+	@$(DOCKER_COMPOSE_CMD) up -d
+	@docker run -d --rm --name $(MLFLOW_HOST) --network $(NETWORK) \
+		-v $(PWD)/mlruns:/mlflow/mlruns -p $(MLFLOW_PORT):$(MLFLOW_PORT) \
+		ghcr.io/mlflow/mlflow:v2.13.1 mlflow server --host 0.0.0.0 \
+		--port $(MLFLOW_PORT) --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
+		--default-artifact-root /mlflow/mlruns
+	@echo "$(COLOR_GREEN)✅ Services démarrés$(COLOR_RESET)"
 
-# ===============================
-# API Management
-# ===============================
-api-build: ## Build image API
-	DOCKER_BUILDKIT=0 docker build -t $(IMAGE_PREFIX)-api .
-
-api-start: docker-api-run ## Démarre l'API (build + run)
-api-stop: ## Stoppe l'API
-	$(DOCKER_COMPOSE_CMD) down api
-
-# ===============================
-# 4. Démarrage services
-# ===============================
-docker-start: docker-network docker-up
-mlflow-up: ## Démarre MLflow
-	docker ps -q --filter "name=mlflow" | xargs -r docker stop 2>/dev/null || true
-	docker ps -a -q --filter "name=mlflow" | xargs -r docker rm 2>/dev/null || true
-	docker run -d --rm \
-		--name $(MLFLOW_HOST) \
-		--network $(NETWORK) \
-		-v $(PWD)/mlruns:/mlflow/mlruns \
-		-p $(MLFLOW_PORT):$(MLFLOW_PORT) \
-		$(MLFLOW_IMAGE) \
-		mlflow server --host 0.0.0.0 --port $(MLFLOW_PORT) \
-		  --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
-		  --default-artifact-root /mlflow/mlruns
-
-dvc-all: dvc-pull-all docker-repro-image-all
-quick-start-dvc: docker-api-run mlflow-up docker-network docker-up docker-repro-image-all ## Quick start + exécution complète de DVC
-
-docker-api-run: ## Run API via Docker Compose (sans profil)
-	$(DOCKER_COMPOSE_CMD) up api --build -d
-
-docker-network:
-	docker network create ml_net || echo "Network ml_net already exists"
-
-docker-up:
-	@echo "🛑 Arrêt et suppression des conteneurs existants..."
-	-$(DOCKER_COMPOSE_CMD) down --remove-orphans || true
-	docker compose up -d
-
-dvc-use-data:
-	docker run --rm \
-	  -v $(pwd):/app \
-	  -w /app \
-	  compagnon_immo-dvc \
-	  python mlops/1_import_donnees/import_data.py \
-	    --output-folder data/incremental \
-	    --cumulative-path data/df_sample.csv \
-	    --checkpoint-path data/checkpoint.parquet \
-	    --date-column date_vente \
-	    --key-columns id_transaction \
-	    --sep ";" \
-	    --dvc-repo-url https://dagshub.com/YazPei/Compagnon_immo \
-	    --dvc-path data/dvc_data.csv \
-	    --dvc-rev main
-
-
-
-docker-repro-image-all: docker-dvc-check dvc-repro-all
-docker-dvc-check:
-	@if [ -z "$$(docker images -q $(DVC_IMAGE):latest)" ]; then \
-		echo "🔧 Build de $(DVC_IMAGE):latest..."; \
-		DOCKER_BUILDKIT=0 docker build --no-cache -t $(DVC_IMAGE):latest -f mlops/2_dvc/Dockerfile .; \
-	else \
-		echo "✅ Image $(DVC_IMAGE) déjà disponible."; \
-	fi
-
-dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
-	@if ! docker ps --format "{{.Names}}" | grep -q "^$(MLFLOW_HOST)$$"; then \
-		echo "🔧 MLflow non démarré, lancement..."; \
-		$(MAKE) mlflow-up; \
-		echo "⏳ Attente que MLflow soit prêt..."; \
-		timeout 60 bash -c 'until docker run --rm --network $(NETWORK) curlimages/curl -s http://$(MLFLOW_HOST):$(MLFLOW_PORT)/api/2.0/mlflow/experiments/list >/dev/null 2>&1; do sleep 2; done' || { echo "❌ MLflow n'a pas démarré dans les temps"; exit 1; }; \
-		echo "✅ MLflow prêt"; \
-	fi
-	sudo chmod -R 755 .dvc || true
-	docker run --rm --user root \
-	  --network $(NETWORK) \
-	  -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
-	  -v $(PWD):/app:Z -w /app $(DVC_IMAGE) sh -c "chown -R root:root .dvc && rm -f .dvc/tmp/rwlock && dvc repro -f"
+stop: ## Arrête tous les services
+	@echo "$(COLOR_YELLOW)🛑 Stopping services...$(COLOR_RESET)"
+	-@$(DOCKER_COMPOSE_CMD) down --remove-orphans || true
+	-docker stop $(MLFLOW_HOST) || true
+	-docker rm $(MLFLOW_HOST) || true
+	@echo "$(COLOR_GREEN)✅ Services arrêtés$(COLOR_RESET)"
 
 
 

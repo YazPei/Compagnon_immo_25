@@ -1,0 +1,184 @@
+# path: Makefile.s3
+# -*- coding: utf-8 -*-
+SHELL := /bin/bash
+.RECIPEPREFIX := >
+.ONESHELL:
+.SILENT:
+export PYTHONIOENCODING := utf-8
+
+.DEFAULT_GOAL := s3-help
+
+# ---------- Python venv ----------
+S3_VENV := .s3venv
+S3_PY   := $(if $(wildcard $(S3_VENV)/bin/python),$(S3_VENV)/bin/python,python3)
+S3_PIP  := $(if $(wildcard $(S3_VENV)/bin/pip),$(S3_VENV)/bin/pip,pip3)
+
+# ---------- Defaults (override à l'appel) ----------
+S3_FILE   ?= merged_sales_data.csv         # fichier local à uploader
+S3_KEY    ?= data/merged_sales_data.csv    # clé S3 (dans le bucket)
+S3_DIR    ?= data/                         # dossier local à synchroniser (upload)
+S3_PREFIX ?= data/                         # préfixe S3
+S3_OUT    ?= downloads/                    # dossier local pour downloads
+S3_EXP    ?= 3600                          # presign TTL (s)
+
+# Import (ton script existant)
+IMP_OUT_DIR    ?= data/incremental
+IMP_CUMUL_PATH ?= data/df_sample.csv
+IMP_CHECKPOINT ?= data/checkpoint.parquet
+IMP_DATE_COL   ?= 
+IMP_KEY_COLS   ?= idannonce
+IMP_SEP        ?= ;
+IMP_S3_KEY     ?= data/merged_sales_data.csv
+
+# ---------- Helpers ----------
+S3_UPLOAD_FLAGS_SINGLE   := --force-single --verbose
+S3_UPLOAD_FLAGS_MULTIPART:= --chunk-size-mb 8 --multipart-threshold-mb 16 --max-concurrency 2 --verbose
+
+CHK_ENV  = test -f $$HOME/.dagshub.env || (echo "Missing $$HOME/.dagshub.env"; exit 1)
+CHK_TOOL = test -f tools/dagshub_s3.py   || (echo "Missing tools/dagshub_s3.py"; exit 1)
+
+# ---------- Phony ----------
+.PHONY: s3-help s3-venv s3-install s3-env s3-sanity \
+        s3-upload s3-upload-mp s3-list s3-download \
+        s3-sync-up s3-sync-up-mp s3-sync-down \
+        s3-presign s3-cat s3-rm s3-clean \
+        s3-import s3-pipeline-csv \
+        s3-verify-csv check-env s3-check-env
+
+# ---------- Help ----------
+s3-help:
+> echo "S3 targets:"
+> echo "  s3-install          : crée .s3venv + deps (boto3, pandas, pyarrow, ...)"
+> echo "  s3-env              : affiche endpoint/bucket/region (charge ~/.dagshub.env)"
+> echo "  s3-sanity           : test list 1 objet"
+> echo "  s3-upload / -mp     : upload fichier (single-part / multipart)"
+> echo "  s3-list / download  : lister / télécharger"
+> echo "  s3-sync-up / -mp    : sync dossier -> S3"
+> echo "  s3-sync-down        : sync S3 -> dossier local"
+> echo "  s3-presign / s3-cat / s3-rm"
+> echo "  s3-verify-csv       : aperçu local du CSV (50 lignes, dtypes)"
+> echo "  s3-import           : lance ton import_data.py depuis S3"
+> echo "  s3-pipeline-csv     : upload CSV -> import -> list"
+> echo "  check-env           : vérifie variables & accès S3"
+
+# ---------- Setup ----------
+s3-venv:
+> python3 -m venv $(S3_VENV)
+> $(S3_PIP) -q install --upgrade pip
+
+s3-install: s3-venv
+> $(S3_PIP) -q install boto3 botocore pandas click mlflow pyarrow fastparquet
+
+s3-env:
+> $(CHK_ENV)
+> set -a; . $$HOME/.dagshub.env; set +a
+> echo "Endpoint: $$AWS_S3_ENDPOINT"
+> echo "Bucket  : $$DAGSHUB_BUCKET"
+> echo "Region  : $$AWS_DEFAULT_REGION"
+
+s3-sanity: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py sanity
+
+# ---------- Upload / List / Download ----------
+s3-upload: s3-env
+> $(CHK_TOOL)
+> test -f "$(S3_FILE)" || { echo "File not found: $(S3_FILE)"; exit 2; }
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py upload --file "$(S3_FILE)" --key "$(S3_KEY)" \
+>   $(S3_UPLOAD_FLAGS_SINGLE)
+
+s3-upload-mp: s3-env
+> $(CHK_TOOL)
+> test -f "$(S3_FILE)" || { echo "File not found: $(S3_FILE)"; exit 2; }
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py upload --file "$(S3_FILE)" --key "$(S3_KEY)" \
+>   $(S3_UPLOAD_FLAGS_MULTIPART)
+
+s3-list: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py list --prefix "$(S3_PREFIX)" --max-keys 50
+>
+s3-download: s3-env
+> $(CHK_TOOL)
+> mkdir -p "$(S3_OUT)"
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py download --key "$(S3_KEY)" --out "$(S3_OUT)"
+
+# ---------- Sync ----------
+s3-sync-up: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py sync-up --dir "$(S3_DIR)" --prefix "$(S3_PREFIX)" \
+>   --force-single
+
+s3-sync-up-mp: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py sync-up --dir "$(S3_DIR)" --prefix "$(S3_PREFIX)" \
+>   --chunk-size-mb 8 --multipart-threshold-mb 16 --max-concurrency 2 --verbose
+
+s3-sync-down: s3-env
+> $(CHK_TOOL)
+> mkdir -p "$(S3_OUT)"
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py sync-down --prefix "$(S3_PREFIX)" --out "$(S3_OUT)" --verbose
+
+# ---------- Presign / cat / rm ----------
+s3-presign: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py presign --key "$(S3_KEY)" --expires "$(S3_EXP)"
+
+s3-cat: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py cat --key "$(S3_KEY)" --lines 20
+
+s3-rm: s3-env
+> $(CHK_TOOL)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/dagshub_s3.py rm --key "$(S3_KEY)" --prefix "$(S3_PREFIX)"
+
+s3-clean:
+> rm -rf $(S3_VENV) __pycache__ .pytest_cache
+
+# ---------- Vérif CSV locale (aperçu) ----------
+s3-verify-csv: s3-install
+> test -f "$(S3_FILE)" || { echo "File not found: $(S3_FILE)"; exit 2; }
+> $(S3_PY) tools/verify_csv_local.py --path "$(S3_FILE)" --sep ";" --rows 50
+
+# ---------- Import (ton script existant) ----------
+s3-import: s3-env
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) mlops/1_import_donnees/import_data.py \
+>   --source-mode s3 \
+>   --s3-key "$(IMP_S3_KEY)" \
+>   --output-folder "$(IMP_OUT_DIR)" \
+>   --cumulative-path "$(IMP_CUMUL_PATH)" \
+>   --checkpoint-path "$(IMP_CHECKPOINT)" \
+>   --date-column "$(IMP_DATE_COL)" \
+>   --key-columns "$(IMP_KEY_COLS)" \
+>   --sep "$(IMP_SEP)"
+
+.PHONY: s3-import-lowmem
+s3-import-lowmem: s3-env
+> IMPORT_CHUNKSIZE?=100000 IMP_APPEND_ONLY=1 IMP_DEDUP_DUCKDB?=0 \
+> IMP_SEP="$(IMP_SEP)" IMP_S3_KEY="$(IMP_S3_KEY)" \
+> make -f Makefile.s3 s3-import
+
+# ---------- Pipeline CSV ----------
+s3-pipeline-csv: s3-upload s3-import s3-list
+> echo "✔ Pipeline CSV terminée."
+
+# ---------- Check env ----------
+check-env: s3-install
+> $(CHK_ENV)
+> test -f tools/check_env.py || (echo "Missing tools/check_env.py"; exit 1)
+> set -a; . $$HOME/.dagshub.env; set +a
+> $(S3_PY) tools/check_env.py
+
+s3-check-env: check-env
+

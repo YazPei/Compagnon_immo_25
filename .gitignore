@@ -13,7 +13,9 @@ infra/config/dagshub.yaml
 .venv312/
 venv/
 env/
-
+.s3venv/
+.s3venv
+s3venv/
 # Fichiers de configuration de l'éditeur
 .vscode/
 .idea/
@@ -50,7 +52,8 @@ archives/
 *.ipynb
 
 # dvc 
-
+.dvc/config.local
+dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md

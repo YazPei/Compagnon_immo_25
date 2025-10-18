@@ -21,6 +21,8 @@ mlflow
 click
 pyarrow
 pandas
+dvc-webdav
+s3fs
 
 
 

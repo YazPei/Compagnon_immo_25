@@ -1,27 +1,25 @@
-# file: dvc.yaml
 stages:
   import_data:
-    cmd: >
-      python mlops/1_import_donnees/import_data.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/1_import_donnees/import_data.py
       --source-mode s3
       --s3-key data/merged_sales_data.csv
       --output-folder data/incremental
       --cumulative-path data/df_sample.csv
       --checkpoint-path data/state/immo_checkpoint.parquet
-      --date-column date_vente
-      --key-columns id_transaction
+      --date-column date
+      --key-columns idannonce
       --sep ';'
     deps:
-      - mlops/1_import_donnees/import_data.py
-      # Dépendance externe S3: remplace le bucket si besoin
       - s3://Compagnon_immo_25/data/merged_sales_data.csv
+      - mlops/1_import_donnees/import_data.py
     outs:
       - data/df_sample.csv
       - data/incremental
 
   fusion_geo:
-    cmd: >
-      python mlops/3_fusion/fusion_geo_dvf.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/3_fusion/fusion_geo_dvf.py
       --folder-path1 data
       --folder-path2 data
       --output-folder data/clean
@@ -33,9 +31,11 @@ stages:
       - data/clean/df_sales_clean.csv
 
   preprocessing:
-    cmd: >
-      mkdir -p data/processed/reports/figures &&
-      python mlops/preprocessing_4/preprocessing.py --input-path data/clean/ --output-path data/processed/
+    cmd: >-
+      bash -lc "mkdir -p data/processed/reports/figures &&
+      ./.s3venv/bin/python mlops/preprocessing_4/preprocessing.py
+      --input-path data/clean/
+      --output-path data/processed/"
     deps:
       - mlops/preprocessing_4/preprocessing.py
       - mlops/preprocessing_4/utils.py
@@ -46,8 +46,8 @@ stages:
       - data/processed/df_sales_clean_series.csv
 
   clustering:
-    cmd: >
-      python mlops/5_clustering/Clustering.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/5_clustering/Clustering.py
       --input-path data/processed
       --output-path exports/df_cluster.csv
     deps:
@@ -63,7 +63,8 @@ stages:
       - mlflow_outputs/elbow_plot.png
 
   encode:
-    cmd: python mlops/6_Regression/1_Encoding/encoding.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/6_Regression/1_Encoding/encoding.py
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
@@ -74,7 +75,8 @@ stages:
       - data/encoded/y_test.csv
 
   train_lgbm:
-    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/6_Regression/2_LGBM/train_lgbm.py
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
@@ -89,7 +91,9 @@ stages:
           cache: false
 
   analyse:
-    cmd: python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+    cmd: >-
+      ./.s3venv/bin/python mlops/6_Regression/4_Analyse/analyse.py
+      --model lightgbm
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv
@@ -97,7 +101,8 @@ stages:
       - data/encoded/lgbm_model.joblib
 
   splitst:
-    cmd: python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
     deps:
       - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       - data/df_sales_clean_ST.csv
@@ -107,8 +112,8 @@ stages:
       - data/split
 
   decompose:
-    cmd: >
-      python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       --input-folder data/split
       --output-folder outputs/decomposition
       --suffix ${ST_SUFFIX}
@@ -120,8 +125,8 @@ stages:
       - outputs/decomposition/decomposition_multiplicative_cluster_0.png
 
   train_sarimax:
-    cmd: >
-      python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       --input-folder data/split
       --output-folder outputs/best
       --suffix ${ST_SUFFIX}
@@ -138,8 +143,8 @@ stages:
       - outputs/best
 
   evaluate:
-    cmd: >
-      python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
+    cmd: >-
+      ./.s3venv/bin/python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       --input-folder data/split
       --model-folder outputs/best
       --output-folder outputs/evaluate
@@ -149,3 +154,4 @@ stages:
       - data/split
     outs:
       - outputs/evaluate
+

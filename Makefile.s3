@@ -100,7 +100,7 @@ s3-list: s3-env
 > $(CHK_TOOL)
 > set -a; . $$HOME/.dagshub.env; set +a
 > $(S3_PY) tools/dagshub_s3.py list --prefix "$(S3_PREFIX)" --max-keys 50
-
+>
 s3-download: s3-env
 > $(CHK_TOOL)
 > mkdir -p "$(S3_OUT)"

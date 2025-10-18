@@ -50,7 +50,10 @@ archives/
 *.ipynb
 
 # dvc 
+.dvc/config
 
 mlflow_outputs/
 Dockerfile.test
 TODO.md
+
+data/merged_sales_data.csv.dvc

@@ -25,6 +25,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Cache pytest
+.pytest_cache/
+
 # Fichiers inutiles et lourds
 *.log
 *.tmp
@@ -57,3 +60,6 @@ dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md
+docs/testing-integration.md
+
+.gitignore.save

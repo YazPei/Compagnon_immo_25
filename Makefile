@@ -265,36 +265,91 @@ dvc-repro-all: ## dvc repro pipeline complet (image DVC)
 # 7) S3 — DagsHub (auth requise)
 # ===============================
 # Requis à l'env:
+
+# en-tête ok
+.RECIPEPREFIX := >
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+.ONESHELL:
+.SILENT:
+
+# ---- S3 / projet ----
 S3_ENDPOINT ?= https://dagshub.com/api/v1/repo-buckets/s3/YazPei
 BUCKET ?= Compagnon_immo_25
 KEY ?= merged_sales_data.csv
 REGION ?= us-east-1
-AWS_ACCESS_KEY_ID ?= YazPei
-AWS_SECRET_ACCESS_KEY=<PAT DagsHub>
 
-# --- PATCH: DagsHub S3 sanity ---
-s3_sanity_dagshub: ## Vérifie l'accès à la clé (HEAD+list)
-> @[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
-> @[ -n "$(KEY)" ]    || (echo "Set KEY"; exit 2)
-> @[ -n "$$AWS_ACCESS_KEY_ID" ]     || (echo "Set AWS_ACCESS_KEY_ID=YazPei"; exit 2)
-> @[ -n "$$AWS_SECRET_ACCESS_KEY" ] || (echo "Set AWS_SECRET_ACCESS_KEY=<PAT>"; exit 2)
-> $(PYTHON_BIN) -c 'import os,boto3; from botocore.config import Config; ep=os.getenv("S3_ENDPOINT") or os.getenv("AWS_S3_ENDPOINT") or os.getenv("AWS_ENDPOINT_URL_S3"); assert ep,"Set S3_ENDPOINT or AWS_S3_ENDPOINT or AWS_ENDPOINT_URL_S3"; reg="us-east-1"; b=os.environ["BUCKET"]; k=os.environ["KEY"]; s3=boto3.client("s3",endpoint_url=ep,aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],region_name=reg,config=Config(signature_version="s3v4",s3={"addressing_style":"path"})); print("Endpoint:",ep,"| Region:",reg); print("Head:",s3.head_object(Bucket=b,Key=k)); resp=s3.list_objects_v2(Bucket=b,MaxKeys=20); print("Keys:",[o["Key"] for o in (resp.get("Contents") or [])])'
+# Fichier d'env DagsHub (ton chemin réel)
+DAGSHUB_ENV ?= /home/vboxuser/Compagnon_new/.dagshub.env
 
-s3_import_data: ## Wrapper DagsHub (valeurs par défaut)
-> $(MAKE) import_s3_dagshub \
->   S3_ENDPOINT=https://dagshub.com/api/v1/repo-buckets/s3/YazPei \
->   BUCKET=Compagnon_immo_25 \
->   KEY=merged_sales_data.csv \
->   REGION=us-east-1 \
->   DATE_COL=date \
->   KEY_COLS=idannonce
+# ---- venv ----
+S3_VENV ?= .venv
+PY   := $(S3_VENV)/bin/python
+PIP  := $(S3_VENV)/bin/pip
 
-import_s3_dagshub: ## Import S3 (DagsHub)
-> @[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
-> @[ -n "$(KEY)" ]    || (echo "Set KEY"; exit 2)
-> @[ -n "$$AWS_ACCESS_KEY_ID" ]     || (echo "Set AWS_ACCESS_KEY_ID=YazPei"; exit 2)
-> @[ -n "$$AWS_SECRET_ACCESS_KEY" ] || (echo "Set AWS_SECRET_ACCESS_KEY=<PAT>"; exit 2)
-> EP="$${S3_ENDPOINT:-$${AWS_S3_ENDPOINT:-$${AWS_ENDPOINT_URL_S3}}}"; [ -n "$$EP" ] || { echo "Set S3_ENDPOINT or AWS_S3_ENDPOINT or AWS_ENDPOINT_URL_S3"; exit 2; }; mkdir -p data/state data/incremental; PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8 $(PYTHON_BIN) mlops/1_import_donnees/import_data.py --source-mode s3 --s3-endpoint-url "$$EP" --s3-bucket "$(BUCKET)" --s3-key "$(KEY)" --s3-region "us-east-1" --output-folder data/incremental --cumulative-path data/df_sample.csv --checkpoint-path data/state/checkpoint.parquet --date-column "$(DATE_COL)" --key-columns "$(KEY_COLS)" --sep ";"
+s3-venv:
+> python3 -m venv "$(S3_VENV)"
+> "$(PIP)" -q install --upgrade pip setuptools wheel
+
+s3-install: s3-venv
+> "$(PIP)" -q install "boto3>=1.34" "botocore>=1.34" "urllib3>=2" \
+>                          "pandas>=2.2" "pyarrow>=15" "fsspec>=2024.3" "s3fs>=2024.3" \
+>                          "click>=8.1" "mlflow>=2.10,<3"
+
+
+# Shell interactif (optionnel)
+venv-shell:
+> source .venv/bin/activate
+> exec "$$SHELL" -i
+
+s3-env:
+> set -a
+> [ -f .env ] && . .env || true
+> [ -f "$(DAGSHUB_ENV)" ] && . "$(DAGSHUB_ENV)" || echo "WARN: $(DAGSHUB_ENV) introuvable"
+> set +a
+> echo "Endpoint: $(S3_ENDPOINT)"
+> echo "Bucket  : $(BUCKET)"
+> echo "Region  : $(REGION)"
+> if [ -n "$${AWS_ACCESS_KEY_ID:-}" ]; then echo "AWS_ACCESS_KEY_ID: OK"; else echo "AWS_ACCESS_KEY_ID: MISSING"; fi
+> if [ -n "$${AWS_SECRET_ACCESS_KEY:-}" ]; then echo "AWS_SECRET_ACCESS_KEY: OK"; else echo "AWS_SECRET_ACCESS_KEY: MISSING"; fi
+> if [ -n "$${AWS_SESSION_TOKEN:-}" ]; then echo "AWS_SESSION_TOKEN: present"; fi
+> echo "Chargé depuis: $(DAGSHUB_ENV)"
+
+# petit test utile
+test-s3: s3-install s3-env
+> "$(PY)" - <<'PY'
+> import os, boto3
+> s3 = boto3.client(
+>     "s3",
+>     endpoint_url=os.environ.get("S3_ENDPOINT","$(S3_ENDPOINT)"),
+>     region_name=os.environ.get("AWS_DEFAULT_REGION","$(REGION)"),
+> )
+> resp = s3.head_object(Bucket="$(BUCKET)", Key="$(KEY)")
+> print("OK HEAD:", resp["ResponseMetadata"]["HTTPStatusCode"])
+> PY
+
+
+
+import: s3-install s3-env
+> [ -n "$${AWS_ACCESS_KEY_ID:-}" ] || { echo "ERROR: AWS_ACCESS_KEY_ID manquant"; exit 2; }
+> [ -n "$${AWS_SECRET_ACCESS_KEY:-}" ] || { echo "ERROR: AWS_SECRET_ACCESS_KEY manquant"; exit 2; }
+> PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8 \
+> "$(PY)" mlops/1_import_donnees/import_data.py \
+>   --source-mode s3 \
+>   --s3-endpoint-url "$(S3_ENDPOINT)" \
+>   --s3-bucket "$(BUCKET)" \
+>   --s3-key "$(KEY)" \
+>   --s3-region "$(REGION)" \
+>   --output-folder data/incremental \
+>   --cumulative-path data/df_sample.csv \
+>   --checkpoint-path data/state/checkpoint.parquet \
+>   --date-column "date" \
+>   --key-columns "idannonce" \
+>   --sep ";"
+
+clean-venv:
+> rm -rf "$(S3_VENV)"
+
 
 
 # ===============================

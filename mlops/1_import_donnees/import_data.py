@@ -15,7 +15,6 @@ import pandas as pd
 import mlflow
 
 try:
-    # why: éviter UnicodeEncodeError quand MLflow écrit des emojis sur stdout non-UTF8
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if hasattr(sys.stderr, "reconfigure"):

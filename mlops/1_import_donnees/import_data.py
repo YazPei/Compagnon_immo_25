@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+
 from __future__ import annotations
-import os
+import os, sys, locale
 import io
 import json
 import time
@@ -12,6 +13,19 @@ from typing import List, Optional, Tuple, IO, Union
 import click
 import pandas as pd
 import mlflow
+
+try:
+    # why: éviter UnicodeEncodeError quand MLflow écrit des emojis sur stdout non-UTF8
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("LC_ALL", "C.UTF-8")
+os.environ.setdefault("LANG", "C.UTF-8")
+
 
 def _lazy_import_boto3():
     import boto3

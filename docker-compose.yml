@@ -19,7 +19,6 @@ services:
       - "6380:6379"  # Port hôte changé pour éviter le conflit
     networks:
       - ml_net
-    profiles: ["regression", "series", "test"]
 
   # MLflow pour le suivi des expériences
   mlflow:
@@ -115,6 +114,7 @@ services:
       - mlflow
     networks:
       - ml_net
+    profiles: ["regression", "series", "test"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -227,7 +227,7 @@ services:
   run_full:
     build:
       context: ./SERVICES/dvc
-      dockerfile: Dockerfile.run
+      dockerfile: Dockerfile
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app

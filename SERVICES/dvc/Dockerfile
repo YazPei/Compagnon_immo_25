@@ -19,7 +19,7 @@ RUN python -m venv /opt/venv
 WORKDIR /app
 
 # Installation des dépendances Python
-COPY ./mlops/2_dvc/requirements.txt /tmp/requirements.txt
+COPY ./requirements.txt /tmp/requirements.txt
 RUN python -m pip install --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && rm -f /tmp/requirements.txt
@@ -55,11 +55,10 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 
 # Copie du code applicatif et scripts DVC
-COPY --chown=app:app ./app /app/app
-COPY --chown=app:app ./mlops/2_dvc /app/mlops/2_dvc
+COPY --chown=app:app ./ /app/
 
 # Hygiène : droits + nettoyage
-RUN chmod +x /app/mlops/2_dvc/run_dvc.sh \
+RUN chmod +x /app/SERVICES/dvc/run_dvc.sh \
     && find /opt/venv -name "*.pyc" -delete \
     && rm -rf /root/.cache
 

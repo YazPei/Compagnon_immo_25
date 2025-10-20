@@ -152,7 +152,7 @@ env-from-gh: ## Récupère .env depuis GitHub Actions (artifact)
 > echo "OK: $(ENV_DST) updated (preview redacted):" ; \
 > n=0 ; while IFS='' read -r line && [ $$n -lt 16 ]; do \
 >   case $$line in *"="*) key=$${line%%=*}; printf "%s=***redacted***\n" "$$key" ;; *) printf "%s\n" "$$line" ;; esac ; \
->   n=$$((n+1)) ; done <"$(ENV_DST)"
+>   n=$$((n+1)) ; done <"$(	ENV_DST)"
 
 env-from-gh.local: ## Raccourci standard
 > @$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
@@ -283,7 +283,7 @@ REGION ?= us-east-1
 DAGSHUB_ENV ?= /home/vboxuser/Compagnon_new/.dagshub.env
 
 # ---- venv ----
-S3_VENV ?= .venv
+S3_VENV ?= .s3venv
 PY   := $(S3_VENV)/bin/python
 PIP  := $(S3_VENV)/bin/pip
 
@@ -351,47 +351,6 @@ clean-venv:
 > rm -rf "$(S3_VENV)"
 
 
-
-# ===============================
-# 8) S3 — AWS public/profil (optionnel)
-# ===============================
-import_s3_public: ## Import S3 public (AWS, unsigned)
-> @[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
-> @[ -n "$(KEY)" ]    || (echo "Set KEY"; exit 2)
-> @[ -n "$(REGION)" ] || (echo "Set REGION"; exit 2)
-> @mkdir -p data/state data/incremental
-> PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8 \
-> $(PYTHON_BIN) mlops/1_import_donnees/import_data.py \
->   --source-mode s3 \
->   --s3-anon \
->   --s3-bucket "$(BUCKET)" \
->   --s3-key "$(KEY)" \
->   --s3-region "$(REGION)" \
->   --output-folder data/incremental \
->   --cumulative-path data/df_sample.csv \
->   --checkpoint-path data/state/checkpoint.parquet \
->   --date-column "$(DATE_COL)" \
->   --key-columns "$(KEY_COLS)" \
->   --sep ";"
-
-import_s3_profile: ## Import S3 via AWS_PROFILE (AWS natif)
-> @[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
-> @[ -n "$(KEY)" ]    || (echo "Set KEY"; exit 2)
-> @[ -n "$(REGION)" ] || (echo "Set REGION"; exit 2)
-> @[ -n "$$AWS_PROFILE" ] || (echo "Set AWS_PROFILE"; exit 2)
-> @mkdir -p data/state data/incremental
-> PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8 \
-> $(PYTHON_BIN) mlops/1_import_donnees/import_data.py \
->   --source-mode s3 \
->   --s3-bucket "$(BUCKET)" \
->   --s3-key "$(KEY)" \
->   --s3-region "$(REGION)" \
->   --output-folder data/incremental \
->   --cumulative-path data/df_sample.csv \
->   --checkpoint-path data/state/checkpoint.parquet \
->   --date-column "$(DATE_COL)" \
->   --key-columns "$(KEY_COLS)" \
->   --sep ";"
 
 # ===============================
 # 9) STOP / CLEAN

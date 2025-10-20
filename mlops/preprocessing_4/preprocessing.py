@@ -83,7 +83,7 @@ def run_preprocessing_pipeline(input_path: str, output_path: str):
 
 
     # === BEGIN PIPELINE ===
-    file_path = os.path.join(input_path, "df_sales_clean.csv") 
+    file_path = os.path.join(input_path, "df_sample.csv") 
     df = pd.read_csv(file_path, sep=";", dtype={"INSEE_COM": str})
     run_suffix = os.getenv("RUN_MODE", "default")
     GROUP_COL = "INSEE_COM"

@@ -239,18 +239,6 @@ services:
     environment: ["RUN_MODE=full"]
     networks: [ml_net]
 
-  fusion_geo:
-    build:
-      context: .
-      dockerfile: mlops/3_fusion/Dockerfile.fusion
-    user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - .:/app
-      - ./mlops:/app/mlops
-    env_file: [.env]
-    networks: [ml_net]
-    command: ["bash", "-lc", "python mlops/3_fusion/fusion.py"]
-    profiles: ["regression", "series"]
 
   preprocessing:
     build:

@@ -1,54 +1,27 @@
 stages:
   import_data:
-    cmd: >
-      PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8
-      /usr/bin/env python3 mlops/1_import_donnees/import_data.py
-      --source-mode s3
-      --s3-endpoint-url "https://dagshub.com/api/v1/repo-buckets/s3/YazPei"
-      --s3-bucket "Compagnon_immo_25"
-      --s3-key "merged_sales_data.csv"
-      --s3-region "us-east-1"
-      --output-folder data/incremental
-      --cumulative-path data/df_sample.csv
-      --checkpoint-path data/state/checkpoint.parquet
-      --date-column "date"
-      --key-columns "idannonce"
-      --sep ";"
+    cmd: bash mlops/run_import.sh
     deps:
       - mlops/1_import_donnees/import_data.py
     outs:
-      - data/df_sample.csv
       - data/state/checkpoint.parquet
+      - data/df_sample.csv
       - data/incremental:
           persist: true
     always_changed: true
 
 
 
-
-  fusion_geo:
-    cmd: >-
-      ./.s3venv/bin//usr/bin/env python3 mlops/3_fusion/fusion_geo_dvf.py
-      --folder-path1 data
-      --folder-path2 data
-      --output-folder data/clean
-    deps:
-      - mlops/3_fusion/fusion_geo_dvf.py
-      - data/DVF_donnees_macroeco.csv
-      - data/df_sample.csv
-    outs:
-      - data/clean/df_sales_clean.csv
-
   preprocessing:
     cmd: >-
       bash -lc "mkdir -p data/processed/reports/figures &&
       ./.s3venv/bin//usr/bin/env python3 mlops/preprocessing_4/preprocessing.py
-      --input-path data/clean/
+      --input-path data/
       --output-path data/processed/"
     deps:
       - mlops/preprocessing_4/preprocessing.py
       - mlops/preprocessing_4/utils.py
-      - data/clean/df_sales_clean.csv
+      - data/df_sample.csv
     outs:
       - data/processed/df_sales_clean_train.csv
       - data/processed/df_sales_clean_test.csv

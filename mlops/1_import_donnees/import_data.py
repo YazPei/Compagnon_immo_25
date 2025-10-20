@@ -410,7 +410,7 @@ def incremental_extract(
     return delta_path, cumulative_csv, rows_delta, rows_cumul
 
 @click.command()
-@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_new.csv)")
+@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_sample.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv", help="CSV cumul (df_sample.csv)")
 @click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin checkpoint (parquet)")
 @click.option("--date-column", type=str, default=None, help="Colonne date pour watermark")

@@ -48,7 +48,7 @@ archives/
 *.csv
 *.xlsx
 *.parquet
-*.zip
+*.zip*
 *.tar.gz
 *.pt
 
@@ -62,11 +62,11 @@ dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md
-<<<<<<< HEAD
+
 docs/testing-integration.md
 
 .gitignore.save
-=======
+
 *.dvc
 *.json
->>>>>>> c97769e5 (dvc)
+

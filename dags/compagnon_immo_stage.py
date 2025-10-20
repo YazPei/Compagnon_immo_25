@@ -1,203 +1,92 @@
-# --- path: airflow/dags/stage.py
+# path: dags/compagnon_immo_stage.py
+# WHY: DAG aligné S3 public/profil/DVC. Utilise ton import_data.py patché.
 import os
 import pendulum
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.bash import BashOperator
 
-REPO = "/opt/airflow/repo"
-BASE = f"{REPO}/mlops"
-
 PARIS = pendulum.timezone("Europe/Paris")
+REPO = "/opt/airflow/repo"
 PY = "python"
-
-MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI")
-ST_SUFFIX = Variable.get("ST_SUFFIX", "")
-default_args = {"retries": 2, "retry_delay": pendulum.duration(minutes=10)}
-
-# --- DVC/Dagshub variables (Airflow Variables) ---
-DVC_REPO_URL = Variable.get("DVC_REPO_URL", default_var=None)      # ex: https://dagshub.com/<user>/<repo>
-DVC_FILE_PATH = Variable.get("DVC_FILE_PATH", default_var=None)    # ex: data/raw/dvc_data.csv
-DVC_REV = Variable.get("DVC_REV", default_var="main")
-DAGSHUB_USERNAME = Variable.get("DAGSHUB_USERNAME", default_var=None)
-DAGSHUB_TOKEN = Variable.get("DAGSHUB_TOKEN", default_var=None)
 
 def bash_task(task_id, cmd, timeout_min=None, env_extra=None, cwd=REPO):
     env = os.environ.copy()
-    if MLFLOW_URI:
-        env["MLFLOW_TRACKING_URI"] = MLFLOW_URI
-    env["RUN_MODE"] = "full"
-    env["ST_SUFFIX"] = ST_SUFFIX
-    # DVC/Dagshub creds pour dvc.api.open()
-    if DVC_REPO_URL:
-        env["DVC_REPO_URL"] = DVC_REPO_URL
-    if DVC_FILE_PATH:
-        env["DVC_FILE_PATH"] = DVC_FILE_PATH
-    if DVC_REV:
-        env["DVC_REV"] = DVC_REV
-    if DAGSHUB_USERNAME:
-        env["DAGSHUB_USERNAME"] = DAGSHUB_USERNAME
-    if DAGSHUB_TOKEN:
-        env["DAGSHUB_TOKEN"] = DAGSHUB_TOKEN
-    # utile si tu fais des imports relatifs
-    env["PYTHONPATH"] = REPO
-
+    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if mlflow_uri:
+        env["MLFLOW_TRACKING_URI"] = mlflow_uri
     if env_extra:
         env.update(env_extra)
     return BashOperator(
         task_id=task_id,
-        cwd=cwd,
         bash_command=cmd,
+        cwd=cwd,
         env=env,
         execution_timeout=(pendulum.duration(minutes=timeout_min) if timeout_min else None),
     )
 
+def build_import_cmd():
+    source_mode = Variable.get("SOURCE_MODE", default_var="s3_public")  # s3_public|s3_profile|dvc
+    s3_bucket  = Variable.get("S3_BUCKET", default_var=None)
+    s3_key     = Variable.get("S3_KEY", default_var=None)
+    s3_region  = Variable.get("S3_REGION", default_var="eu-west-1")
+    s3_endpoint= Variable.get("S3_ENDPOINT", default_var=None)
+    aws_profile= Variable.get("AWS_PROFILE", default_var=None)
+
+    out_folder = f"{REPO}/data/incremental/{{{{ ds }}}}"
+    cumul_csv  = f"{REPO}/data/df_sample.csv"
+    chk_path   = "/opt/airflow/data/state/immo_checkpoint.parquet"
+    date_col   = "date_vente"
+    key_cols   = "id_transaction"
+
+    if source_mode == "dvc":
+        dvc_repo_url = Variable.get("DVC_REPO_URL", default_var=None)
+        dvc_file_path= Variable.get("DVC_FILE_PATH", default_var=None)
+        dvc_rev      = Variable.get("DVC_REV", default_var="main")
+        assert dvc_repo_url and dvc_file_path, "DVC_REPO_URL/DVC_FILE_PATH requis en mode dvc"
+        cmd = (
+            f"{PY} {REPO}/mlops/1_import_donnees/import_data.py "
+            f"--output-folder {out_folder} --cumulative-path {cumul_csv} "
+            f"--checkpoint-path {chk_path} --date-column {date_col} --key-columns {key_cols} --sep ';' "
+            f"--source-mode dvc --dvc-repo-url '{dvc_repo_url}' --dvc-path '{dvc_file_path}' --dvc-rev '{dvc_rev}'"
+        )
+        return cmd, {}
+
+    assert s3_bucket and s3_key, "S3_BUCKET/S3_KEY requis en mode s3_*"
+    base_cmd = (
+        f"{PY} {REPO}/mlops/1_import_donnees/import_data.py "
+        f"--output-folder {out_folder} --cumulative-path {cumul_csv} "
+        f"--checkpoint-path {chk_path} --date-column {date_col} --key-columns {key_cols} --sep ';' "
+        f"--source-mode s3 --s3-bucket '{s3_bucket}' --s3-key '{s3_key}' --s3-region '{s3_region}' "
+    )
+    if s3_endpoint:
+        base_cmd += f"--s3-endpoint-url '{s3_endpoint}' "
+
+    if source_mode == "s3_public":
+        # Mode public: UNSIGNED + pas de creds requis
+        return base_cmd + "--s3-anon", {"AWS_NO_SIGN_REQUEST": "1"}
+
+    if source_mode == "s3_profile":
+        env = {}
+        if aws_profile:
+            env["AWS_PROFILE"] = aws_profile
+            env["AWS_SDK_LOAD_CONFIG"] = "1"
+        return base_cmd, env
+
+    raise ValueError(f"Unknown SOURCE_MODE={source_mode}")
+
 with DAG(
-    dag_id="immo_stage_by_stage",
+    dag_id="compagnon_immo_stage",
     start_date=pendulum.datetime(2025, 9, 1, tz=PARIS),
     schedule="0 3 * * 1",
     catchup=False,
-    default_args=default_args,
-    tags=["immo", "stages", "mlflow"],
+    default_args={"retries": 2, "retry_delay": pendulum.duration(minutes=10)},
+    tags=["immo", "s3", "mlflow", "dvc"],
 ) as dag:
+    init_dirs = bash_task("init_dirs", "mkdir -p /opt/airflow/data/state /opt/airflow/data/incremental", timeout_min=1)
 
-    # 0) Sanity (MLflow)
-    ping_mlflow = bash_task(
-        "ping_mlflow",
-        cmd='curl -sf "${MLFLOW_TRACKING_URI}" > /dev/null && echo "MLflow OK" || (echo "MLflow KO"; exit 1)',
-        timeout_min=1,
-    )
+    import_cmd, import_env = build_import_cmd()
+    import_data = bash_task("import_donnees", import_cmd, env_extra=import_env, timeout_min=45)
 
-    # 0bis) Prépare les dossiers persistants (checkpoint + incremental)
-    init_dirs = bash_task(
-        "init_dirs",
-        cmd="mkdir -p /opt/airflow/data/state /opt/airflow/data/incremental && echo 'dirs ok'",
-        timeout_min=1,
-    )
-
-    # 1) Import des données — **MODE DVC/Dagshub**
-    # NOTE: pour conserver la templating Jinja d'Airflow dans une f-string Python,
-    # on met des quadruples accolades: {{{{ ds }}}}
-    import_data = bash_task(
-        "import_donnees",
-        cmd=(
-            f"{PY} {BASE}/1_import_donnees/import_data.py "
-            f"--output-folder {REPO}/data/incremental/{{{{ ds }}}} "
-            f"--cumulative-path {REPO}/data/df_sample.csv "
-            f"--checkpoint-path /opt/airflow/data/state/immo_checkpoint.parquet "
-            f"--date-column date_vente "
-            f"--key-columns id_transaction "
-            f"--sep ';' "
-            f"--chunk-size 200000 "
-            f"--dvc-repo-url \"$DVC_REPO_URL\" "
-            f"--dvc-path \"$DVC_FILE_PATH\" "
-            f"--dvc-rev \"$DVC_REV\" "
-        ),
-        timeout_min=30,
-    )
-
-    # 2) Étapes DVC (si utiles)
-    dvc_ops = bash_task(
-        "dvc_ops",
-        cmd=f"{PY} {BASE}/2_dvc/main.py",
-        timeout_min=10,
-    )
-
-    # 3) Fusion géo + DVF
-    fusion_geo = bash_task(
-        "fusion_geo",
-        cmd=f"{PY} {BASE}/3_fusion/fusion_geo_dvf.py",
-        timeout_min=20,
-    )
-
-    # 4) Préprocessing (ton étape 4)
-    preprocessing = bash_task(
-        "preprocessing_4",
-        cmd=(
-            f"{PY} {BASE}/preprocessing_4/preprocessing.py "
-            f"--input-path data "
-            f"--output-path data "
-            f"--run-date {{{{ ds }}}}"
-        ),
-        timeout_min=30,
-    )
-
-    # 5) Clustering
-    clustering = bash_task(
-        "clustering",
-        cmd=(
-            f"{PY} {BASE}/5_clustering/Clustering.py "
-            f"--input-path data/train_clean_ST.csv "
-            f"--output-path1 data/df_cluster.csv "
-            f"--output-path2 data/df_sales_clean_ST.csv"
-        ),
-        timeout_min=20,
-    )
-
-    # 6) Régression (encoding → train → analyse)
-    encode = bash_task(
-        "encode",
-        cmd=f"{PY} {BASE}/6_Regression/1_Encoding/encoding.py",
-        timeout_min=20,
-    )
-    train_lgbm = bash_task(
-        "train_lgbm",
-        cmd=f"{PY} {BASE}/6_Regression/2_LGBM/train_lgbm.py",
-        timeout_min=45,
-    )
-    analyse = bash_task(
-        "analyse",
-        cmd=f"{PY} {BASE}/6_Regression/4_Analyse/analyse.py",
-        timeout_min=15,
-    )
-
-    # 7) Séries temporelles
-    split = bash_task(
-        "split",
-        cmd=f"{PY} {BASE}/7_Serie_temporelle/1_SPLIT/load_split.py",
-        timeout_min=10,
-    )
-    decompose = bash_task(
-        "decompose",
-        cmd=(
-            f"{PY} {BASE}/7_Serie_temporelle/2_Decompose/seasonal_decomp.py "
-            f"--input-folder exports/st "
-            f"--output-folder exports/st "
-            f"--run-date {{{{ ds }}}}"
-        ),
-        timeout_min=20,
-    )
-    train_sarimax = bash_task(
-        "train_sarimax",
-        cmd=(
-            f"{PY} {BASE}/7_Serie_temporelle/3_SARIMAX/sarimax_train.py "
-            f"--input-folder exports/st "
-            f"--output-folder exports/st "
-            f"--run-date {{{{ ds }}}}"
-        ),
-        timeout_min=45,
-    )
-    evaluate = bash_task(
-        "evaluate",
-        cmd=f"{PY} {BASE}/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py",
-        timeout_min=10,
-    )
-
-    # Orchestration
-    (
-        ping_mlflow
-        >> init_dirs
-        >> import_data
-        >> dvc_ops
-        >> fusion_geo
-        >> preprocessing
-        >> clustering
-        >> encode
-        >> train_lgbm
-        >> analyse
-        >> split
-        >> decompose
-        >> train_sarimax
-        >> evaluate
-    )
+    init_dirs >> import_data
 

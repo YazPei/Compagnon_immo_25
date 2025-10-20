@@ -1,12 +1,23 @@
-FROM apache/airflow:2.9.0
+FROM apache/airflow:2.9.2-python3.10
 
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 USER airflow
-# Dockerfile.airflow (relevant lines)
+
+# Python deps nécessaires pour import S3 et DVC
+# (évite NoCredentialsError en public via notre flag --s3-anon)
+RUN pip install --no-cache-dir \
+    boto3 botocore dvc[s3] \
+    pandas pyarrow fastparquet \
+    mlflow duckdb click
+
+# Repo projet (déjà monté via volumes; COPY optionnel si build sans bind-mount)
+# COPY dags /opt/airflow/dags
+# COPY mlops /opt/airflow/mlops
+# COPY data /opt/airflow/data
+
+ENV PYTHONPATH=/opt/airflow/repo
 WORKDIR /opt/airflow
-COPY dags/requirements.txt /opt/airflow/dags/requirements.txt
-RUN pip install --no-cache-dir -r /opt/airflow/dags/requirements.txt
-
-
-COPY dags/ /opt/airflow/dags/
-
 

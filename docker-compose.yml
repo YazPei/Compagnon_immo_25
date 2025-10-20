@@ -1,5 +1,5 @@
+# docker-compose.yml (corrigé)
 services:
-  # Base de données PostgreSQL pour Airflow
   postgres-airflow:
     image: postgres:16
     environment:
@@ -8,114 +8,129 @@ services:
       POSTGRES_DB: airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - ml_net
+    networks: [ml_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     profiles: ["airflow"]
 
-  # Redis pour les tâches en arrière-plan
   redis:
     image: redis:7-alpine
-    ports:
-      - "6380:6379"  # Port hôte changé pour éviter le conflit
-    networks:
-      - ml_net
+    ports: ["6380:6379"]
+    networks: [ml_net]
     profiles: ["regression", "series", "test"]
 
-  # MLflow pour le suivi des expériences
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.13.1
-    ports:
-      - "5050:5050"
+    ports: ["5050:5050"]
     command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5050
+      mlflow server --host 0.0.0.0 --port 5050
       --backend-store-uri sqlite:///mlflow.db
       --default-artifact-root /mlflow/artifacts
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["regression", "series", "test"]
 
-  # Airflow Webserver
   airflow-webserver:
     build:
       context: .
-      dockerfile: Dockerfile
-    command: >
-      bash -c "
-        airflow db upgrade &&
-        airflow webserver --port 8081
-      "
-    ports:
-      - "8081:8081"
+      dockerfile: Dockerfile.airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-      AIRFLOW_UID: 50000
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       MLFLOW_TRACKING_URI: http://mlflow:5050
+      # Variables Airflow (override via .env)
+      SOURCE_MODE: ${SOURCE_MODE:-s3_public}  # s3_public|s3_profile|dvc
+      S3_BUCKET:   ${S3_BUCKET:-mon-bucket}
+      S3_KEY:      ${S3_KEY:-path/to/file.csv}
+      S3_REGION:   ${S3_REGION:-eu-west-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      AWS_PROFILE: ${AWS_PROFILE:-}
     volumes:
-      - ./dags:/opt/airflow/dags
+      - ~/.aws:/home/airflow/.aws:ro
+      - ./compagnon_immo_25/dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
       - .:/opt/airflow/repo
       - ./data:/opt/airflow/data
       - ./exports:/opt/airflow/exports
       - ./mlops:/opt/airflow/mlops
+    command: >
+      bash -lc '
+        airflow db upgrade &&
+        airflow variables set SOURCE_MODE "${SOURCE_MODE}" &&
+        airflow variables set S3_BUCKET "${S3_BUCKET}" &&
+        airflow variables set S3_KEY "${S3_KEY}" &&
+        airflow variables set S3_REGION "${S3_REGION}" &&
+        airflow variables set S3_ENDPOINT "${S3_ENDPOINT}" &&
+        airflow variables set AWS_PROFILE "${AWS_PROFILE}" &&
+        airflow webserver --port 8081
+      '
+    ports: ["8081:8081"]
     depends_on:
-      - postgres-airflow
-      - redis
-      - mlflow
-    networks:
-      - ml_net
-    profiles: ["airflow"]
+      postgres-airflow:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    networks: [ml_net]
 
-  # Airflow Scheduler
   airflow-scheduler:
     build:
       context: .
-      dockerfile: Dockerfile
-    command: airflow scheduler
+      dockerfile: Dockerfile.airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW_UID: 50000
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       MLFLOW_TRACKING_URI: http://mlflow:5050
+      SOURCE_MODE: ${SOURCE_MODE:-s3_public}
+      S3_BUCKET:   ${S3_BUCKET:-mon-bucket}
+      S3_KEY:      ${S3_KEY:-path/to/file.csv}
+      S3_REGION:   ${S3_REGION:-eu-west-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      AWS_PROFILE: ${AWS_PROFILE:-}
     volumes:
-      - ./dags:/opt/airflow/dags
+      - ~/.aws:/home/airflow/.aws:ro
+      - ./compagnon_immo_25/dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
       - .:/opt/airflow/repo
       - ./data:/opt/airflow/data
       - ./exports:/opt/airflow/exports
       - ./mlops:/opt/airflow/mlops
+    command: >
+      bash -lc '
+        airflow variables set SOURCE_MODE "${SOURCE_MODE}" &&
+        airflow variables set S3_BUCKET "${S3_BUCKET}" &&
+        airflow variables set S3_KEY "${S3_KEY}" &&
+        airflow variables set S3_REGION "${S3_REGION}" &&
+        airflow variables set S3_ENDPOINT "${S3_ENDPOINT}" &&
+        airflow variables set AWS_PROFILE "${AWS_PROFILE}" &&
+        airflow scheduler
+      '
     depends_on:
-      - postgres-airflow
-      - redis
-      - mlflow
-    networks:
-      - ml_net
-    profiles: ["airflow"]
+      postgres-airflow:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    networks: [ml_net]
 
-  # API FastAPI
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    ports: ["8000:8000"]
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
       - ENVIRONMENT=development
     depends_on:
-      - mlflow
-      - redis
-    networks:
-      - ml_net
+      mlflow:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks: [ml_net]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -123,7 +138,6 @@ services:
       retries: 3
       start_period: 40s
 
-  # Service DVC pour les pipelines de données
   dvc:
     build:
       context: .
@@ -138,12 +152,11 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
       - DVC_NO_ANALYTICS=1
     depends_on:
-      - mlflow
-    networks:
-      - ml_net
+      mlflow:
+        condition: service_started
+    networks: [ml_net]
     profiles: ["dvc"]
 
-  # Service de test automatisé
   api-test:
     build:
       context: .
@@ -165,36 +178,27 @@ services:
         condition: service_started
       redis:
         condition: service_started
-    networks:
-      - ml_net
+    networks: [ml_net]
     command: bash -c "cd /app && ls -la app/api/tests && python -m pytest app/api/tests -v"
     profiles: ["test", "regression", "series"]
 
-  # Service CI pour tests et linting
   ci:
     build:
       context: .
       dockerfile: Dockerfile
     user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - .:/app
+    volumes: [".:/app"]
     working_dir: /app
-    environment:
-      - PYTHONPATH=/app
-    networks:
-      - ml_net
+    environment: ["PYTHONPATH=/app"]
+    networks: [ml_net]
     command: >
-      bash -c "
-        python -m pytest app/api/tests -v &&
-        python -m flake8 app/ --max-line-length=88 --ignore=E203,W503
-      "
+      bash -c "python -m pytest app/api/tests -v &&
+               python -m flake8 app/ --max-line-length=88 --ignore=E203,W503"
     profiles: ["ci"]
 
-  # Prometheus pour la collecte de métriques
   prometheus:
     image: prom/prometheus:v2.45.0
-    ports:
-      - "9090:9090"
+    ports: ["9090:9090"]
     volumes:
       - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
@@ -204,15 +208,12 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["monitoring"]
 
-  # Grafana pour la visualisation des métriques
   grafana:
     image: grafana/grafana:10.1.0
-    ports:
-      - "3000:3000"
+    ports: ["3000:3000"]
     volumes:
       - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning
       - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
@@ -221,29 +222,23 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
-      - prometheus
-    networks:
-      - ml_net
+      prometheus:
+        condition: service_started
+    networks: [ml_net]
     profiles: ["monitoring"]
 
-  # --------- Pipeline de lancement ----------
   run_full:
     build:
       context: .
       dockerfile: mlops/1_import_donnees/Dockerfile.run
     user: "${UID:-1000}:${GID:-1000}"
-    volumes:
-      - .:/app
+    volumes: [".:/app"]
     tty: true
     stdin_open: true
-    env_file:
-      - .env
-    environment:
-      - RUN_MODE=full
-    networks:
-      - ml_net
+    env_file: [.env]
+    environment: ["RUN_MODE=full"]
+    networks: [ml_net]
 
-  # --------- Préparation des données ----------
   fusion_geo:
     build:
       context: .
@@ -252,10 +247,8 @@ services:
     volumes:
       - .:/app
       - ./mlops:/app/mlops
-    env_file:
-      - .env
-    networks:
-      - ml_net
+    env_file: [.env]
+    networks: [ml_net]
     command: ["bash", "-lc", "python mlops/3_fusion/fusion.py"]
     profiles: ["regression", "series"]
 
@@ -269,13 +262,9 @@ services:
       - .:/app
       - ./data:/app/data
       - ./mlops/preprocessing_4:/app/mlops/preprocessing_4
-    env_file:
-      - .env
-    command: ["python","mlops/preprocessing_4/preprocessing.py",
-          "--input-path","/app/data",
-          "--output-path","/app/data"]
-    networks:
-      - ml_net
+    env_file: [.env]
+    command: ["python","mlops/preprocessing_4/preprocessing.py","--input-path","/app/data","--output-path","/app/data"]
+    networks: [ml_net]
     profiles: ["regression", "series"]
 
   clustering:
@@ -286,14 +275,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./mlops:/app/mlops
-    env_file:
-      - .env
-    networks:
-      - ml_net
-    command: ["python","mlops/5_clustering/Clustering.py",
-          "--input-path","/app/data/train_clean.csv",
-          "--output-path1","/app/data/df_cluster.csv",
-          "--output-path2","/app/data/df_sales_clean_ST.csv"]
+    env_file: [.env]
+    networks: [ml_net]
+    command: ["python","mlops/5_clustering/Clustering.py","--input-path","/app/data/train_clean.csv","--output-path1","/app/data/df_cluster.csv","--output-path2","/app/data/df_sales_clean_ST.csv"]
     profiles: ["regression", "series"]
 
   encode:
@@ -306,13 +290,10 @@ services:
       - ./data:/app/data
       - ./exports:/app/exports
     command: ["python", "/app/mlops/6_Regression/1_Encoding/encoding.py"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
+    env_file: [.env]
+    networks: [ml_net]
     profiles: ["regression"]
 
-  # --------- Régression ----------
   train_lgbm:
     build:
       context: .
@@ -323,10 +304,8 @@ services:
       - ./data:/app/data
       - ./exports:/app/exports
     command: ["python", "/app/mlops/6_Regression/2_LGBM/train_lgbm.py"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
+    env_file: [.env]
+    networks: [ml_net]
     profiles: ["regression"]
 
   analyse:
@@ -339,13 +318,10 @@ services:
       - ./exports:/app/exports
       - ./data:/app/data
     command: ["python", "/app/mlops/6_Regression/4_Analyse/analyse.py"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
+    env_file: [.env]
+    networks: [ml_net]
     profiles: ["regression"]
 
-  # --------- Séries Temporelles ----------
   split:
     build:
       context: .
@@ -356,13 +332,11 @@ services:
       - ./data:/app/data
       - ./mlops:/app/mlops
     entrypoint: ["python", "/app/mlops/7_Serie_temporelle/1_SPLIT/load_split.py"]
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
       - RUN_MODE=full
       - ST_SUFFIX=${ST_SUFFIX:-q12}
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["series"]
 
   decompose:
@@ -373,16 +347,12 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py",
-          "--input-folder","/app/exports/st",
-          "--output-folder","/app/exports/st"]
-    env_file:
-      - .env
+    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py","--input-folder","/app/exports/st","--output-folder","/app/exports/st"]
+    env_file: [.env]
     environment:
       - RUN_MODE=full
       - ST_SUFFIX=${ST_SUFFIX:-q12}
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["series"]
 
   train_sarimax:
@@ -393,16 +363,12 @@ services:
     volumes:
       - ./exports:/app/exports
       - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py",
-          "--input-folder","/app/exports/st",
-          "--output-folder","/app/exports/st"]
-    env_file:
-      - .env
+    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py","--input-folder","/app/exports/st","--output-folder","/app/exports/st"]
+    env_file: [.env]
     environment:
       - RUN_MODE=full
       - ST_SUFFIX=${ST_SUFFIX:-q12}
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["series"]
 
   evaluate:
@@ -415,13 +381,11 @@ services:
       - ./mlops:/app/mlops
       - ./data:/app/data
     entrypoint: ["python", "/app/mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"]
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
       - RUN_MODE=full
       - ST_SUFFIX=${ST_SUFFIX:-q12}
-    networks:
-      - ml_net
+    networks: [ml_net]
     profiles: ["series"]
 
   series_pipeline:
@@ -434,18 +398,14 @@ services:
       - ./data:/app/data
       - ./exports:/app/exports
     command: ["python", "/app/mlops/7_Serie_temporelle/pipeline.py", "--help"]
-    env_file:
-      - .env
-    networks:
-      - ml_net
+    env_file: [.env]
+    networks: [ml_net]
     profiles: ["series"]
 
-# Définir les volumes une seule fois à la racine
 volumes:
   postgres_data:
   mlflow_artifacts:
 
-# Définir les networks une seule fois à la racine
 networks:
   ml_net:
     driver: bridge

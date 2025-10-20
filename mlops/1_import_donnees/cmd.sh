@@ -1,18 +1,39 @@
-# &; ENV DAGSHUB 
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 1) Charger tes variables DagsHub 
-source /home/vboxuser/Compagnon_new/.dagshub.env
+MODE="${MODE:-public}" # public|profile
+: "${BUCKET:?BUCKET required}"
+: "${KEY:?KEY required}"
+: "${REGION:?REGION required}"
+DATE_COL="${DATE_COL:-}"
+KEY_COLS="${KEY_COLS:-}"
 
-# 2) Test direct Étape 4 (single-part)
-python3 tools/upload_s3_resilient.py /home/vboxuser/Compagnon_new/Compagnon_immo_25/merged_sales_data.csv "$DAGSHUB_BUCKET" path/in/bucket/merged_sales_data.csv \
-  --endpoint-url "$AWS_S3_ENDPOINT" --path-style --force-single --verbose
+mkdir -p data/state data/incremental
 
-# 3) Si OK → Étape 5 (multipart “doux”)
-python3 tools/upload_s3_resilient.py /home/vboxuser/Compagnon_new/Compagnon_immo_25/merged_sales_data.csv "$DAGSHUB_BUCKET" path/in/bucket/merged_sales_data.csv \
-  --endpoint-url "$AWS_S3_ENDPOINT" --path-style --chunk-size-mb 8 --multipart-threshold-mb 16 \
-  --max-concurrency 2 --verbose
-
-# (Option) utiliser le script automatisé
-chmod +x /home/vboxuser/Compagnon_new/Compagnon_immo_25/mlops/1_import_donnees/upload_dagshub.sh
-/home/vboxuser/Compagnon_new/Compagnon_immo_25/mlops/1_import_donnees/upload_dagshub.sh /home/vboxuser/Compagnon_new/Compagnon_immo_25/merged_sales_data.csv path/in/bucket/merged_sales_data.csv
-
+if [[ "$MODE" == "public" ]]; then
+  exec python3 import_data.py \
+    --source-mode s3 \
+    --s3-anon \
+    --s3-bucket "$BUCKET" \
+    --s3-key "$KEY" \
+    --s3-region "$REGION" \
+    --output-folder data/incremental \
+    --cumulative-path data/df_sample.csv \
+    --checkpoint-path data/state/checkpoint.parquet \
+    --date-column "$DATE_COL" \
+    --key-columns "$KEY_COLS" \
+    --sep ";"
+else
+  : "${AWS_PROFILE:?AWS_PROFILE required for MODE=profile}"
+  exec python3 import_data.py \
+    --source-mode s3 \
+    --s3-bucket "$BUCKET" \
+    --s3-key "$KEY" \
+    --s3-region "$REGION" \
+    --output-folder data/incremental \
+    --cumulative-path data/df_sample.csv \
+    --checkpoint-path data/state/checkpoint.parquet \
+    --date-column "$DATE_COL" \
+    --key-columns "$KEY_COLS" \
+    --sep ";"
+fi

@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# path: import_data.py
-
-
 from __future__ import annotations
 import os
 import io
@@ -9,7 +6,6 @@ import json
 import time
 import math
 import tempfile
-from contextlib import nullcontext
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
 
@@ -17,12 +13,17 @@ import click
 import pandas as pd
 import mlflow
 
-# ============= Optional deps (lazy import) =============
 def _lazy_import_boto3():
     import boto3
+    from botocore import UNSIGNED
     from botocore.config import Config
-    from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError
-    return boto3, Config, (ClientError, EndpointConnectionError, ReadTimeoutError)
+    from botocore.exceptions import (
+        ClientError,
+        EndpointConnectionError,
+        ReadTimeoutError,
+        NoCredentialsError,
+    )
+    return boto3, UNSIGNED, Config, (ClientError, EndpointConnectionError, ReadTimeoutError, NoCredentialsError)
 
 def _lazy_import_dvc():
     import dvc.api
@@ -33,7 +34,6 @@ def _lazy_import_requests():
     from requests.exceptions import RequestException, Timeout, ConnectionError as ReqConnErr
     return requests, (RequestException, Timeout, ReqConnErr)
 
-# ============= MLflow bootstrap =============
 def setup_mlflow() -> Optional[str]:
     uri = os.getenv("MLFLOW_TRACKING_URI")
     if uri:
@@ -43,7 +43,6 @@ def setup_mlflow() -> Optional[str]:
     mlflow.set_tracking_uri("file://" + artifact_dir)
     return "file://" + artifact_dir
 
-# ============= Checkpoint I/O =============
 def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
     if not path.exists():
         return set(), None
@@ -59,11 +58,10 @@ def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
 
 def save_checkpoint(path: Path, seen_keys: set, last_watermark: Optional[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"key_hash": sorted(seen_keys)}).to_parquet(path, index=False)
+    pd.DataFrame({ "key_hash": sorted(seen_keys) }).to_parquet(path, index=False)
     with open(path.with_suffix(".json"), "w", encoding="utf-8") as f:
-        json.dump({"last_watermark": last_watermark}, f)
+        json.dump({ "last_watermark": last_watermark }, f)
 
-# ============= Utils =============
 def make_key_hash(df: pd.DataFrame, key_cols: List[str]) -> pd.Series:
     if not key_cols:
         return pd.util.hash_pandas_object(df, index=False).astype(str)
@@ -86,7 +84,6 @@ def _is_parquet_path(p: Union[str, Path]) -> bool:
     s = str(p).lower()
     return s.endswith(".parquet") or s.endswith(".pq") or s.endswith(".parq")
 
-# ============= Source opening (multi modes) =============
 class SourceHandle:
     def __init__(self, handle_or_path: Union[IO[str], IO[bytes], Path], is_stream: bool, cleanup=lambda: None):
         self.handle_or_path = handle_or_path
@@ -129,6 +126,12 @@ def open_source_http(*, url: str, timeout: int = 30, retries: int = 5) -> Source
             _backoff_sleep(i + 1)
     raise RuntimeError(f"HTTP download failed after {retries} retries: {last}")
 
+def _as_bool_env(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
+
 def open_source_s3(
     *,
     endpoint_url: Optional[str],
@@ -142,24 +145,48 @@ def open_source_s3(
     verify_ssl: bool = True,
     timeout: int = 30,
     retries: int = 5,
+    anon: bool = False,
 ) -> SourceHandle:
-    boto3, Config, BEX = _lazy_import_boto3()
-    cfg = Config(
-        region_name=region,
-        retries={"max_attempts": 10, "mode": "adaptive"},
-        signature_version="s3v4",
-        s3={"addressing_style": "path" if path_style else "virtual"},
-        connect_timeout=10,
-        read_timeout=120,
-    )
+    # why: allow public/unsigned access for public buckets
+    boto3, UNSIGNED, Config, BEX = _lazy_import_boto3()
+
+    use_anon = bool(anon or _as_bool_env("AWS_NO_SIGN_REQUEST"))
+    if use_anon:
+        cfg = Config(
+            region_name=region,
+            retries={"max_attempts": 10, "mode": "adaptive"},
+            signature_version=UNSIGNED,
+            s3={"addressing_style": "path" if path_style else "virtual"},
+            connect_timeout=10,
+            read_timeout=120,
+        )
+        ak = sk = st = None
+    else:
+        ak = access_key or os.getenv("AWS_ACCESS_KEY_ID")
+        sk = secret_key or os.getenv("AWS_SECRET_ACCESS_KEY")
+        st = session_token or os.getenv("AWS_SESSION_TOKEN")
+        if not ak and not sk and not st and not os.getenv("AWS_PROFILE"):
+            raise RuntimeError(
+                "Aucun identifiant AWS détecté. "
+                "Utilise --s3-anon pour bucket public, ou fournis des creds (env vars, AWS_PROFILE/SSO)."
+            )
+        cfg = Config(
+            region_name=region,
+            retries={"max_attempts": 10, "mode": "adaptive"},
+            signature_version="s3v4",
+            s3={"addressing_style": "path" if path_style else "virtual"},
+            connect_timeout=10,
+            read_timeout=120,
+        )
+
     s = boto3.session.Session()
     c = s.client(
         "s3",
         endpoint_url=endpoint_url or None,
         region_name=region,
-        aws_access_key_id=access_key or os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=secret_key or os.getenv("AWS_SECRET_ACCESS_KEY"),
-        aws_session_token=session_token or os.getenv("AWS_SESSION_TOKEN"),
+        aws_access_key_id=ak,
+        aws_secret_access_key=sk,
+        aws_session_token=st,
         config=cfg,
         verify=verify_ssl,
     )
@@ -182,7 +209,6 @@ def open_source_local(path: Path) -> SourceHandle:
         raise FileNotFoundError(path)
     return SourceHandle(path, is_stream=False)
 
-# ============= Chunk reader (CSV/Parquet) =============
 def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chunksize: int = 200_000):
     cs_env = os.getenv("IMPORT_CHUNKSIZE")
     cs = chunksize if not (cs_env and cs_env.isdigit()) else int(cs_env)
@@ -191,7 +217,6 @@ def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chu
     else:
         yield from pd.read_csv(str(handle), sep=sep, chunksize=cs, on_bad_lines="skip", low_memory=False)
 
-# --- append disque pour éviter la concat RAM ---
 def _append_csv(dst: Path, delta: Path, sep: str) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     has_header = dst.exists() and dst.stat().st_size > 0
@@ -199,7 +224,6 @@ def _append_csv(dst: Path, delta: Path, sep: str) -> None:
         chunk.to_csv(dst, sep=sep, index=False, mode="a", header=not has_header)
         has_header = True
 
-# --- (optionnel) dedup disque avec DuckDB ---
 def _dedup_with_duckdb(csv_path: Path, key_cols: list[str], date_col: Optional[str], sep: str) -> None:
     try:
         import duckdb
@@ -211,17 +235,16 @@ def _dedup_with_duckdb(csv_path: Path, key_cols: list[str], date_col: Optional[s
     if key_cols:
         order = f"ORDER BY {date_col} NULLS LAST" if date_col else "ORDER BY rowid() DESC"
         part = ", ".join(key_cols)
-        con.execute(f"""
+        con.execute(f'''
             CREATE OR REPLACE TABLE _dedup AS
             SELECT * FROM (
               SELECT *, row_number() OVER(PARTITION BY {part} {order}) AS _rn
               FROM _all
             ) WHERE _rn = 1;
-        """)
+        ''')
         con.execute("COPY _dedup TO ? (FORMAT CSV, HEADER, DELIMITER ?);", [str(csv_path), sep])
 
 def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_rows: int = 200_000):
-    # pandas ne stream pas les Parquet; on charge puis on “chunk” en mémoire.
     df = pd.read_parquet(handle if is_stream else str(handle))
     n = len(df)
     if n == 0:
@@ -230,27 +253,22 @@ def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_row
     for i in range(steps):
         yield df.iloc[i * batch_rows : (i + 1) * batch_rows].copy()
 
-# ============= Extraction incrémentale =============
 def incremental_extract(
     *,
-    source_mode: str,  # "dvc" | "http" | "s3" | "local"
-    # DVC
+    source_mode: str,
     dvc_repo_url: Optional[str],
     dvc_path: Optional[str],
     dvc_rev: Optional[str],
     dvc_remote: Optional[str],
-    # HTTP
     http_url: Optional[str],
-    # S3
     s3_endpoint_url: Optional[str],
     s3_bucket: Optional[str],
     s3_key: Optional[str],
     s3_region: str,
     s3_path_style: bool,
     s3_verify_ssl: bool,
-    # Local
+    s3_anon: bool,
     local_path: Optional[str],
-    # Common
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -261,7 +279,6 @@ def incremental_extract(
 ) -> Tuple[Path, Path, int, int]:
     seen_keys, watermark = load_checkpoint(checkpoint_path)
 
-    # Ouvre la source
     if source_mode == "dvc":
         if not (dvc_repo_url and dvc_path):
             raise ValueError("DVC: dvc_repo_url et dvc_path requis.")
@@ -282,6 +299,7 @@ def incremental_extract(
             region=s3_region or os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
             path_style=s3_path_style,
             verify_ssl=s3_verify_ssl,
+            anon=s3_anon,
         )
         src_path_like = f"s3://{s3_bucket}/{s3_key}"
     elif source_mode == "local":
@@ -292,7 +310,6 @@ def incremental_extract(
     else:
         raise ValueError(f"source_mode inconnu: {source_mode}")
 
-    # Prépare sorties
     delta_folder.mkdir(parents=True, exist_ok=True)
     delta_path = delta_folder / "df_new.csv"
     cumulative_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -301,7 +318,6 @@ def incremental_extract(
     new_rows: List[pd.DataFrame] = []
 
     try:
-        # Choix CSV/Parquet
         is_parquet = _is_parquet_path(src_path_like)
         if is_parquet:
             chunks_iter = iter_chunks_parquet(src.handle_or_path, src.is_stream, batch_rows=200_000)
@@ -333,13 +349,11 @@ def incremental_extract(
 
             new_rows.append(delta)
     finally:
-        # cleanup (tempfiles http/s3)
         try:
             src.cleanup()
         except Exception:
             pass
 
-    # Concatène & écrit
     if new_rows:
         df_new = pd.concat(new_rows, ignore_index=True)
         df_new = to_str_cols(df_new, ["code_postal", "INSEE_COM", "departement", "commune"])
@@ -347,7 +361,6 @@ def incremental_extract(
         df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=";", index=False)
 
         if os.getenv("IMP_APPEND_ONLY", "0") == "1":
-            # évite la lecture complète du cumul en RAM
             _append_csv(cumulative_csv, delta_path, sep)
             if os.getenv("IMP_DEDUP_DUCKDB", "0") == "1" and key_cols:
                 try:
@@ -355,7 +368,6 @@ def incremental_extract(
                 except Exception:
                     pass
         else:
-            # mode legacy (RAM)
             if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
                 df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
                 df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
@@ -367,14 +379,12 @@ def incremental_extract(
                 df_all = df_all.drop_duplicates(keep="last")
             df_all.to_csv(cumulative_csv, sep=sep, index=False)
 
-        # checkpoint
         seen_keys.update(make_key_hash(df_new, key_cols).astype(str).tolist())
         last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
         save_checkpoint(checkpoint_path, seen_keys, last_wm)
     else:
         delta_path.write_text("", encoding="utf-8")
 
-    # métriques
     def _count_rows(csv_path: Path) -> int:
         if not csv_path.exists() or csv_path.stat().st_size == 0:
             return 0
@@ -386,36 +396,32 @@ def incremental_extract(
 
     return delta_path, cumulative_csv, rows_delta, rows_cumul
 
-# ============= CLI =============
 @click.command()
-@click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
+@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv", help="CSV cumul (df_sample.csv)")
-@click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin du checkpoint (parquet)")
-@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark (ex: date_vente)")
-@click.option("--key-columns", type=str, default="", help="Clés séparées par des virgules (ex: id_transaction,lot)")
-@click.option("--sep", type=str, default=";", help="Séparateur CSV (défaut ';')")
+@click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin checkpoint (parquet)")
+@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark")
+@click.option("--key-columns", type=str, default="", help="Clés CSV séparées par des virgules")
+@click.option("--sep", type=str, default=";", help="Séparateur CSV")
 
-# Choix de la source
 @click.option("--source-mode", type=click.Choice(["dvc", "http", "s3", "local"]), required=True)
 
-# DVC
-@click.option("--dvc-repo-url", type=str, default=None, help="https://dagshub.com/<user>/<repo>")
-@click.option("--dvc-path", type=str, default=None, help="Chemin dans le repo (ex: data/raw.csv)")
+@click.option("--dvc-repo-url", type=str, default=None)
+@click.option("--dvc-path", type=str, default=None)
 @click.option("--dvc-rev", type=str, default="main")
 @click.option("--dvc-remote", type=str, default=None)
 
-# HTTP
-@click.option("--http-url", type=str, default=None, help="URL HTTP(S) du fichier (CSV/Parquet)")
+@click.option("--http-url", type=str, default=None)
 
-# S3 (DagsHub/MinIO/AWS)
-@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_S3_ENDPOINT"), help="Endpoint S3 (DagsHub)")
-@click.option("--s3-bucket", type=str, default=lambda: os.getenv("DAGSHUB_BUCKET"), help="Bucket/repo")
-@click.option("--s3-key", type=str, default=None, help="Key (ex: data/file.csv)")
+@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_S3_ENDPOINT"))
+@click.option("--s3-bucket", type=str, default=lambda: os.getenv("DAGSHUB_BUCKET"))
+@click.option("--s3-key", type=str, default=None)
 @click.option("--s3-region", type=str, default=lambda: os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
-@click.option("--s3-path-style", is_flag=True, default=True, help="Path-style (recommandé S3-compatibles)")
-@click.option("--s3-no-verify-ssl", is_flag=True, default=False, help="Ne pas vérifier le cert TLS (self-signed)")
-# Local
-@click.option("--local-path", type=click.Path(), default=None, help="Chemin local (CSV/Parquet)")
+@click.option("--s3-path-style", is_flag=True, default=True)
+@click.option("--s3-no-verify-ssl", is_flag=True, default=False)
+@click.option("--s3-anon/--no-s3-anon", is_flag=True, default=False)
+
+@click.option("--local-path", type=click.Path(), default=None)
 def main(
     output_folder,
     cumulative_path,
@@ -435,6 +441,7 @@ def main(
     s3_region,
     s3_path_style,
     s3_no_verify_ssl,
+    s3_anon,
     local_path,
 ):
     artifact_location = setup_mlflow()
@@ -465,6 +472,7 @@ def main(
             s3_region=s3_region,
             s3_path_style=s3_path_style,
             s3_verify_ssl=(not s3_no_verify_ssl),
+            s3_anon=s3_anon,
             local_path=local_path,
             delta_folder=delta_folder,
             cumulative_csv=cumulative_csv,
@@ -475,7 +483,6 @@ def main(
             run_ds=run_ds,
         )
 
-        # Params
         mlflow.log_param("source_mode", source_mode)
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
@@ -490,19 +497,17 @@ def main(
         mlflow.log_param("date_column", date_column or "")
         mlflow.log_param("key_columns", ",".join(key_cols))
         mlflow.log_param("sep", sep)
+        mlflow.log_param("s3_anon", bool(s3_anon))
 
-        # Metrics
         mlflow.log_metric("rows_delta", rows_delta)
         mlflow.log_metric("rows_cumul", rows_cumul)
 
-        # Artifacts (léger)
-        if delta_path.exists():
+        if Path(delta_path).exists():
             mlflow.log_artifact(str(delta_path))
-        if cumulative_csv.exists():
+        if Path(cumulative_csv).exists():
             mlflow.log_artifact(str(cumulative_csv))
 
         print(f"✅ Delta → {delta_path} (rows={rows_delta}) | Cumul → {cumul_path} (rows={rows_cumul})")
 
 if __name__ == "__main__":
     main()
-

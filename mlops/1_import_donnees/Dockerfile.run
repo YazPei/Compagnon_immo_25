@@ -1,34 +1,30 @@
 # --- path: Dockerfile.run
-FROM python:3.11-slim-bookworm
+# path: Dockerfile.run
+FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PYTHONUNBUFFERED=1
 
-# 1) Dépendances système
+# minimal system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    curl \
-    libgomp1 \
-    libfreetype6 \
-    libpng16-16 \
+    gcc curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# 2) Dossier de travail (aligné avec Airflow)
-WORKDIR /opt/airflow
+WORKDIR /app
 
-# 3) Copie requirements + install
-COPY requirements.txt /opt/airflow/requirements.txt
-RUN pip install --upgrade pip && pip install -r /opt/airflow/requirements.txt
+# install python deps
+RUN pip install --no-cache-dir \
+    pandas pyarrow fastparquet \
+    boto3 botocore \
+    click mlflow \
+    duckdb \
+    dvc[s3]
 
-# 4) Copie du repo complet (tous tes scripts sont accessibles)
-COPY . /opt/airflow/repo
+# copy project
+COPY . /app
 
-# 5) Pré-crée des dossiers persistants (checkpoint, outputs)
-RUN mkdir -p /opt/airflow/data/state /opt/airflow/data/incremental /opt/airflow/output
+# prepare folders
+RUN mkdir -p /app/data/state /app/data/incremental /app/output
 
-# Optionnel: utilisateur non-root
-# RUN useradd -m airflow && chown -R airflow:airflow /opt/airflow
-# USER airflow
-
+# default command prints help
+CMD ["make", "-f", "Makefile.s3", "help"]

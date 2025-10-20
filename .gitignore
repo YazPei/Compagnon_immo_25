@@ -6,7 +6,7 @@
 env/
 .env.bak
 infra/config/dagshub.yaml
-
+.pytest.ini
 
 # Environnements virtuels
 .venv/
@@ -35,6 +35,8 @@ __pycache__/
 *.joblib
 *.db
 *.cfg
+.pytest_cache/
+.gitignore.save
 
 # Données et sorties
 outputs/
@@ -60,6 +62,11 @@ dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md
+<<<<<<< HEAD
 docs/testing-integration.md
 
 .gitignore.save
+=======
+*.dvc
+*.json
+>>>>>>> c97769e5 (dvc)

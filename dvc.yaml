@@ -4,10 +4,10 @@ stages:
       PYTHONIOENCODING=UTF-8 LC_ALL=C.UTF-8 LANG=C.UTF-8
       /usr/bin/env python3 mlops/1_import_donnees/import_data.py
       --source-mode s3
-      --s3-anon
-      --s3-bucket "Compagnon_immo"
+      --s3-endpoint-url "https://dagshub.com/api/v1/repo-buckets/s3/YazPei"
+      --s3-bucket "Compagnon_immo_25"
       --s3-key "merged_sales_data.csv"
-      --s3-region "eu-west-1"
+      --s3-region "us-east-1"
       --output-folder data/incremental
       --cumulative-path data/df_sample.csv
       --checkpoint-path data/state/checkpoint.parquet
@@ -22,6 +22,8 @@ stages:
       - data/incremental:
           persist: true
     always_changed: true
+
+
 
 
   fusion_geo:

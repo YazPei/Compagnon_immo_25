@@ -1,0 +1,14 @@
+artifact_uri: file:///home/vboxuser/Compagnon_new/Compagnon_immo_25/mlruns/eb5e1538b13e41279b23eb64662dacd8/artifacts
+end_time: 1760960712301
+entry_point_name: ''
+experiment_id: '590107318283490497'
+lifecycle_stage: active
+run_id: eb5e1538b13e41279b23eb64662dacd8
+run_name: Import incrémental [s3]
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1760960691431
+status: 4
+tags: []
+user_id: vboxuser

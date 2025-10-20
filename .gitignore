@@ -69,4 +69,4 @@ docs/testing-integration.md
 
 *.dvc
 *.json
-
+.secrets.baseline

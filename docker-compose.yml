@@ -41,8 +41,8 @@ services:
   # Airflow Webserver
   airflow-webserver:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./SERVICES/airflow
+      dockerfile: Dockerfile.airflow
     command: >
       bash -c "
         airflow db upgrade &&
@@ -59,12 +59,12 @@ services:
       AIRFLOW_UID: 50000
       MLFLOW_TRACKING_URI: http://mlflow:5050
     volumes:
-      - ./dags:/opt/airflow/dags
+      - ./SERVICES/airflow:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
       - .:/opt/airflow/repo
       - ./data:/opt/airflow/data
       - ./exports:/opt/airflow/exports
-      - ./mlops:/opt/airflow/mlops
+      - ./SERVICES:/opt/airflow/services
     depends_on:
       - postgres-airflow
       - redis
@@ -76,8 +76,8 @@ services:
   # Airflow Scheduler
   airflow-scheduler:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./SERVICES/airflow
+      dockerfile: Dockerfile.airflow
     command: airflow scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -87,12 +87,12 @@ services:
       AIRFLOW_UID: 50000
       MLFLOW_TRACKING_URI: http://mlflow:5050
     volumes:
-      - ./dags:/opt/airflow/dags
+      - ./SERVICES/airflow:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
       - .:/opt/airflow/repo
       - ./data:/opt/airflow/data
       - ./exports:/opt/airflow/exports
-      - ./mlops:/opt/airflow/mlops
+      - ./SERVICES:/opt/airflow/services
     depends_on:
       - postgres-airflow
       - redis
@@ -104,7 +104,7 @@ services:
   # API FastAPI
   api:
     build:
-      context: .
+      context: ./SERVICES/api
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -113,7 +113,6 @@ services:
       - ENVIRONMENT=development
     depends_on:
       - mlflow
-      - redis
     networks:
       - ml_net
     healthcheck:
@@ -126,7 +125,7 @@ services:
   # Service DVC pour les pipelines de données
   dvc:
     build:
-      context: .
+      context: ./SERVICES/dvc
       dockerfile: Dockerfile
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
@@ -137,8 +136,6 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5050
       - DVC_NO_ANALYTICS=1
-    depends_on:
-      - mlflow
     networks:
       - ml_net
     profiles: ["dvc"]
@@ -146,13 +143,13 @@ services:
   # Service de test automatisé
   api-test:
     build:
-      context: .
+      context: ./SERVICES/tests
       dockerfile: Dockerfile
     user: root
     volumes:
-      - ./app:/app/app
+      - ./SERVICES/api:/app/app
       - ./params.yaml:/app/params.yaml
-      - ./app/api/tests:/app/app/api/tests
+      - ./SERVICES/tests:/app/app/api/tests
     working_dir: /app
     environment:
       - API_BASE_URL=http://api:8000/api/v1
@@ -173,7 +170,7 @@ services:
   # Service CI pour tests et linting
   ci:
     build:
-      context: .
+      context: ./SERVICES/tests
       dockerfile: Dockerfile
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
@@ -185,8 +182,8 @@ services:
       - ml_net
     command: >
       bash -c "
-        python -m pytest app/api/tests -v &&
-        python -m flake8 app/ --max-line-length=88 --ignore=E203,W503
+        python -m pytest SERVICES/tests -v &&
+        python -m flake8 SERVICES/api --max-line-length=88 --ignore=E203,W503
       "
     profiles: ["ci"]
 
@@ -196,7 +193,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./SERVICES/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -214,8 +211,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./SERVICES/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./SERVICES/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -229,8 +226,8 @@ services:
   # --------- Pipeline de lancement ----------
   run_full:
     build:
-      context: .
-      dockerfile: mlops/1_import_donnees/Dockerfile.run
+      context: ./SERVICES/dvc
+      dockerfile: Dockerfile.run
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
@@ -246,32 +243,32 @@ services:
   # --------- Préparation des données ----------
   fusion_geo:
     build:
-      context: .
-      dockerfile: mlops/3_fusion/Dockerfile.fusion
+      context: ./SERVICES/fusion
+      dockerfile: Dockerfile.fusion
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
-      - ./mlops:/app/mlops
+      - ./SERVICES:/app/services
     env_file:
       - .env
     networks:
       - ml_net
-    command: ["bash", "-lc", "python mlops/3_fusion/fusion.py"]
+    command: ["bash", "-lc", "python services/fusion/fusion.py"]
     profiles: ["regression", "series"]
 
   preprocessing:
     build:
-      context: .
-      dockerfile: mlops/preprocessing_4/Dockerfile.preprocessing
+      context: ./SERVICES/preprocessing
+      dockerfile: Dockerfile.preprocessing
     image: compagnon_immo_25-preprocessing
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/app
       - ./data:/app/data
-      - ./mlops/preprocessing_4:/app/mlops/preprocessing_4
+      - ./SERVICES/preprocessing:/app/services/preprocessing
     env_file:
       - .env
-    command: ["python","mlops/preprocessing_4/preprocessing.py",
+    command: ["python","services/preprocessing/preprocessing.py",
           "--input-path","/app/data",
           "--output-path","/app/data"]
     networks:
@@ -280,17 +277,17 @@ services:
 
   clustering:
     build:
-      context: .
-      dockerfile: mlops/5_clustering/Dockerfile.clustering
+      context: ./SERVICES/clustering
+      dockerfile: Dockerfile.clustering
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./data:/app/data
-      - ./mlops:/app/mlops
+      - ./SERVICES:/app/services
     env_file:
       - .env
     networks:
       - ml_net
-    command: ["python","mlops/5_clustering/Clustering.py",
+    command: ["python","services/clustering/Clustering.py",
           "--input-path","/app/data/train_clean.csv",
           "--output-path1","/app/data/df_cluster.csv",
           "--output-path2","/app/data/df_sales_clean_ST.csv"]
@@ -298,14 +295,14 @@ services:
 
   encode:
     build:
-      context: .
-      dockerfile: mlops/6_Regression/1_Encoding/Dockerfile.encoding.REG
+      context: ./SERVICES/encoding
+      dockerfile: Dockerfile.encoding.REG
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ./mlops/6_Regression/1_Encoding:/app/mlops/6_Regression/1_Encoding
+      - ./SERVICES/encoding:/app/services/encoding
       - ./data:/app/data
       - ./exports:/app/exports
-    command: ["python", "/app/mlops/6_Regression/1_Encoding/encoding.py"]
+    command: ["python", "/app/services/encoding/encoding.py"]
     env_file:
       - .env
     networks:
@@ -315,14 +312,14 @@ services:
   # --------- Régression ----------
   train_lgbm:
     build:
-      context: .
-      dockerfile: mlops/6_Regression/2_LGBM/Dockerfile.lgbm.REG
+      context: ./SERVICES/train_lgbm
+      dockerfile: Dockerfile.lgbm.REG
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ./mlops/6_Regression/2_LGBM:/app/mlops/6_Regression/2_LGBM
+      - ./SERVICES/train_lgbm:/app/services/train_lgbm
       - ./data:/app/data
       - ./exports:/app/exports
-    command: ["python", "/app/mlops/6_Regression/2_LGBM/train_lgbm.py"]
+    command: ["python", "/app/services/train_lgbm/train_lgbm.py"]
     env_file:
       - .env
     networks:
@@ -331,14 +328,14 @@ services:
 
   analyse:
     build:
-      context: .
-      dockerfile: mlops/6_Regression/4_Analyse/Dockerfile.analyse.REG
+      context: ./SERVICES/analyse
+      dockerfile: Dockerfile.analyse.REG
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ./mlops/6_Regression/4_Analyse:/app/mlops/6_Regression/4_Analyse
+      - ./SERVICES/analyse:/app/services/analyse
       - ./exports:/app/exports
       - ./data:/app/data
-    command: ["python", "/app/mlops/6_Regression/4_Analyse/analyse.py"]
+    command: ["python", "/app/services/analyse/analyse.py"]
     env_file:
       - .env
     networks:
@@ -348,14 +345,14 @@ services:
   # --------- Séries Temporelles ----------
   split:
     build:
-      context: .
-      dockerfile: mlops/7_Serie_temporelle/1_SPLIT/Dockerfile.split.ST
+      context: ./SERVICES/series_temporelles/1_SPLIT
+      dockerfile: Dockerfile.split.ST
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
       - ./data:/app/data
-      - ./mlops:/app/mlops
-    entrypoint: ["python", "/app/mlops/7_Serie_temporelle/1_SPLIT/load_split.py"]
+      - ./SERVICES:/app/services
+    entrypoint: ["python", "/app/services/series_temporelles/1_SPLIT/load_split.py"]
     env_file:
       - .env
     environment:
@@ -367,13 +364,13 @@ services:
 
   decompose:
     build:
-      context: .
-      dockerfile: mlops/7_Serie_temporelle/2_Decompose/Dockerfile.decompose.ST
+      context: ./SERVICES/series_temporelles/2_Decompose
+      dockerfile: Dockerfile.decompose.ST
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
-      - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py",
+      - ./SERVICES:/app/services
+    command: ["python","/app/services/series_temporelles/2_Decompose/seasonal_decomp.py",
           "--input-folder","/app/exports/st",
           "--output-folder","/app/exports/st"]
     env_file:
@@ -387,13 +384,13 @@ services:
 
   train_sarimax:
     build:
-      context: .
-      dockerfile: mlops/7_Serie_temporelle/3_SARIMAX/Dockerfile.sarimax.ST
+      context: ./SERVICES/series_temporelles/3_SARIMAX
+      dockerfile: Dockerfile.sarimax.ST
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
-      - ./mlops:/app/mlops
-    command: ["python","/app/mlops/7_Serie_temporelle/3_SARIMAX/sarimax_api.py",
+      - ./SERVICES:/app/services
+    command: ["python","/app/services/series_temporelles/3_SARIMAX/sarimax_api.py",
           "--input-folder","/app/exports/st",
           "--output-folder","/app/exports/st"]
     env_file:
@@ -407,14 +404,14 @@ services:
 
   evaluate:
     build:
-      context: .
-      dockerfile: mlops/7_Serie_temporelle/4_EVALUATE/Dockerfile.evaluate.ST
+      context: ./SERVICES/series_temporelles/4_EVALUATE
+      dockerfile: Dockerfile.evaluate.ST
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./exports:/app/exports
-      - ./mlops:/app/mlops
+      - ./SERVICES:/app/services
       - ./data:/app/data
-    entrypoint: ["python", "/app/mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"]
+    entrypoint: ["python", "/app/services/series_temporelles/4_EVALUATE/evaluate_ST.py"]
     env_file:
       - .env
     environment:
@@ -426,14 +423,14 @@ services:
 
   series_pipeline:
     build:
-      context: .
-      dockerfile: mlops/7_Serie_temporelle/Dockerfile.series_pipeline
+      context: ./SERVICES/series_temporelles
+      dockerfile: Dockerfile.series_pipeline
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ./mlops:/app/mlops
+      - ./SERVICES:/app/services
       - ./data:/app/data
       - ./exports:/app/exports
-    command: ["python", "/app/mlops/7_Serie_temporelle/pipeline.py", "--help"]
+    command: ["python", "/app/services/series_temporelles/pipeline.py", "--help"]
     env_file:
       - .env
     networks:

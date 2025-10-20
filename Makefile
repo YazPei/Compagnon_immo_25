@@ -14,7 +14,7 @@ IMAGE_PREFIX := compagnon_immo
 NETWORK := ml_net
 PYTHON_BIN := python3
 PIP := pip3
-TEST_DIR := app/api/tests
+TEST_DIR := SERVICES/tests
 DVC_TOKEN ?= default_token_securise_ou_vide
 MLFLOW_IMAGE := ghcr.io/mlflow/mlflow:v2.13.1
 DVC_IMAGE := $(IMAGE_PREFIX)-dvc
@@ -99,12 +99,12 @@ docker-build: prepare-dirs ## Build via compose
 airflow-build: ## Build images Airflow
 	docker compose build airflow-webserver airflow-scheduler
 
-# API Management
-api-build: ## Build image API
+# API Management (anciennes commandes déplacées)
+api-build-old: ## Build image API (ancienne version)
 	bash scripts/api_build.sh
 
-api-start: docker-api-run ## Démarre l'API (build + run)
-api-stop: ## Stoppe l'API
+api-start-old: docker-api-run ## Démarre l'API (build + run) (ancienne version)
+api-stop-old: ## Stoppe l'API (ancienne version)
 	bash scripts/api_stop.sh
 
 
@@ -158,10 +158,10 @@ dvc-repro-all: docker-dvc-check ## dvc repro de tout le pipeline
 
 # 5. Tests & CI
 api-test: ## Lancer les tests de l'API dans un environnement Docker complet
-	bash scripts/api_test.sh
+	bash SERVICES/tests/api_test.sh
 
 api-test-fast: ## Lancer les tests de l'API rapidement (sans rebuild si images existent)
-	bash scripts/api_test_fast.sh
+	bash SERVICES/tests/api_test_fast.sh
 
 ci-test: ## Exécute les tests CI dans Docker
 	@echo "🔍 Lancement des tests CI dans Docker..."
@@ -169,6 +169,14 @@ ci-test: ## Exécute les tests CI dans Docker
 	@echo "🛑 Nettoyage de l'environnement CI..."
 	@$(DOCKER_COMPOSE_CMD) --profile ci down -v
 	@echo "$(COLOR_GREEN)✅ Tous les tests CI ont réussi !$(COLOR_RESET)"
+
+# API Management
+api-build: ## Build image API
+	bash SERVICES/api/api_build.sh
+
+api-start: docker-api-run ## Démarre l'API (build + run)
+api-stop: ## Stoppe l'API
+	bash SERVICES/api/api_stop.sh
 
 # 6. Arrêt & nettoyage
 mlflow-down: ## Stoppe MLflow
@@ -309,9 +317,9 @@ s3-clean: rm -rf $(S3_VENV) __pycache__ .pytest_cache
 
 # MLOps Pipeline Steps
 fusion-run: docker-dvc-check ## Lancer la fusion des données via script externe
-	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash mlops/3_fusion/run_fusion.sh
+	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash SERVICES/fusion/run_fusion.sh
 
 clustering-run: docker-dvc-check ## Lancer le clustering via script externe
-	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash mlops/5_clustering/run_clustering.sh
+	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash SERVICES/clustering/run_clustering.sh
 
 

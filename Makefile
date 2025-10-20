@@ -315,3 +315,42 @@ clustering-run: docker-dvc-check ## Lancer le clustering via script externe
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash mlops/5_clustering/run_clustering.sh
 
 
+
+# ==== [S3 Import shortcuts] ====
+PY ?= python3
+
+.PHONY: import_s3_public import_s3_profile
+
+import_s3_public: ## Import S3 public (unsigned)
+	@[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
+	@[ -n "$(KEY)" ] || (echo "Set KEY"; exit 2)
+	@[ -n "$(REGION)" ] || (echo "Set REGION"; exit 2)
+	$(PY) mlops/1_import_donnees/import_data.py \
+	  --source-mode s3 \
+	  --s3-anon \
+	  --s3-bucket "$(BUCKET)" \
+	  --s3-key "$(KEY)" \
+	  --s3-region "$(REGION)" \
+	  --output-folder data/incremental \
+	  --cumulative-path data/df_sample.csv \
+	  --checkpoint-path data/state/checkpoint.parquet \
+	  --date-column "$(DATE_COL)" \
+	  --key-columns "$(KEY_COLS)" \
+	  --sep ";"
+
+import_s3_profile: ## Import S3 via AWS_PROFILE
+	@[ -n "$(BUCKET)" ] || (echo "Set BUCKET"; exit 2)
+	@[ -n "$(KEY)" ] || (echo "Set KEY"; exit 2)
+	@[ -n "$(REGION)" ] || (echo "Set REGION"; exit 2)
+	@[ -n "$$AWS_PROFILE" ] || (echo "Set AWS_PROFILE (aws configure --profile <name>)"; exit 2)
+	$(PY) mlops/1_import_donnees/import_data.py \
+	  --source-mode s3 \
+	  --s3-bucket "$(BUCKET)" \
+	  --s3-key "$(KEY)" \
+	  --s3-region "$(REGION)" \
+	  --output-folder data/incremental \
+	  --cumulative-path data/df_sample.csv \
+	  --checkpoint-path data/state/checkpoint.parquet \
+	  --date-column "$(DATE_COL)" \
+	  --key-columns "$(KEY_COLS)" \
+	  --sep ";"

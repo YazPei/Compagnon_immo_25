@@ -7,7 +7,8 @@ env/
 .env.bak
 infra/config/dagshub.yaml
 .pytest.ini
-
+aws
+aws/
 # Environnements virtuels
 .venv/
 .venv312/
@@ -16,6 +17,9 @@ env/
 .s3venv/
 .s3venv
 s3venv/
+.s3_venv/
+.s3_venv
+s3_venv/
 # Fichiers de configuration de l'éditeur
 .vscode/
 .idea/

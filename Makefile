@@ -300,6 +300,7 @@ s3-install: s3-venv
 # Shell interactif (optionnel)
 venv-shell:
 > source .venv/bin/activate
+> pip install awscli
 > exec "$$SHELL" -i
 
 s3-env:

@@ -41,6 +41,7 @@ __pycache__/
 # Données et sorties
 outputs/
 mlruns/
+mlrunss
 dvc_remote/
 archives/
 

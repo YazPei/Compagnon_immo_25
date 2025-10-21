@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, IO, Union
 import click
 import pandas as pd
 import mlflow
-
+import hashlib
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -23,6 +23,8 @@ except Exception:
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("LC_ALL", "C.UTF-8")
 os.environ.setdefault("LANG", "C.UTF-8")
+
+
 
 
 def _lazy_import_boto3():
@@ -144,6 +146,12 @@ def _as_bool_env(name: str, default: bool = False) -> bool:
         return default
     return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
 
+
+def _stable_bucket_idx(key_str: str, num_slices: int) -> int:
+    # hash stable (sha1) → entier → modulo
+    h = hashlib.sha1(key_str.encode("utf-8", errors="ignore")).digest()
+    return int.from_bytes(h[:8], "big") % max(1, num_slices)
+    
 def open_source_s3(
     *,
     endpoint_url: Optional[str],
@@ -318,9 +326,20 @@ def incremental_extract(
     key_cols: List[str],
     sep: str,
     run_ds: Optional[str],
+    append_only: bool,
+    dedup_duckdb: bool,
+    num_slices: int,
+    slice_index: int,
 ) -> Tuple[Path, Path, int, int]:
+    """
+    Lit la source (DVC/HTTP/S3/local) en chunks, écrit un delta CSV en streaming,
+    met à jour le cumul selon append_only/dedup_duckdb, et maintient un checkpoint.
+    """
+    # --- checkpoint (seen keys + watermark)
     seen_keys, watermark = load_checkpoint(checkpoint_path)
+    max_date_seen = pd.to_datetime(watermark, utc=True, errors="coerce") if watermark else None
 
+    # --- ouvrir la source
     if source_mode == "dvc":
         if not (dvc_repo_url and dvc_path):
             raise ValueError("DVC: dvc_repo_url et dvc_path requis.")
@@ -352,89 +371,135 @@ def incremental_extract(
     else:
         raise ValueError(f"source_mode inconnu: {source_mode}")
 
+    # --- chemins delta & cumul
     delta_folder.mkdir(parents=True, exist_ok=True)
     delta_path = delta_folder / "df_new.csv"
     cumulative_csv.parent.mkdir(parents=True, exist_ok=True)
+    if delta_path.exists():
+        delta_path.unlink()
 
-    max_date_seen = pd.to_datetime(watermark, utc=True, errors="coerce") if watermark else None
-    new_rows: List[pd.DataFrame] = []
+    # --- itérateur de chunks selon le type
+    is_parquet = _is_parquet_path(src_path_like)
+    chunks_iter = (
+        iter_chunks_parquet(src.handle_or_path, src.is_stream, batch_rows=200_000)
+        if is_parquet
+        else iter_chunks_csv(src.handle_or_path, src.is_stream, sep=sep, chunksize=200_000)
+    )
+
+    # --- boucle streaming
+    wrote_header = False
+    chunks_seen = 0
+    rows_seen = 0
+    t0 = time.time()
 
     try:
-        is_parquet = _is_parquet_path(src_path_like)
-        if is_parquet:
-            chunks_iter = iter_chunks_parquet(src.handle_or_path, src.is_stream, batch_rows=200_000)
-        else:
-            chunks_iter = iter_chunks_csv(src.handle_or_path, src.is_stream, sep=sep, chunksize=200_000)
-
         for chunk in chunks_iter:
             chunk = parse_date(chunk, date_col)
+            if key_cols:
+                keys_concat = chunk[key_cols].astype(str).fillna("").agg("||".join, axis=1)
+            else:
+                keys_concat = chunk.index.astype(str)  # fallback
 
+            bucket_mask = keys_concat.apply(
+                lambda s: _stable_bucket_idx(s, max(1, num_slices)) == (slice_index % max(1, num_slices))
+            )
+            chunk = chunk.loc[bucket_mask]
+            if chunk.empty:
+                continue            
+
+
+            # filtre watermark (si présent)
             if date_col and watermark:
                 wm = pd.to_datetime(watermark, utc=True, errors="coerce")
                 if wm is not None:
                     chunk = chunk.loc[chunk[date_col] > wm]
-            if chunk.empty:
-                continue
-
+                    if chunk.empty:
+                        continue
+            
+            # détection des nouvelles lignes
             kh = make_key_hash(chunk, key_cols)
             mask_new = ~kh.astype(str).isin(seen_keys)
             delta = chunk.loc[mask_new].copy()
             if delta.empty:
                 continue
 
-            delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
+            # maj progression
+            chunks_seen += 1
+            rows_seen += len(delta)
+            if chunks_seen % 5 == 0:
+                print(f"[info] processed {chunks_seen} chunks, {rows_seen:,} new rows in {time.time() - t0:.1f}s")
 
+            # watermark courant
             if date_col and date_col in delta.columns:
                 cand = delta[date_col].max()
                 if pd.notna(cand):
                     max_date_seen = cand if max_date_seen is None else max(max_date_seen, cand)
 
-            new_rows.append(delta)
+            # écriture incrémentale du delta (pas de concat en RAM)
+            delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
+            delta_out = delta.drop(columns=["__key_hash__"], errors="ignore")
+            delta_out.to_csv(delta_path, sep=sep, index=False, mode="a", header=not wrote_header)
+            wrote_header = True
+
+            # maj des clés vues
+            seen_keys.update(delta["__key_hash__"].astype(str).tolist())
     finally:
         try:
             src.cleanup()
         except Exception:
             pass
 
-    if new_rows:
-        df_new = pd.concat(new_rows, ignore_index=True)
-        df_new = to_str_cols(df_new, ["code_postal", "INSEE_COM", "departement", "commune"])
-
-        df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=";", index=False)
-
-        if os.getenv("IMP_APPEND_ONLY", "0") == "1":
+    # --- fusion dans le cumul
+    if not delta_path.exists() or delta_path.stat().st_size == 0:
+        # aucun nouveau enregistrement
+        delta_path.write_text("", encoding="utf-8")
+    else:
+        if append_only:
             _append_csv(cumulative_csv, delta_path, sep)
-            if os.getenv("IMP_DEDUP_DUCKDB", "0") == "1" and key_cols:
+            if dedup_duckdb and key_cols:
                 try:
+                    print("[info] duckdb dedup starting…")
                     _dedup_with_duckdb(cumulative_csv, key_cols, date_col, sep)
-                except Exception:
-                    pass
+                    print("[ok] duckdb dedup done")
+                except Exception as e:
+                    print(f"[warn] duckdb dedup skipped: {e}")
         else:
+            # chemin "ancien" (lecture delta + cumul, puis drop_duplicates)
+            df_new = pd.read_csv(delta_path, sep=sep, low_memory=False)
             if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
                 df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
-                df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
+                df_all = pd.concat([df_old, df_new], ignore_index=True)
             else:
-                df_all = df_new.drop(columns=["__key_hash__"], errors="ignore")
+                df_all = df_new
             if key_cols:
                 df_all = df_all.drop_duplicates(subset=key_cols, keep="last")
             else:
                 df_all = df_all.drop_duplicates(keep="last")
             df_all.to_csv(cumulative_csv, sep=sep, index=False)
 
-        seen_keys.update(make_key_hash(df_new, key_cols).astype(str).tolist())
-        last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
-        save_checkpoint(checkpoint_path, seen_keys, last_wm)
-    else:
-        delta_path.write_text("", encoding="utf-8")
+    # --- checkpoint (keys + watermark)
+    last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
+    save_checkpoint(checkpoint_path, seen_keys, last_wm)
 
-    def _count_rows(csv_path: Path) -> int:
-        if not csv_path.exists() or csv_path.stat().st_size == 0:
+    # --- comptage rapide (évite de relire en Python)
+    def _count_rows_fast(p: Path) -> int:
+        if not p.exists() or p.stat().st_size == 0:
             return 0
-        with open(csv_path, "r", encoding="utf-8") as f:
-            return max(sum(1 for _ in f) - 1, 0)
+        try:
+            import subprocess
+            out = subprocess.check_output(["wc", "-l", str(p)], text=True)
+            n = int(out.strip().split()[0])
+            return max(n - 1, 0)
+        except Exception:
+            # fallback: compteur streaming
+            c = 0
+            with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                for _ in f:
+                    c += 1
+            return max(c - 1, 0)
 
-    rows_delta = _count_rows(delta_path)
-    rows_cumul = _count_rows(cumulative_csv)
+    rows_delta = _count_rows_fast(delta_path)
+    rows_cumul = _count_rows_fast(cumulative_csv)
 
     return delta_path, cumulative_csv, rows_delta, rows_cumul
 
@@ -464,6 +529,15 @@ def incremental_extract(
 @click.option("--s3-anon/--no-s3-anon", is_flag=True, default=False)
 
 @click.option("--local-path", type=click.Path(), default=None)
+@click.option("--num-slices", type=int, default=10, show_default=True,
+              help="Nombre de tranches (ex: 10 pour 10%).")
+@click.option("--slice-index", type=int, default=0, show_default=True,
+              help="Index de la tranche à ingérer (0..num_slices-1).")
+              
+@click.option("--append-only/--no-append-only",
+              default=lambda: os.getenv("IMP_APPEND_ONLY","1")=="1")
+@click.option("--dedup-duckdb/--no-dedup-duckdb",
+              default=lambda: os.getenv("IMP_DEDUP_DUCKDB","1")=="1")
 def main(
     output_folder,
     cumulative_path,
@@ -485,6 +559,8 @@ def main(
     s3_no_verify_ssl,
     s3_anon,
     local_path,
+    append_only, dedup_duckdb,
+    num_slices, slice_index,  
 ):
     artifact_location = setup_mlflow()
 
@@ -523,6 +599,10 @@ def main(
             key_cols=key_cols,
             sep=sep,
             run_ds=run_ds,
+            append_only=append_only,
+            dedup_duckdb=dedup_duckdb,
+            num_slices=num_slices,
+            slice_index=slice_index,
         )
 
         mlflow.log_param("source_mode", source_mode)

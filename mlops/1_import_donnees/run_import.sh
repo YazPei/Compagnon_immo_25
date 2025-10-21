@@ -20,6 +20,9 @@ for k in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_ENDPOINT
   if [ -n "${!k:-}" ]; then echo "[env] $k=SET"; else echo "[env] $k=MISSING"; fi
 done
 
+export IMP_APPEND_ONLY="${IMP_APPEND_ONLY:-1}"
+export IMP_DEDUP_DUCKDB="${IMP_DEDUP_DUCKDB:-1}"
+
 # 2) Choisir un Python existant
 if [ -n "${PY:-}" ] && [ -x "$PY" ]; then :
 elif [ -x ./.venv/bin/python ]; then PY=./.venv/bin/python

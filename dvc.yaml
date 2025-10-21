@@ -1,11 +1,12 @@
 stages:
   import_data:
-    cmd: bash mlops/1_import_donnees/run_import.sh
+    cmd: IMP_APPEND_ONLY=1 IMP_DEDUP_DUCKDB=1 bash mlops/1_import_donnees/run_import.sh
     deps:
+      - mlops/1_import_donnees/run_import.sh
       - mlops/1_import_donnees/import_data.py
     outs:
-      - data/state/checkpoint.parquet
       - data/df_sample.csv
+      - data/state/checkpoint.parquet
       - data/incremental:
           persist: true
     always_changed: true
@@ -14,8 +15,8 @@ stages:
 
   preprocessing:
     cmd: >-
-      bash -lc "mkdir -p data/processed/reports/figures &&
-      ./.s3venv/bin//usr/bin/env python3 mlops/preprocessing_4/preprocessing.py
+      mkdir -p data/processed/reports/figures && ./.venv/bin/python mlops/preprocessing_4/preprocessing.py --input-path data/ --output-path data/processed/
+
       --input-path data/
       --output-path data/processed/"
     deps:

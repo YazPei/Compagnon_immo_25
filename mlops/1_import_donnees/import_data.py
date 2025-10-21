@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-
 from __future__ import annotations
+from boto3.s3.transfer import TransferConfig, S3Transfer
+import math, time
 import os, sys, locale
 import io
 import json
-import time
-import math
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
@@ -160,8 +159,10 @@ def open_source_s3(
     retries: int = 5,
     anon: bool = False,
 ) -> SourceHandle:
-    # why: allow public/unsigned access for public buckets
+    # lazy imports (boto3 + transfer)
     boto3, UNSIGNED, Config, BEX = _lazy_import_boto3()
+    from boto3.s3.transfer import TransferConfig, S3Transfer
+    import time
 
     use_anon = bool(anon or _as_bool_env("AWS_NO_SIGN_REQUEST"))
     if use_anon:
@@ -178,10 +179,10 @@ def open_source_s3(
         ak = access_key or os.getenv("AWS_ACCESS_KEY_ID")
         sk = secret_key or os.getenv("AWS_SECRET_ACCESS_KEY")
         st = session_token or os.getenv("AWS_SESSION_TOKEN")
-        if not ak and not sk and not st and not os.getenv("AWS_PROFILE"):
+        if not ak or not sk:
             raise RuntimeError(
                 "Aucun identifiant AWS détecté. "
-                "Utilise --s3-anon pour bucket public, ou fournis des creds (env vars, AWS_PROFILE/SSO)."
+                "Utilise --s3-anon pour un bucket public ou fournis AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY."
             )
         cfg = Config(
             region_name=region,
@@ -192,8 +193,8 @@ def open_source_s3(
             read_timeout=120,
         )
 
-    s = boto3.session.Session()
-    c = s.client(
+    sess = boto3.session.Session()
+    client = sess.client(
         "s3",
         endpoint_url=endpoint_url or None,
         region_name=region,
@@ -203,12 +204,38 @@ def open_source_s3(
         config=cfg,
         verify=verify_ssl,
     )
+
     tf = tempfile.NamedTemporaryFile(prefix="s3_src_", suffix=Path(key).name or ".tmp", delete=False)
     tf.close()
+
     last = None
     for i in range(retries + 1):
         try:
-            c.download_file(bucket, key, tf.name)
+            # taille + log
+            head = client.head_object(Bucket=bucket, Key=key)
+            size = int(head.get("ContentLength", 0))
+            print(f"[info] s3 download: s3://{bucket}/{key} ({size} bytes)")
+
+            # multipart + progression
+            tcfg = TransferConfig(
+                multipart_threshold=8 * 1024 * 1024,
+                multipart_chunksize=16 * 1024 * 1024,
+                max_concurrency=16,
+                use_threads=True,
+            )
+            downloaded = {"n": 0, "t": time.time()}
+
+            def _progress(nbytes: int):
+                downloaded["n"] += nbytes
+                now = time.time()
+                if now - downloaded["t"] >= 1 or downloaded["n"] == size:
+                    done = downloaded["n"]
+                    pct = (done / size * 100.0) if size else 0.0
+                    print(f"\r[dl] {done/1e6:,.1f} MB / {size/1e6:,.1f} MB ({pct:5.1f}%)", end="", flush=True)
+                    downloaded["t"] = now
+
+            S3Transfer(client=client, config=tcfg).download_file(bucket, key, tf.name, callback=_progress)
+            print("\n[ok] s3 download done ->", tf.name)
             return SourceHandle(Path(tf.name), is_stream=False, cleanup=lambda: os.unlink(tf.name))
         except BEX as e:
             last = e
@@ -216,6 +243,8 @@ def open_source_s3(
                 break
             _backoff_sleep(i + 1)
     raise RuntimeError(f"S3 download failed after {retries} retries: {last}")
+
+
 
 def open_source_local(path: Path) -> SourceHandle:
     if not path.exists():
@@ -426,7 +455,7 @@ def incremental_extract(
 
 @click.option("--http-url", type=str, default=None)
 
-@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_S3_ENDPOINT"))
+@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_ENDPOINT_URL_S3"))
 @click.option("--s3-bucket", type=str, default=lambda: os.getenv("DAGSHUB_BUCKET"))
 @click.option("--s3-key", type=str, default=None)
 @click.option("--s3-region", type=str, default=lambda: os.getenv("AWS_DEFAULT_REGION", "us-east-1"))

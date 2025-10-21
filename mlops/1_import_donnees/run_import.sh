@@ -16,6 +16,10 @@ sed -i '1s/^\xEF\xBB\xBF//' "$ENV_PATH"
 awk 'NF && $0 !~ /=/ {print "ERR .env:", NR ":" $0; bad=1} END{exit bad}' "$ENV_PATH"
 set -a; . "$ENV_PATH"; set +a
 
+for k in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_ENDPOINT_URL_S3 BUCKET KEY; do
+  if [ -n "${!k:-}" ]; then echo "[env] $k=SET"; else echo "[env] $k=MISSING"; fi
+done
+
 # 2) Choisir un Python existant
 if [ -n "${PY:-}" ] && [ -x "$PY" ]; then :
 elif [ -x ./.venv/bin/python ]; then PY=./.venv/bin/python

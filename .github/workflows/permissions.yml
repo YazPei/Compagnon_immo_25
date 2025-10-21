@@ -35,6 +35,8 @@ jobs:
       REGION: ${{ secrets.REGION }}
       DATE_COL: ${{ secrets.DATE_COL }}
       KEY_COLS: ${{ secrets.KEY_COLS }}
+      IMP_APPEND_ONLY: 1
+      IMP_DEDUP_DUCKDB: 1
 
     steps:
       - name: Checkout
@@ -91,6 +93,8 @@ jobs:
             echo "REGION=${{ secrets.REGION }}"
             echo "DATE_COL=${{ secrets.DATE_COL }}"
             echo "KEY_COLS=${{ secrets.KEY_COLS }}"
+            echo "IMP_APPEND_ONLY=1"
+            echo "IMP_DEDUP_DUCKDB=1"
           } >> artifacts/env.txt
           echo "[debug] wrote $(pwd)/artifacts/env.txt"
           wc -c artifacts/env.txt; head -n 3 artifacts/env.txt

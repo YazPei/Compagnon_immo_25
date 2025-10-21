@@ -1,6 +1,6 @@
 stages:
   import_data:
-    cmd: bash mlops/run_import.sh
+    cmd: bash mlops/1_import_donnees/run_import.sh
     deps:
       - mlops/1_import_donnees/import_data.py
     outs:

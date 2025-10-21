@@ -37,9 +37,9 @@ COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
 # ---------- GitHub Actions → .env (config par défaut écrasable) ----------
-WF ?= .github/workflows/permissions.yml
-BRANCH ?= dvc_stage
-ART_NAME ?= env-artifact
+WF := .github/workflows/permissions.yml
+BRANCH := dvc_stage
+ART_NAME := env-artifact
 
 # Defaults (override via: make env-from-gh BRANCH=feature-xyz)
 

@@ -1,106 +1,106 @@
-	name: permissions
-	on:
-	  workflow_dispatch: {}
-	  push:
+name: permissions
+on:
+  workflow_dispatch: {}
+  push:
 
-	permissions:
-	  contents: read
-	  actions: write
+permissions:
+  contents: read
+  actions: write
 
-	defaults:
-	  run:
-	    shell: bash
-	    working-directory: .
+defaults:
+  run:
+    shell: bash
+    working-directory: .
 
-	jobs:
-	  build:
-	    runs-on: ubuntu-latest
-
-
-	    env:
-	      COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
-	      COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
-	      MLFLOW_TRACKING_URI:     ${{ secrets.MLFLOW_TRACKING_URI }}
-	      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-	      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-	      GH_TOKEN: ${{ secrets.GH_SECRET }}
-	      AWS_S3_ENDPOINT: ${{ secrets.AWS_S3_ENDPOINT }}
-	      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-	      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-	      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-	      DAGSHUB_BUCKET: ${{ secrets.DAGSHUB_BUCKET }}
-	      AWS_ENDPOINT_URL_S3: ${{ secrets.AWS_ENDPOINT_URL_S3 }}
-	      BUCKET: ${{ secrets.BUCKET }}
-	      KEY: ${{ secrets.KEY }}
-	      REGION: ${{ secrets.REGION }}
-	      DATE_COL: ${{ secrets.DATE_COL }}
-	      KEY_COLS: ${{ secrets.KEY_COLS }}
-
-	    steps:
-	      - name: Checkout
-		uses: actions/checkout@v4
-
-	      - name: Sanity check MLflow (ping API)
-		run: |
-		  curl -s -u "$MLFLOW_TRACKING_USERNAME:$MLFLOW_TRACKING_PASSWORD" \
-		    "$MLFLOW_TRACKING_URI/api/2.0/mlflow/experiments/list" | head -n 5
-
-	      - name: Afficher config (sans secrets)
-		run: cat infra/config/dagshub.yaml
-		
-	      - name: Diagnose secrets presence (no values)
-		shell: bash
-		run: |
-		  set -euo pipefail
-		  for k in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_ENDPOINT_URL_S3 DAGSHUB_BUCKET BUCKET KEY REGION DATE_COL KEY_COLS; do
-		    v="${!k:-}"
-		    if [ -n "$v" ]; then
-		      echo "$k=SET (len=${#v})"
-		    else
-		      echo "$k=MISSING"
-		    fi
-		  done
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
 
-	      - name: Générer .env depuis les secrets
-		shell: bash
-		run: |
-		  set -euo pipefail
-		  mkdir -p artifacts
-		  : > artifacts/env.txt   # vide/initialise le fichier
-		  {
-		    echo "HELLO=world"
-		    echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
-		    echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
-		    echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
-		    echo "MLFLOW_BACKEND_STORE_URI=${{ secrets.MLFLOW_BACKEND_STORE_URI }}"
-		    echo "MLFLOW_ARTIFACT_URI=${{ secrets.MLFLOW_ARTIFACT_URI }}"
-		    echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
-		    echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
-		    echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
-		    echo "AIRFLOW__WEBSERVER__SECRET_KEY=${{ secrets.AIRFLOW__WEBSERVER__SECRET_KEY }}"
-		    echo "GH_TOKEN=${{ secrets.GH_SECRET }}"
-		    echo "AWS_S3_ENDPOINT=${{ secrets.AWS_S3_ENDPOINT }}"
-		    echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}"
-		    echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-		    echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"
-		    echo "DAGSHUB_BUCKET=${{ secrets.DAGSHUB_BUCKET }}"
-		    echo "AWS_ENDPOINT_URL_S3=${{ secrets.AWS_ENDPOINT_URL_S3 }}"
-		    echo "BUCKET=${{ secrets.BUCKET }}"
-		    echo "KEY=${{ secrets.KEY }}"
-		    echo "REGION=${{ secrets.REGION }}"
-		    echo "DATE_COL=${{ secrets.DATE_COL }}"
-		    echo "KEY_COLS=${{ secrets.KEY_COLS }}"
-		  } >> artifacts/env.txt
-		  echo "[debug] wrote $(pwd)/artifacts/env.txt"
-		  wc -c artifacts/env.txt; head -n 3 artifacts/env.txt
+    env:
+      COMPAGNON_SECRET_KETSIA: ${{ secrets.COMPAGNON_SECRET_KETSIA }}
+      COMPAGNON_SECRET_YAZ:    ${{ secrets.COMPAGNON_SECRET_YAZ }}
+      MLFLOW_TRACKING_URI:     ${{ secrets.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GH_SECRET }}
+      AWS_S3_ENDPOINT: ${{ secrets.AWS_S3_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      DAGSHUB_BUCKET: ${{ secrets.DAGSHUB_BUCKET }}
+      AWS_ENDPOINT_URL_S3: ${{ secrets.AWS_ENDPOINT_URL_S3 }}
+      BUCKET: ${{ secrets.BUCKET }}
+      KEY: ${{ secrets.KEY }}
+      REGION: ${{ secrets.REGION }}
+      DATE_COL: ${{ secrets.DATE_COL }}
+      KEY_COLS: ${{ secrets.KEY_COLS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sanity check MLflow (ping API)
+        run: |
+          curl -s -u "$MLFLOW_TRACKING_USERNAME:$MLFLOW_TRACKING_PASSWORD" \
+            "$MLFLOW_TRACKING_URI/api/2.0/mlflow/experiments/list" | head -n 5
+
+      - name: Afficher config (sans secrets)
+        run: cat infra/config/dagshub.yaml
+        
+      - name: Diagnose secrets presence (no values)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for k in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION AWS_ENDPOINT_URL_S3 DAGSHUB_BUCKET BUCKET KEY REGION DATE_COL KEY_COLS; do
+            v="${!k:-}"
+            if [ -n "$v" ]; then
+              echo "$k=SET (len=${#v})"
+            else
+              echo "$k=MISSING"
+            fi
+          done
 
 
-	      - name: Upload env artifact
-		uses: actions/upload-artifact@v4
-		with:
-		  name: env-artifact
-		  path: artifacts          # ← on uploade le dossier (non caché)
-		  if-no-files-found: error
-		  retention-days: 1
+      - name: Générer .env depuis les secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          : > artifacts/env.txt   # vide/initialise le fichier
+          {
+            echo "HELLO=world"
+            echo "AIRFLOW__CORE__FERNET_KEY=${{ secrets.AIRFLOW__CORE__FERNET_KEY }}"
+            echo "AIRFLOW__CORE__EXECUTOR=LocalExecutor"
+            echo "AIRFLOW__CORE__DEFAULT_TIMEZONE=Europe/Paris"
+            echo "MLFLOW_BACKEND_STORE_URI=${{ secrets.MLFLOW_BACKEND_STORE_URI }}"
+            echo "MLFLOW_ARTIFACT_URI=${{ secrets.MLFLOW_ARTIFACT_URI }}"
+            echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
+            echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}"
+            echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
+            echo "AIRFLOW__WEBSERVER__SECRET_KEY=${{ secrets.AIRFLOW__WEBSERVER__SECRET_KEY }}"
+            echo "GH_TOKEN=${{ secrets.GH_SECRET }}"
+            echo "AWS_S3_ENDPOINT=${{ secrets.AWS_S3_ENDPOINT }}"
+            echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}"
+            echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"
+            echo "DAGSHUB_BUCKET=${{ secrets.DAGSHUB_BUCKET }}"
+            echo "AWS_ENDPOINT_URL_S3=${{ secrets.AWS_ENDPOINT_URL_S3 }}"
+            echo "BUCKET=${{ secrets.BUCKET }}"
+            echo "KEY=${{ secrets.KEY }}"
+            echo "REGION=${{ secrets.REGION }}"
+            echo "DATE_COL=${{ secrets.DATE_COL }}"
+            echo "KEY_COLS=${{ secrets.KEY_COLS }}"
+          } >> artifacts/env.txt
+          echo "[debug] wrote $(pwd)/artifacts/env.txt"
+          wc -c artifacts/env.txt; head -n 3 artifacts/env.txt
+
+
+      - name: Upload env artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: env-artifact
+          path: artifacts          # ← on uploade le dossier (non caché)
+          if-no-files-found: error
+          retention-days: 1
 

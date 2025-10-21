@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# toujours source le .env du repo racine
+ENV_PATH="$(git rev-parse --show-toplevel)/.env"
+[ -f "$ENV_PATH" ] || { echo "ERR: .env introuvable à $ENV_PATH"; exit 1; }
+
+# hygiène: CRLF + BOM + format
+sed -i 's/\r$//' "$ENV_PATH"
+sed -i '1s/^\xEF\xBB\xBF//' "$ENV_PATH"
+awk 'NF && $0 !~ /=/ {print "ERR .env:", NR ":" $0; bad=1} END{exit bad}' "$ENV_PATH"
+
+set -a; . "$ENV_PATH"; set +a
+
 
 # charge ton env (adapter le chemin si besoin)
 [ -f .env ] && . .env || true

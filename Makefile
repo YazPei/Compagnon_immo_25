@@ -37,9 +37,12 @@ COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
 # ---------- GitHub Actions → .env (config par défaut écrasable) ----------
-WF       ?= permissions.yml
-BRANCH   ?= main
+WF ?= .github/workflows/permissions.yml
+BRANCH ?= dvc_stage
 ART_NAME ?= env-artifact
+
+# Defaults (override via: make env-from-gh BRANCH=feature-xyz)
+
 # ENV_DST déjà défini plus haut
 
 # ---------- PHONY ----------
@@ -152,7 +155,7 @@ env-from-gh: ## Récupère .env depuis GitHub Actions (artifact)
 > echo "OK: $(ENV_DST) updated (preview redacted):" ; \
 > n=0 ; while IFS='' read -r line && [ $$n -lt 16 ]; do \
 >   case $$line in *"="*) key=$${line%%=*}; printf "%s=***redacted***\n" "$$key" ;; *) printf "%s\n" "$$line" ;; esac ; \
->   n=$$((n+1)) ; done <"$(	ENV_DST)"
+>   n=$$((n+1)) ; done <"$(ENV_DST)"
 
 env-from-gh.local: ## Raccourci standard
 > @$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
@@ -292,7 +295,7 @@ s3-venv:
 > "$(PIP)" -q install --upgrade pip setuptools wheel
 
 s3-install: s3-venv
-> "$(PIP)" -q install "boto3>=1.34" "botocore>=1.34" "urllib3>=2" \
+> "$(PIP)" -q install "boto3>=1.34" "botocore==1.40.46" "urllib3>=2" \
 >                          "pandas>=2.2" "pyarrow>=15" "fsspec>=2024.3" "s3fs>=2024.3" \
 >                          "click>=8.1" "mlflow>=2.10,<3"
 

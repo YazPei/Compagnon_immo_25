@@ -71,7 +71,7 @@ TODO.md
 docs/testing-integration.md
 
 .gitignore.save
-
 *.dvc
+.dvc/
 *.json
 .secrets.baseline

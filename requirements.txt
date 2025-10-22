@@ -34,3 +34,4 @@ pyarrow==15.*
 fsspec==2024.3.*
 s3fs==2024.3.*
 click==8.1.*
+aws

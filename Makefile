@@ -1,20 +1,15 @@
-# ===== Makefile — Compagnon Immo (UTF-8, '>' comme préfixe de recette) =====
 .RECIPEPREFIX := >
-
-# ---------- Encodage / locale ----------
 export LANG := C.UTF-8
 export LC_ALL := C.UTF-8
 export PYTHONIOENCODING := UTF-8
 
-# ---------- Variables env ----------
-ENV_DST  ?= .env
+ENV_DST ?= .env
 ENV_FILE ?= $(ENV_DST)
 ifneq ("$(wildcard $(ENV_FILE))","")
 include $(ENV_FILE)
 export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' $(ENV_FILE))
 endif
 
-# ---------- Variables projet ----------
 IMAGE_PREFIX := compagnon_immo
 NETWORK := ml_net
 PYTHON_BIN := python3
@@ -36,14 +31,9 @@ COLOR_GREEN := \033[32m
 COLOR_RED := \033[31m
 COLOR_YELLOW := \033[33m
 
-# ---------- GitHub Actions → .env (config par défaut écrasable) ----------
 WF := .github/workflows/permissions.yml
 BRANCH := dvc_stage
 ART_NAME := env-artifact
-
-# Defaults (override via: make env-from-gh BRANCH=feature-xyz)
-
-# ENV_DST déjà défini plus haut
 
 # ---------- PHONY ----------
 .PHONY: help lint check-dependencies prepare-dirs install install-gh \
@@ -56,9 +46,6 @@ ART_NAME := env-artifact
         s3_sanity_dagshub import_s3_dagshub s3_import_data \
         import_s3_public import_s3_profile
 
-# ===============================
-# 1) AIDE & CHECKS
-# ===============================
 help: ## Affiche l'aide
 > @echo "========== Compagnon Immo - Commandes =========="
 > @grep -E '^[a-zA-Z0-9_.-]+:.*?##.*$$' $(MAKEFILE_LIST) | \
@@ -77,9 +64,6 @@ check-dependencies: ## Vérifie docker/python/dvc/gh
 > @command -v gh >/dev/null 2>&1 || { echo "$(COLOR_RED)❌ gh manquant$(COLOR_RESET)"; exit 1; }
 > @echo "$(COLOR_GREEN)✅ Dépendances OK$(COLOR_RESET)"
 
-# ===============================
-# 2) PREP / INSTALL
-# ===============================
 prepare-dirs: ## Crée data/ exports/ mlruns/ logs/airflow
 > @mkdir -p data exports mlruns logs/airflow
 > @touch data/.gitkeep
@@ -97,9 +81,6 @@ install-gh: ## Installe GitHub CLI
 >   echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null; \
 >   sudo apt update && sudo apt install -y gh; fi
 
-# ===============================
-# 3) PERMISSIONS & .env
-# ===============================
 permission: prepare-dirs install ## Attribue rwx à l'utilisateur courant sur tout le repo
 > @echo "$(COLOR_YELLOW)🔧 Attribution des permissions...$(COLOR_RESET)"
 > @sudo chown -R $$(whoami):$$(whoami) . || true
@@ -160,9 +141,6 @@ env-from-gh: ## Récupère .env depuis GitHub Actions (artifact)
 env-from-gh.local: ## Raccourci standard
 > @$(MAKE) env-from-gh WF=permissions.yml BRANCH=main ART_NAME=env-artifact ENV_DST=.env
 
-# ===============================
-# 4) API (Docker Compose)
-# ===============================
 api-build: ## Build image API
 > @DOCKER_BUILDKIT=0 $(DOCKER_COMPOSE_CMD) build api
 
@@ -191,9 +169,6 @@ api-shell: ## Shell dans le conteneur API
 > if [ -z "$$cid" ]; then echo "API non démarrée. Lancez 'make api-start'."; exit 1; fi; \
 > docker exec -it "$$cid" /bin/bash
 
-# ===============================
-# 5) DOCKER / MLFLOW / AIRFLOW
-# ===============================
 docker-build: prepare-dirs ## docker compose build
 > @$(DOCKER_COMPOSE_CMD) build
 
@@ -216,7 +191,7 @@ mlflow-up: ## Démarre MLflow local (file store)
 > docker run -d --rm \
 >   --name $(MLFLOW_HOST) \
 >   --network $(NETWORK) \
->   -v $(PWD)/mlruns:/mlflow/mlruns \
+>   -v $(PWD)/mlruns:/mlflow/mlruns:Z \
 >   -p $(MLFLOW_PORT):$(MLFLOW_PORT) \
 >   $(MLFLOW_IMAGE) \
 >   mlflow server --host 0.0.0.0 --port $(MLFLOW_PORT) \
@@ -244,9 +219,6 @@ airflow-init: ## Init DB Airflow + admin/admin
 >   airflow users create --username admin --password admin \
 >   --firstname Admin --lastname User --role Admin --email admin@example.com || true
 
-# ===============================
-# 6) DVC
-# ===============================
 dvc-repro-import: ## dvc repro du stage 'import_data'
 > @mkdir -p data/state data/incremental
 > DVC_LOGLEVEL=DEBUG dvc repro -f import_data
@@ -264,31 +236,20 @@ dvc-repro-all: ## dvc repro pipeline complet (image DVC)
 >   -e MLFLOW_TRACKING_URI=$(MLFLOW_URI_DCK) \
 >   -v $(PWD):/app:Z -w /app $(DVC_IMAGE) sh -c "chown -R root:root .dvc && rm -f .dvc/tmp/rwlock && dvc repro -f"
 
-# ===============================
-# 7) S3 — DagsHub (auth requise)
-# ===============================
-# Requis à l'env:
-
-# en-tête ok
 .RECIPEPREFIX := >
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .ONESHELL:
 .SILENT:
 
-# ---- S3 / projet ----
 S3_ENDPOINT ?= https://dagshub.com/api/v1/repo-buckets/s3/YazPei
 BUCKET ?= Compagnon_immo_25
 KEY ?= merged_sales_data.csv
 REGION ?= us-east-1
-
-# Fichier d'env DagsHub (ton chemin réel)
 DAGSHUB_ENV ?= /home/vboxuser/Compagnon_new/.dagshub.env
-
-# ---- venv ----
 S3_VENV ?= .s3venv
-PY   := $(S3_VENV)/bin/python
-PIP  := $(S3_VENV)/bin/pip
+PY := $(S3_VENV)/bin/python
+PIP := $(S3_VENV)/bin/pip
 
 s3-venv:
 > python3 -m venv "$(S3_VENV)"
@@ -296,11 +257,9 @@ s3-venv:
 
 s3-install: s3-venv
 > "$(PIP)" -q install "boto3>=1.34" "botocore==1.40.46" "urllib3>=2" \
->                          "pandas>=2.2" "pyarrow>=15" "fsspec>=2024.3" "s3fs>=2024.3" \
->                          "click>=8.1" "mlflow>=2.10,<3"
+>   "pandas>=2.2" "pyarrow>=15" "fsspec>=2024.3" "s3fs>=2024.3" \
+>   "click>=8.1" "mlflow>=2.10,<3"
 
-
-# Shell interactif (optionnel)
 venv-shell:
 > source .venv/bin/activate
 > pip install awscli
@@ -319,7 +278,6 @@ s3-env:
 > if [ -n "$${AWS_SESSION_TOKEN:-}" ]; then echo "AWS_SESSION_TOKEN: present"; fi
 > echo "Chargé depuis: $(DAGSHUB_ENV)"
 
-# petit test utile
 test-s3: s3-install s3-env
 > "$(PY)" - <<'PY'
 > import os, boto3
@@ -331,8 +289,6 @@ test-s3: s3-install s3-env
 > resp = s3.head_object(Bucket="$(BUCKET)", Key="$(KEY)")
 > print("OK HEAD:", resp["ResponseMetadata"]["HTTPStatusCode"])
 > PY
-
-
 
 import: s3-install s3-env
 > [ -n "$${AWS_ACCESS_KEY_ID:-}" ] || { echo "ERROR: AWS_ACCESS_KEY_ID manquant"; exit 2; }
@@ -356,9 +312,6 @@ clean-venv:
 
 
 
-# ===============================
-# 9) STOP / CLEAN
-# ===============================
 stop-all: ## Stoppe tout l'écosystème
 > -@docker ps -a --filter "name=compagnon_immo" -q | xargs -r docker rm -f || true
 > -@$(DOCKER_COMPOSE_CMD) down -v --remove-orphans || true

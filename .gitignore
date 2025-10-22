@@ -67,6 +67,7 @@ dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md
+TODO_evaluator.md
 
 docs/testing-integration.md
 

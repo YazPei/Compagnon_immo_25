@@ -54,6 +54,9 @@ def apply_mapping(df, mapping):
 @click.command()
 @click.option("--encoded-folder", default="data/encoded", show_default=True,
               help="Dossier contenant X_train.csv, y_train.csv, X_test.csv, y_test.csv.")
+@click.option("--model-folder", default="models", show_default=True,
+              help="Dossier où enregistrer le modèle LightGBM.")
+
 @click.option("--experiment", default="regression_pipeline", show_default=True,
               help="Nom d'expérience MLflow.")
 @click.option("--tuner", type=click.Choice(["none", "random"], case_sensitive=False),
@@ -67,7 +70,7 @@ def apply_mapping(df, mapping):
 @click.option("--mem-mode", type=click.Choice(["auto","row","col"], case_sensitive=False),
               default="auto", show_default=True,
               help="Heuristique LightGBM (auto) ou forcer row/col-wise.")
-def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
+def main(encoded_folder, model_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
     X_train_path = os.path.join(encoded_folder, "X_train.csv")
     y_train_path = os.path.join(encoded_folder, "y_train.csv")
     X_test_path  = os.path.join(encoded_folder, "X_test.csv")
@@ -179,12 +182,12 @@ def main(encoded_folder, experiment, tuner, n_iter, cv, random_state, mem_mode):
             print(f"[WARN] CV stratifiée non calculée : {e}")
 
         # Sauvegardes modèles
-        best_model_path  = os.path.join(encoded_folder, "best_lgbm_model.pkl")
-        best_params_path = os.path.join(encoded_folder, "best_lgbm_params.pkl")
+        best_model_path  = os.path.join(model_folder, "best_lgbm_model.pkl")
+        best_params_path = os.path.join(model_folder, "best_lgbm_params.pkl")
         joblib.dump(model, best_model_path)
         joblib.dump(best_params, best_params_path)
         # Compat avec la stage 'analyse'
-        joblib.dump(model, os.path.join(encoded_folder, "lgbm_model.joblib"))
+        joblib.dump(model, os.path.join(model_folder, "lgbm_model.joblib"))
 
         mlflow.log_artifact(best_model_path)
         mlflow.log_artifact(best_params_path)

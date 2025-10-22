@@ -23,7 +23,7 @@ def _ensure_dir(p: str | Path) -> None:
 @click.command()
 @click.option('--encoded-folder', prompt='Dossier des fichiers encodés', type=click.Path(exists=True))
 @click.option('--model', type=click.Choice(['lightgbm', 'xgboost']), prompt='Modèle à analyser')
-def analyse_model(encoded_folder, model):
+def analyse_model(encoded_folder, model_folder, model):
     """
     Lit le modèle + X_test/y_test, calcule les métriques, et LOGGUE dans MLflow :
     - toutes les métriques (dont rmse)
@@ -36,7 +36,7 @@ def analyse_model(encoded_folder, model):
 
     # chemins
     encoded_folder = Path(encoded_folder)
-    model_path = encoded_folder / f'{model}_model.joblib'
+    model_path = model_folder / f'{model}_model.joblib'
     X_test_path = encoded_folder / 'X_test.csv'
     y_test_path = encoded_folder / 'y_test.csv'
 

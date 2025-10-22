@@ -46,7 +46,6 @@ stages:
     cmd: >
       python mlops/6_Regression/2_LGBM/train_lgbm.py
       && mkdir -p models
-      && mv data/encoded/lgbm_model.joblib models/lgbm_model.joblib   # si ton script écrit encore là
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
@@ -64,7 +63,7 @@ stages:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv
       - data/encoded/y_test.csv
-      - data/encoded/lgbm_model.joblib
+      - models/lgbm_model.joblib
 
   splitst:
     cmd: python mlops/7_Serie_temporelle/1_SPLIT/load_split.py

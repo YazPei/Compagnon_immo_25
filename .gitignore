@@ -75,5 +75,3 @@ docs/testing-integration.md
 *.dvc
 *.json
 .secrets.baseline
-/data/processed
-/exports

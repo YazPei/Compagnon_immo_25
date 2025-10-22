@@ -1,7 +1,0 @@
-__pycache__
-*.pyc
-.dvc/cache
-.mlruns
-.git
-.env
-

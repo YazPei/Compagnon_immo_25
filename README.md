@@ -181,6 +181,55 @@ dvc pull
 
 ---
 
+## Prédiction des Prix Immobiliers par Séries Temporelles
+
+Projet de modélisation des prix immobiliers utilisant les réseaux de neurones récurrents (LSTM/GRU).
+
+## Structure du Projet
+
+```
+├── data/                   # Données brutes et traitées
+├── models/                 # Modèles de séries temporelles (LSTM/GRU)
+├── preprocessing/          # Nettoyage et préparation des données
+├── training/              # Scripts d'entraînement
+├── evaluation/            # Métriques et visualisations
+├── config/                # Fichiers de configuration
+├── notebooks/             # Notebooks d'exploration (optionnel)
+├── outputs/               # Modèles sauvegardés et résultats
+└── main.py               # Point d'entrée principal
+```
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Utilisation
+
+```bash
+python main.py --data chemin/vers/donnees.csv
+```
+
+## Configuration
+
+Modifiez `config/config.yaml` pour ajuster les paramètres du modèle et de l'entraînement.
+
+## Modèles Supportés
+
+- **LSTM**: Long Short-Term Memory
+- **GRU**: Gated Recurrent Unit
+
+## Métriques d'Évaluation
+
+- RMSE (Root Mean Square Error)
+- MAE (Mean Absolute Error)
+- MAPE (Mean Absolute Percentage Error)
+- R² (Coefficient de détermination)
+- Précision directionnelle
+
+---
+
 ## 🛠️ **Contributeurs**
 - **Peiffer Yasmine**
 - **Pedro Ketsia**

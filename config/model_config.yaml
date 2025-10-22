@@ -1,0 +1,22 @@
+# Configuration pour la modélisation par séries temporelles
+
+model_type: "lstm"  # ou "gru"
+
+model_params:
+  sequence_length: 60
+  units: 50
+  dropout: 0.2
+
+training_params:
+  epochs: 100
+  batch_size: 32
+  validation_split: 0.2
+
+data_params:
+  target_column: "prix"
+  train_split: 0.8
+
+preprocessing:
+  normalize: true
+  remove_outliers: true
+  outlier_threshold: 3

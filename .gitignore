@@ -77,3 +77,44 @@ docs/testing-integration.md
 .secrets.baseline
 /data/processed
 /exports
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Outputs
+outputs/
+logs/
+*.log
+
+# Data (à ajuster selon vos besoins)
+data/*.csv
+data/*.xlsx
+!data/sample_data.csv
+
+# Models
+*.h5
+*.pkl
+*.joblib
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Makefile.bak.20251020_143922

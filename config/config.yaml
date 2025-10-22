@@ -1,0 +1,37 @@
+# Configuration pour la modélisation des prix immobiliers par séries temporelles
+
+# Configuration du modèle
+model:
+  type: "lstm"  # lstm ou gru
+  sequence_length: 60
+  units: 50
+  dropout: 0.2
+
+# Configuration des données
+data:
+  price_column: "prix"
+  date_column: "date"
+  train_ratio: 0.8
+
+# Configuration de l'entraînement
+training:
+  epochs: 100
+  batch_size: 32
+  validation_split: 0.2
+
+# Configuration de l'évaluation
+evaluation:
+  save_plots: true
+  plot_dir: "outputs/plots"
+  model_save_dir: "outputs/models"
+
+# Chemins des fichiers
+paths:
+  data_dir: "data"
+  output_dir: "outputs"
+  log_dir: "logs"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

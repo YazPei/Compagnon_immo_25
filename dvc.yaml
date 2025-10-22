@@ -9,7 +9,7 @@ stages:
       - data/df_sample.csv
       - data/state/checkpoint.parquet
       - data/incremental
-    always_changed: true
+#    always_changed: true
 
   preprocessing:
     cmd: python -m mlops.preprocessing_4.preprocessing --input data --out-dir data/processed
@@ -21,7 +21,7 @@ stages:
       - data/processed
 
   clustering:
-    cmd: python mlops/5_clustering/Clustering.py --input-path data/processed --output-path exports/df_cluster.csv
+    cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-path data/processed --output-path exports/df_cluster.csv
     deps:
       - mlops/5_clustering/Clustering.py
       - data/processed/df_sales_clean_train.csv

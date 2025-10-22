@@ -1,11 +1,10 @@
+# path: mlops/6_Regression/1_Encoding/encoding.py
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
-import os
-import json
-import warnings
-import math
-import click
+import os, json, warnings, math, sys, traceback
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -13,10 +12,16 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder, FunctionTransformer
 from sklearn.impute import SimpleImputer
-from category_encoders import TargetEncoder
 from sklearn.model_selection import train_test_split
 import joblib
 import mlflow
+
+# --- TargetEncoder optionnel (fallback OHE si absent) ---
+_HAS_TARGET_ENCODER = True
+try:
+    from category_encoders import TargetEncoder  # pip install category-encoders
+except Exception:
+    _HAS_TARGET_ENCODER = False
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -40,17 +45,10 @@ YEAR_ORDER   = [
 ]
 
 # ───── Helpers géo & date ─────────────────────────────────────────────────────
-def _radians(x):
-    return x * math.pi / 180.0
+def _radians(x): return x * math.pi / 180.0
 
 def _infer_lat_lon(df: pd.DataFrame):
-    candidates = [
-        ("latitude", "longitude"),
-        ("lat", "lon"),
-        ("lat", "lng"),
-        ("Latitude", "Longitude"),
-        ("LAT", "LON"),
-    ]
+    candidates = [("latitude","longitude"), ("lat","lon"), ("lat","lng"), ("Latitude","Longitude"), ("LAT","LON")]
     for la, lo in candidates:
         if la in df.columns and lo in df.columns:
             try:
@@ -71,29 +69,20 @@ def _infer_lat_lon(df: pd.DataFrame):
 
 def add_geo_columns_if_missing(df: pd.DataFrame) -> pd.DataFrame:
     need = [c for c in GEO_COLS if c not in df.columns]
-    if not need:
-        return df
-
+    if not need: return df
     lat, lon = _infer_lat_lon(df)
     if lat is None or lon is None:
-        print("⚠️  INFO: Impossible d'inférer les colonnes géo (lat/lon/geometry introuvables). "
-              "Je poursuis sans x_geo/y_geo/z_geo.")
+        print("⚠️  INFO: Impossible d'inférer lat/lon → pas de x_geo/y_geo/z_geo.")
         return df
-
-    lat = lat.clip(-90, 90)
-    lon = lon.clip(-180, 180)
-    lat_r = lat.apply(_radians)
-    lon_r = lon.apply(_radians)
-
+    lat = lat.clip(-90, 90); lon = lon.clip(-180, 180)
+    lat_r = lat.apply(_radians); lon_r = lon.apply(_radians)
     x = (np.cos(lat_r) * np.cos(lon_r)).astype("float32")
     y = (np.cos(lat_r) * np.sin(lon_r)).astype("float32")
     z = (np.sin(lat_r)).astype("float32")
-
     df = df.copy()
     if "x_geo" not in df.columns: df["x_geo"] = x
     if "y_geo" not in df.columns: df["y_geo"] = y
     if "z_geo" not in df.columns: df["z_geo"] = z
-
     print("ℹ️  Colonnes géo générées: x_geo, y_geo, z_geo.")
     return df
 
@@ -101,48 +90,30 @@ def convert_date_for_target_encoding(df: pd.DataFrame) -> pd.DataFrame:
     if "date" in df.columns:
         try:
             df = df.copy()
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            df["date"] = df["date"].dt.to_period("M").astype(str)
+            df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.to_period("M").astype(str)
         except Exception:
             pass
     return df
 
-# ───── Year bucketizer (résout l’erreur initiale) ─────────────────────────────
+# ───── Year bucketizer (robuste) ──────────────────────────────────────────────
 _BINS = [-np.inf, 1947, 1974, 1977, 1982, 1988, 2000, 2005, 2012, 2021, np.inf]
-_LABELS_ASC = ["avant 1948","1948-1974","1975-1977","1978-1982","1983-1988",
-               "1989-2000","2001-2005","2006-2012","2013-2021","après 2021"]
+_LABELS_ASC = ["avant 1948","1948-1974","1975-1977","1978-1982","1983-1988","1989-2000","2001-2005","2006-2012","2013-2021","après 2021"]
 
 def _year_bucketize_array(X):
-    """Mappe années numériques ou libellés → libellés YEAR_ORDER (retour (n,1))."""
-    s = pd.Series(np.ravel(X))
-    s_str = s.astype(str)
+    s = pd.Series(np.ravel(X)); s_str = s.astype(str)
     mask_in = s_str.isin(YEAR_ORDER)
     s_num = pd.to_numeric(s, errors="coerce")
-    labels = pd.cut(
-        s_num, bins=_BINS, labels=_LABELS_ASC,
-        right=True, include_lowest=True
-    ).astype(object)
-    out = pd.Series(index=s.index, dtype=object)
-    out[mask_in] = s_str[mask_in]
-    out[~mask_in] = labels[~mask_in]
-    out = out.fillna("1989-2000")
-    return out.to_frame()
+    labels = pd.cut(s_num, bins=_BINS, labels=_LABELS_ASC, right=True, include_lowest=True).astype(object)
+    out = pd.Series(index=s.index, dtype=object); out[mask_in] = s_str[mask_in]; out[~mask_in] = labels[~mask_in]
+    return out.fillna("1989-2000").to_frame()
 
-# ───── Fonctions top-level pour remplacer les lambdas (pickle-safe) ───────────
-def _replace_neg1_with_5(X):
-    X = np.asarray(X)
-    return np.where(X == -1, 5, X)
-
-def _plus1(X):
-    X = np.asarray(X)
-    return X + 1
-
-def _invert_11_minus_X(X):
-    X = np.asarray(X)
-    return 11 - X
+# ───── Top-level fns (pickle-safe) ────────────────────────────────────────────
+def _replace_neg1_with_5(X): X = np.asarray(X); return np.where(X == -1, 5, X)
+def _plus1(X): X = np.asarray(X); return X + 1
+def _invert_11_minus_X(X): X = np.asarray(X); return 11 - X
 
 # ───── Pipelines ──────────────────────────────────────────────────────────────
-def build_preprocessor_dynamic(X_fit: pd.DataFrame) -> ColumnTransformer:
+def build_preprocessor_dynamic(X_fit: pd.DataFrame, use_target_encoder: bool) -> ColumnTransformer:
     present_ord   = [c for c in ORDINAL_COLS if c in X_fit.columns]
     present_ohe   = [c for c in ONEHOT_COLS  if c in X_fit.columns]
     present_year  = [c for c in YEAR_COL     if c in X_fit.columns]
@@ -152,8 +123,7 @@ def build_preprocessor_dynamic(X_fit: pd.DataFrame) -> ColumnTransformer:
 
     def warn_missing(expected, present, name):
         missing = [c for c in expected if c not in present]
-        if missing:
-            print(f"⚠️  {name}: colonnes manquantes ignorées: {missing}")
+        if missing: print(f"⚠️  {name}: manquantes ignorées: {missing}")
 
     warn_missing(ORDINAL_COLS, present_ord, "ORDINAL_COLS")
     warn_missing(ONEHOT_COLS,  present_ohe, "ONEHOT_COLS")
@@ -162,34 +132,29 @@ def build_preprocessor_dynamic(X_fit: pd.DataFrame) -> ColumnTransformer:
     warn_missing(NUMERIC_COLS, present_num, "NUMERIC_COLS")
     warn_missing(GEO_COLS,     present_geo, "GEO_COLS")
 
-    ordinal_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy="most_frequent")),
-        ("encode", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
-        ("scale", StandardScaler())
-    ])
-    onehot_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
-    ])
-    target_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy="most_frequent")),
-        ("target", TargetEncoder())
-    ])
-    numeric_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy="median")),
-        ("scale", StandardScaler())
-    ])
-    geo_pipeline = Pipeline([
-        ("scale", StandardScaler())
-    ])
+    ordinal_pipeline = Pipeline([("impute", SimpleImputer(strategy="most_frequent")),
+                                 ("encode", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
+                                 ("scale", StandardScaler())])
 
-    # Year: bucketize -> ordinal (YEAR_ORDER) -> replace -1 -> +1 -> invert -> scale
+    onehot_pipeline = Pipeline([("impute", SimpleImputer(strategy="most_frequent")),
+                                ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))])
+
+    if use_target_encoder:
+        target_pipeline = Pipeline([("impute", SimpleImputer(strategy="most_frequent")),
+                                    ("target", TargetEncoder())])
+    else:
+        # why: fallback explicite si category_encoders absent
+        target_pipeline = Pipeline([("impute", SimpleImputer(strategy="most_frequent")),
+                                    ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))])
+
+    numeric_pipeline = Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())])
+    geo_pipeline     = Pipeline([("scale", StandardScaler())])
+
     year_rank_pipeline = Pipeline([
         ("impute", SimpleImputer(strategy="most_frequent")),
         ("bucket", FunctionTransformer(_year_bucketize_array, validate=False)),
-        ("ord", OrdinalEncoder(categories=[YEAR_ORDER], dtype=int,
-                               handle_unknown="use_encoded_value", unknown_value=-1)),
-        ("replace", FunctionTransformer(_replace_neg1_with_5, validate=False)),
+        ("ord", OrdinalEncoder(categories=[YEAR_ORDER], dtype=int, handle_unknown="use_encoded_value", unknown_value=-1)),
+        ("replace", FunctionTransformer(_replace_neg1_with_5, validate=False)),  # why: inconnu au centre
         ("plus1", FunctionTransformer(_plus1, validate=False)),
         ("invert", FunctionTransformer(_invert_11_minus_X, validate=False)),
         ("scale", StandardScaler())
@@ -208,95 +173,121 @@ def build_preprocessor_dynamic(X_fit: pd.DataFrame) -> ColumnTransformer:
 def get_feature_names(preprocessor: ColumnTransformer, X_fit: pd.DataFrame) -> list:
     names = []
     for name, trans, cols in preprocessor.transformers_:
-        if not cols:
-            continue
+        if not cols: continue  # Sauter les transformers sans colonnes définies
         cols_list = list(cols) if isinstance(cols, (list, tuple, np.ndarray)) else X_fit.columns[cols].tolist()
-        if name == "ohe":
+        
+        if name == "ohe":  # Si c'est OneHotEncoder
             ohe = trans.named_steps["onehot"]
+            # Vérifie si le nombre de colonnes d'input et la longueur de features correspondent
+            expected_len = len(cols_list)
+            actual_len = len(ohe.get_feature_names_out(cols_list))
+            if expected_len != actual_len:
+                print(f"⚠️ Attention, mismatch entre colonnes: {expected_len} attendu vs {actual_len} réel")
             names.extend(ohe.get_feature_names_out(cols_list).tolist())
         else:
             names.extend(cols_list)
     return names
 
+
 # ───── CLI ────────────────────────────────────────────────────────────────────
+import click
 @click.command()
 @click.option("--data-path", default="data/df_cluster.csv", show_default=True, help="CSV brut d'entrée.")
 @click.option("--output", default="data/encoded", show_default=True, help="Dossier de sortie des encodages.")
 @click.option("--experiment", default="regression_pipeline", show_default=True, help="Nom d'expérience MLflow.")
 @click.option("--random-state", default=42, show_default=True, help="Seed.")
 def main(data_path, output, experiment, random_state):
-    os.makedirs(output, exist_ok=True)
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    try:
+        os.makedirs(output, exist_ok=True)
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+        mlflow.set_experiment(experiment)
+        with mlflow.start_run(run_name="encode_only"):
+            print(f"Chargement: {data_path}")
+            df = pd.read_csv(data_path, sep=';', low_memory=False)
 
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name="encode_only"):
-        print(f"Chargement: {data_path}")
-        df = pd.read_csv(data_path, sep=';', low_memory=False)
-        if TARGET not in df.columns:
-            raise ValueError(f"Colonne cible absente: {TARGET}")
 
-        # Cible et prétraitements légers
-        df = df.dropna(subset=[TARGET]).copy()
-        df = convert_date_for_target_encoding(df)
-        df = add_geo_columns_if_missing(df)  # ← ajoute x_geo,y_geo,z_geo si possible
-
-        # Split via colonne 'split' si présente, sinon 80/20
-        if "split" in df.columns:
-            train = df[df["split"] == "train"].copy()
-            test  = df[df["split"] == "test"].copy()
-            if train.empty or test.empty:
-                print("⚠️  Split vide/partiel → bascule en split 80/20.")
+            # Vérifier si la colonne 'cluster' est présente et contient uniquement des NaN
+            if 'cluster' in df.columns and df['cluster'].isnull().all():
+                # Remplir la colonne 'cluster' avec "unknown" si elle est vide
+                df['cluster'] = 'unknown'
+            
+            # Afficher un message de log pour vérifier
+            print(f"Cluster column after filling NaN values: {df['cluster'].head()}")
+            
+            # Suite du traitement des données
+            if TARGET not in df.columns:
+                raise ValueError(f"Colonne cible absente: {TARGET}")
+            
+            df = df.dropna(subset=[TARGET]).copy()
+            df = convert_date_for_target_encoding(df)
+            df = add_geo_columns_if_missing(df)
+            
+            
+            if "split" in df.columns:
+                train = df[df["split"] == "train"].copy()
+                test  = df[df["split"] == "test"].copy()
+                if train.empty or test.empty:
+                    print("⚠️  Split vide/partiel → split 80/20.")
+                    train, test = train_test_split(df, test_size=0.2, random_state=random_state)
+            else:
                 train, test = train_test_split(df, test_size=0.2, random_state=random_state)
-        else:
-            train, test = train_test_split(df, test_size=0.2, random_state=random_state)
 
-        # Features disponibles dynamiquement
-        all_candidate_cols = ORDINAL_COLS + ONEHOT_COLS + TARGET_COLS + NUMERIC_COLS + GEO_COLS + YEAR_COL
-        present_cols = [c for c in all_candidate_cols if c in train.columns]
+            # Liste de toutes les colonnes attendues
+            all_candidate_cols = ORDINAL_COLS + ONEHOT_COLS + TARGET_COLS + NUMERIC_COLS + GEO_COLS + YEAR_COL
 
-        X_train = train[present_cols].copy()
-        y_train = train[TARGET].copy()
-        X_test  = test[present_cols].copy()
-        y_test  = test[TARGET].copy()
+            # Vérifier les colonnes présentes
+            present_cols = [c for c in all_candidate_cols if c in train.columns]
 
-        preproc = build_preprocessor_dynamic(X_train)
-        preproc.fit(X_train, y_train)  # TargetEncoder a besoin de y
+            # Loguer les colonnes présentes
+            print(f"Colonnes présentes dans le DataFrame: {present_cols}")
+            
+            # Utiliser uniquement les colonnes présentes dans le dataset
+            X_train = train[present_cols].copy(); y_train = train[TARGET].copy()
+            X_test  = test[present_cols].copy();  y_test  = test[TARGET].copy()
 
-        X_train_enc = preproc.transform(X_train)
-        X_test_enc  = preproc.transform(X_test)
-        encoded_columns = get_feature_names(preproc, X_train)
+            preproc = build_preprocessor_dynamic(X_train, use_target_encoder=_HAS_TARGET_ENCODER)
+            preproc.fit(X_train, y_train)  # why: TargetEncoder a besoin de y (si dispo)
+            print(f"Dimensions de X_train avant encodage : {X_train.shape}")
 
-        # Sauvegarde
-        paths = {
-            "X_train": os.path.join(output, "X_train.csv"),
-            "y_train": os.path.join(output, "y_train.csv"),
-            "X_test":  os.path.join(output, "X_test.csv"),
-            "y_test":  os.path.join(output, "y_test.csv"),
-            "meta":    os.path.join(output, "encoding_metadata.json"),
-            "preproc": os.path.join(output, "preprocessor.pkl"),
-        }
+            X_train_enc = preproc.transform(X_train)
+            X_test_enc  = preproc.transform(X_test)
+            encoded_columns = get_feature_names(preproc, X_train)
 
-        pd.DataFrame(X_train_enc, columns=encoded_columns).to_csv(paths["X_train"], sep=';', index=False)
-        pd.DataFrame({TARGET: y_train}).to_csv(paths["y_train"], sep=';', index=False)
-        pd.DataFrame(X_test_enc,  columns=encoded_columns).to_csv(paths["X_test"], sep=';', index=False)
-        pd.DataFrame({TARGET: y_test}).to_csv(paths["y_test"], sep=';', index=False)
+            paths = {
+                "X_train": os.path.join(output, "X_train.csv"),
+                "y_train": os.path.join(output, "y_train.csv"),
+                "X_test":  os.path.join(output, "X_test.csv"),
+                "y_test":  os.path.join(output, "y_test.csv"),
+                "meta":    os.path.join(output, "encoding_metadata.json"),
+                "preproc": os.path.join(output, "preprocessor.pkl"),
+            }
 
-        joblib.dump(preproc, paths["preproc"])
-        with open(paths["meta"], "w", encoding="utf-8") as f:
-            json.dump({
-                "encoded_columns": encoded_columns,
-                "original_feature_columns_present": present_cols,
-                "target": TARGET
-            }, f, ensure_ascii=False, indent=2)
+            pd.DataFrame(X_train_enc, columns=encoded_columns).to_csv(paths["X_train"], sep=';', index=False)
+            pd.DataFrame({TARGET: y_train}).to_csv(paths["y_train"], sep=';', index=False)
+            pd.DataFrame(X_test_enc,  columns=encoded_columns).to_csv(paths["X_test"], sep=';', index=False)
+            pd.DataFrame({TARGET: y_test}).to_csv(paths["y_test"], sep=';', index=False)
 
-        # MLflow artifacts + params rapides
-        for p in paths.values():
-            mlflow.log_artifact(p)
-        mlflow.log_param("n_features_encoded", int(len(encoded_columns)))
-        mlflow.log_param("n_train_rows", int(len(y_train)))
-        mlflow.log_param("n_test_rows", int(len(y_test)))
+            joblib.dump(preproc, paths["preproc"])
+            with open(paths["meta"], "w", encoding="utf-8") as f:
+                json.dump({
+                    "encoded_columns": encoded_columns,
+                    "original_feature_columns_present": present_cols,
+                    "target": TARGET,
+                    "used_target_encoder": _HAS_TARGET_ENCODER
+                }, f, ensure_ascii=False, indent=2)
 
-        print("✅ Encodage terminé. Fichiers écrits dans:", output)
+            for p in paths.values(): mlflow.log_artifact(p)
+            mlflow.log_param("n_features_encoded", int(len(encoded_columns)))
+            mlflow.log_param("n_train_rows", int(len(y_train)))
+            mlflow.log_param("n_test_rows", int(len(y_test)))
+            if not _HAS_TARGET_ENCODER:
+                print("ℹ️  Fallback OneHotEncoder (installe 'category-encoders' pour activer TargetEncoder).")
+
+            print("✅ Encodage terminé. Fichiers écrits dans:", output)
+    except Exception as e:
+        print("[FATAL] encoding failed:", e)
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

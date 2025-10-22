@@ -34,8 +34,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 # ========= CHEMINS EN DUR =========
 INPUT_PATH     = "data/df_sales_clean_ST.csv"
-TAUX_PATH      = "data/clean/taux_immo.xlsx"
-GEO_PATH       = "data/processed/contours-codes-postaux.geojson"
+TAUX_PATH      = "data/taux_immo.xlsx"
+GEO_PATH       = "data/contours-codes-postaux.geojson"
 OUTPUT_FOLDER  = "data/split"
 SUFFIX         = os.getenv("ST_SUFFIX", "")  # laisse vide si tu veux
 

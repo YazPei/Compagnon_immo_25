@@ -302,6 +302,21 @@ def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_row
     steps = math.ceil(n / batch_rows)
     for i in range(steps):
         yield df.iloc[i * batch_rows : (i + 1) * batch_rows].copy()
+# --- helpers chrono ---
+def _parse_any_date(s: Optional[str]):
+    if not s:
+        return None
+    try:
+        # accepte "2023-06-01", "2023/06/01", "2023-06", etc.
+        return pd.to_datetime(s, errors="coerce", utc=True)
+    except Exception:
+        return None
+
+def _month_floor(series: pd.Series):
+    # retourne la date ramenée au 1er du mois (timezone UTC)
+    ser = pd.to_datetime(series, errors="coerce", utc=True)
+    return ser.dt.to_period("M").dt.start_time.dt.tz_localize("UTC")
+
 
 def incremental_extract(
     *,
@@ -330,6 +345,11 @@ def incremental_extract(
     dedup_duckdb: bool,
     num_slices: int,
     slice_index: int,
+    date_from: Optional[str],
+    date_to: Optional[str],
+    last_months: Optional[int],
+    chrono_mode: str,
+    chrono_percent: Optional[float]
 ) -> Tuple[Path, Path, int, int]:
     """
     Lit la source (DVC/HTTP/S3/local) en chunks, écrit un delta CSV en streaming,
@@ -370,6 +390,76 @@ def incremental_extract(
         src_path_like = local_path
     else:
         raise ValueError(f"source_mode inconnu: {source_mode}")
+        # --- bornes issues des flags chrono ---
+    date_from_ts = _parse_any_date(date_from)
+    date_to_ts   = _parse_any_date(date_to)
+
+    # Si last_months ou chrono_percent est utilisé, on fait un pré-pass uniquement sur la colonne date
+    need_prepass = (last_months is not None) or (chrono_mode in ("head", "tail") and chrono_percent)
+
+    if need_prepass and date_col:
+        # On ré-ouvre une poignée dédiée pour lire uniquement les dates (léger)
+        if source_mode == "dvc":
+            src_dates = open_source_dvc(dvc_repo_url=dvc_repo_url, dvc_path=dvc_path, dvc_rev=dvc_rev, dvc_remote=dvc_remote)
+        elif source_mode == "http":
+            src_dates = open_source_http(url=http_url)
+        elif source_mode == "s3":
+            src_dates = open_source_s3(
+                endpoint_url=s3_endpoint_url or os.getenv("AWS_S3_ENDPOINT"),
+                bucket=s3_bucket, key=s3_key, region=s3_region,
+                path_style=s3_path_style, verify_ssl=s3_verify_ssl, anon=s3_anon
+            )
+        else:
+            src_dates = open_source_local(Path(local_path))
+
+        # Lit uniquement la colonne date (stream/chunks)
+        dates = []
+        if _is_parquet_path(src_path_like):
+            dtmp = pd.read_parquet(
+                src_dates.handle_or_path if src_dates.is_stream else str(src_dates.handle_or_path),
+                columns=[date_col]
+            )
+            if date_col in dtmp.columns:
+                dtmp[date_col] = pd.to_datetime(dtmp[date_col], errors="coerce", utc=True)
+                dates.append(dtmp[date_col].dropna())
+        else:
+            for c in pd.read_csv(
+                src_dates.handle_or_path if src_dates.is_stream else str(src_dates.handle_or_path),
+                sep=sep, usecols=[date_col], chunksize=200_000, low_memory=False
+            ):
+                if date_col in c.columns:
+                    c[date_col] = pd.to_datetime(c[date_col], errors="coerce", utc=True)
+                    dates.append(c[date_col].dropna())
+
+        try:
+            src_dates.cleanup()
+        except Exception:
+            pass
+
+        if dates:
+            all_dates = pd.concat(dates, ignore_index=True)
+            if last_months is not None:
+                # borne = début du (N-ième) mois en partant de la fin
+                mon = _month_floor(all_dates.sort_values())
+                last = mon.max()
+                if pd.notna(last):
+                    # remonte (last_months-1) mois
+                    boundary = (last.to_period("M") - (last_months - 1)).start_time
+                    boundary = boundary.tz_localize("UTC")
+                    # Garde >= boundary
+                    date_from_ts = max(date_from_ts, boundary) if date_from_ts is not None else boundary
+
+            if chrono_mode in ("head", "tail") and chrono_percent:
+                q = float(chrono_percent)
+                q = min(max(q, 1e-6), 1.0)  # clamp
+                qdt = all_dates.quantile(q)  # quantile temporel (UTC)
+                if pd.notna(qdt):
+                    if chrono_mode == "head":
+                        # garder le début de l'historique
+                        date_to_ts = min(date_to_ts, qdt) if date_to_ts is not None else qdt
+                    else:
+                        # garder la fin de l'historique
+                        date_from_ts = max(date_from_ts, qdt) if date_from_ts is not None else qdt
 
     # --- chemins delta & cumul
     delta_folder.mkdir(parents=True, exist_ok=True)
@@ -395,20 +485,31 @@ def incremental_extract(
     try:
         for chunk in chunks_iter:
             chunk = parse_date(chunk, date_col)
+
+            # Filtres chronologiques appliqués par chunk
+            if date_col and (date_from_ts is not None or date_to_ts is not None):
+                if date_from_ts is not None:
+                    chunk = chunk.loc[chunk[date_col] >= date_from_ts]
+                if date_to_ts is not None:
+                    chunk = chunk.loc[chunk[date_col] <= date_to_ts]
+                if chunk.empty:
+                    continue
+    
+            # Traitement des clés
             if key_cols:
                 keys_concat = chunk[key_cols].astype(str).fillna("").agg("||".join, axis=1)
             else:
                 keys_concat = chunk.index.astype(str)  # fallback
-
+    
+            # Calcul de bucket_mask
             bucket_mask = keys_concat.apply(
                 lambda s: _stable_bucket_idx(s, max(1, num_slices)) == (slice_index % max(1, num_slices))
             )
             chunk = chunk.loc[bucket_mask]
             if chunk.empty:
                 continue            
-
-
-            # filtre watermark (si présent)
+    
+            # Filtre watermark si présent
             if date_col and watermark:
                 wm = pd.to_datetime(watermark, utc=True, errors="coerce")
                 if wm is not None:
@@ -416,38 +517,45 @@ def incremental_extract(
                     if chunk.empty:
                         continue
             
-            # détection des nouvelles lignes
+            # Détection des nouvelles lignes
             kh = make_key_hash(chunk, key_cols)
             mask_new = ~kh.astype(str).isin(seen_keys)
             delta = chunk.loc[mask_new].copy()
             if delta.empty:
                 continue
-
-            # maj progression
+    
+            # Mise à jour de la progression
             chunks_seen += 1
             rows_seen += len(delta)
             if chunks_seen % 5 == 0:
                 print(f"[info] processed {chunks_seen} chunks, {rows_seen:,} new rows in {time.time() - t0:.1f}s")
-
-            # watermark courant
+    
+            # Watermark courant
             if date_col and date_col in delta.columns:
                 cand = delta[date_col].max()
                 if pd.notna(cand):
                     max_date_seen = cand if max_date_seen is None else max(max_date_seen, cand)
-
-            # écriture incrémentale du delta (pas de concat en RAM)
+    
+            # Écriture incrémentale du delta
             delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
             delta_out = delta.drop(columns=["__key_hash__"], errors="ignore")
             delta_out.to_csv(delta_path, sep=sep, index=False, mode="a", header=not wrote_header)
             wrote_header = True
-
-            # maj des clés vues
+    
+            # Mise à jour des clés vues
             seen_keys.update(delta["__key_hash__"].astype(str).tolist())
+    
+    except Exception as e:
+        print(f"Une erreur s'est produite pendant l'extraction des données : {e}")
+        # Log ou actions supplémentaires selon l'erreur
+
     finally:
+        # Nettoyage ou autres actions à réaliser après la boucle
         try:
             src.cleanup()
         except Exception:
             pass
+
 
     # --- fusion dans le cumul
     if not delta_path.exists() or delta_path.stat().st_size == 0:
@@ -538,6 +646,18 @@ def incremental_extract(
               default=lambda: os.getenv("IMP_APPEND_ONLY","1")=="1")
 @click.option("--dedup-duckdb/--no-dedup-duckdb",
               default=lambda: os.getenv("IMP_DEDUP_DUCKDB","1")=="1")
+# === Filtres temporels chronologiques ===
+@click.option("--date-from", type=str, default=None,
+              help="Inclure uniquement les lignes avec date >= (ex: 2022-01-01)")
+@click.option("--date-to", type=str, default=None,
+              help="Inclure uniquement les lignes avec date <= (ex: 2024-12-31)")
+@click.option("--last-months", type=int, default=None,
+              help="Garder uniquement les N derniers mois (calculé sur la distribution des dates).")
+@click.option("--chrono-mode", type=click.Choice(["head","tail","none"]), default="none",
+              help="head=prendre les dates les plus anciennes, tail=les plus récentes.")
+@click.option("--chrono-percent", type=float, default=None,
+              help="Proportion chronologique à garder (0< p <=1). Ex: 0.3.")
+
 def main(
     output_folder,
     cumulative_path,
@@ -561,6 +681,7 @@ def main(
     local_path,
     append_only, dedup_duckdb,
     num_slices, slice_index,  
+    date_from, date_to, last_months, chrono_mode, chrono_percent,
 ):
     artifact_location = setup_mlflow()
 
@@ -603,6 +724,11 @@ def main(
             dedup_duckdb=dedup_duckdb,
             num_slices=num_slices,
             slice_index=slice_index,
+            date_from=date_from,  
+            date_to=date_to,
+            last_months=last_months,
+            chrono_mode=chrono_mode,
+            chrono_percent=chrono_percent
         )
 
         mlflow.log_param("source_mode", source_mode)

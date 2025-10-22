@@ -6,8 +6,8 @@ stages:
     deps:
     - path: mlops/1_import_donnees/import_data.py
       hash: md5
-      md5: a960c455648c8d5f7ce44c5c7ecb45ac
-      size: 24189
+      md5: 5570c399af206f6ac361194f237f6156
+      size: 30058
       isexec: true
     - path: mlops/1_import_donnees/run_import.sh
       hash: md5
@@ -26,8 +26,8 @@ stages:
       nfiles: 1
     - path: data/state/checkpoint.parquet
       hash: md5
-      md5: 8fcbd7595272855092637e1e7ceaf8d0
-      size: 7546900
+      md5: d70e1b01e5b0d2b59deeb38e06fe766b
+      size: 7547020
   fusion_geo:
     cmd: "python mlops/3_fusion/fusion_geo_dvf.py --folder-path1 data --folder-path2
       data --output-folder data/clean\n"
@@ -77,17 +77,8 @@ stages:
       nfiles: 6
   clustering:
     cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-path 
-      data/processed --output-path exports/df_cluster.csv
+      data/processed --output-path exports
     deps:
-    - path: data/contours-codes-postaux.geojson
-      hash: md5
-      md5: fd8abea558099967148f7f22c881f3e8
-      size: 3010266
-      isexec: true
-    - path: data/processed/df_sales_clean_test.csv
-      hash: md5
-      md5: c0781207a7dd3436443120a8cf25177d
-      size: 16402412
     - path: data/processed/df_sales_clean_train.csv
       hash: md5
       md5: b5062377d9c4e57efd8b49115864a445
@@ -115,33 +106,24 @@ stages:
       md5: 3149bec08a1864f76805b93fc3832769
       size: 2866
   encode:
-    cmd: "python mlops/6_Regression/1_Encoding/encoding.py \n"
+    cmd: python mlops/6_Regression/1_Encoding/encoding.py --data-path 
+      data/df_cluster.csv --output data/encoded
     deps:
     - path: exports/df_cluster.csv
       hash: md5
-      md5: cf7ef5fa89d3b63cb16e71ead772b49b
-      size: 146100176
+      md5: 1c3ec7c37a17822d6141692af87abd27
+      size: 97204840
     - path: mlops/6_Regression/1_Encoding/encoding.py
       hash: md5
-      md5: 8985ab8b4b3934fb54387eef789bf04c
-      size: 13170
+      md5: 23731b66f87467b324c3b2cdfc508f43
+      size: 15135
+      isexec: true
     outs:
-    - path: data/encoded/X_test.csv
+    - path: data/encoded
       hash: md5
-      md5: da431b85a1842ef44548c344a5ee9ce6
-      size: 64388025
-    - path: data/encoded/X_train.csv
-      hash: md5
-      md5: de16c593d43fd9379dd04ef7450a9199
-      size: 257563463
-    - path: data/encoded/y_test.csv
-      hash: md5
-      md5: d34e5f9df7159ca64b9decd5c5754b17
-      size: 758568
-    - path: data/encoded/y_train.csv
-      hash: md5
-      md5: 0414a44704ca3758d7c9d68bfe76e8d6
-      size: 3033709
+      md5: e53929e9dd446d0618e68e443ab5565a.dir
+      size: 298742897
+      nfiles: 6
   splitst:
     cmd: "python mlops/7_Serie_temporelle/1_SPLIT/load_split.py\n"
     deps:
@@ -214,33 +196,36 @@ stages:
       size: 4087334
       nfiles: 12
   train_lgbm:
-    cmd: "python mlops/6_Regression/2_LGBM/train_lgbm.py\n"
+    cmd: "python mlops/6_Regression/2_LGBM/train_lgbm.py && mkdir -p models && mv
+      data/encoded/lgbm_model.joblib models/lgbm_model.joblib   # si ton script écrit
+      encore là\n"
     deps:
     - path: data/encoded/X_train.csv
       hash: md5
-      md5: de16c593d43fd9379dd04ef7450a9199
-      size: 257563463
+      md5: a6201564314de26cf014085c46ee7944
+      size: 235893157
     - path: data/encoded/y_train.csv
       hash: md5
-      md5: 0414a44704ca3758d7c9d68bfe76e8d6
-      size: 3033709
+      md5: c70eddb3edbab05e3447c7cfaa59a098
+      size: 3071597
     - path: mlops/6_Regression/2_LGBM/train_lgbm.py
       hash: md5
       md5: bb9fefbebed97b7e0d37c3beeb05cc5e
       size: 9029
+      isexec: true
     outs:
-    - path: data/encoded/lgbm_model.joblib
-      hash: md5
-      md5: 4d6c10cb7cf3a4152f7c8ce54498fdc4
-      size: 2363411
     - path: metrics/train_lgbm.json
       hash: md5
-      md5: 108009166d9ce3ba7ca243b7e23831da
+      md5: a49fe25277229f28e4978eecd25c2da9
       size: 426
+    - path: models/lgbm_model.joblib
+      hash: md5
+      md5: 75e78966e622cbf7e4f9e44d50b9d982
+      size: 2336919
     - path: reports/feature_importance.json
       hash: md5
-      md5: b0ee5bd3956d157c22422ecfb0aeeed5
-      size: 3329
+      md5: 647645eaa0fcb19151ddb7c7a8005741
+      size: 3092
   analyse:
     cmd: "python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm\n"
     deps:

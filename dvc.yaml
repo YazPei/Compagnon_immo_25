@@ -21,12 +21,10 @@ stages:
       - data/processed
 
   clustering:
-    cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-path data/processed --output-path exports/df_cluster.csv
+    cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-path data/processed --output-path exports
     deps:
       - mlops/5_clustering/Clustering.py
       - data/processed/df_sales_clean_train.csv
-      - data/processed/df_sales_clean_test.csv        
-      - data/contours-codes-postaux.geojson  # spacial
     outs:
       - exports/df_cluster.csv
       - data/df_sales_clean_ST.csv
@@ -34,6 +32,7 @@ stages:
       - mlflow_outputs/cluster_input.csv
     plots:
       - mlflow_outputs/elbow_plot.png
+
 
   encode:
     cmd: python mlops/6_Regression/1_Encoding/encoding.py --data-path data/df_cluster.csv --output data/encoded
@@ -72,8 +71,8 @@ stages:
     deps:
       - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       - data/df_sales_clean_ST.csv
-      - data/processed/contours-codes-postaux.geojson
-      - data/clean/taux_immo.xlsx
+      - data/contours-codes-postaux.geojson
+      - data/taux_immo.xlsx
     outs:
       - data/split
 

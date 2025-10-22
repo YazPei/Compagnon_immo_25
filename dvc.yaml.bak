@@ -1,162 +1,85 @@
+# dvc.yaml — racine du repo
 stages:
   import_data:
-    cmd: >
-      python -m mlops.1_import_donnees.import_data.py
-      --folder-path1 data
-      --output-folder data/
+    cmd: python scripts/import_data.py
     deps:
-      - mlops/1_import_donnees/import_data.py
-      - data/dvc_data.csv
+      - scripts/import_data.py
     outs:
-      - data/df_sample.csv
-  
-  fusion_geo:
-    cmd: >
-      python -m mlops.3_fusion.fusion_geo_dvf
-      --folder-path1 data
-      --folder-path2 data
-      --output-folder data/clean
-    deps:
-      - mlops/3_fusion/fusion_geo_dvf.py
-      - data/DVF_donnees_macroeco.csv
-      - data/df_sample.csv
-    outs:
-      - data/clean/df_sales_clean_polars.csv
+      - path: data/df_sample.csv
+        cache: false
+        persist: true
 
   preprocessing:
-    cmd: >
-      python mlops/4_preprocessing/preprocessing.py
-      --input-path data/clean/df_sales_clean_polars.csv
-      --output-path data/processed/train_clean.csv
+    cmd: python scripts/preprocessing.py
     deps:
-      - mlops/4_preprocessing/preprocessing.py
-      - data/clean/df_sales_clean_polars.csv
+      - scripts/preprocessing.py
+      - data/df_sample.csv
     outs:
-      - data/processed/train_clean.csv
-
-  clustering:
-    cmd: >
-      python mlops/5_clustering/Clustering.py
-      --input-path data/processed/train_clean.csv
-      --output-path data/interim/df_sales_clustered.csv
-    deps:
-      - mlops/5_clustering/Clustering.py
-      - data/processed/train_clean.csv
-    outs:
-      - data/interim/df_sales_clustered.csv
-    params:
-      - params.yaml:
-          - clustering.n_clusters
-    metrics:
-      - mlflow_outputs/cluster_input.csv:
-          cache: false
-    plots:
-      - mlflow_outputs/elbow_plot.png
+      - path: data/processed
+        cache: false
+        persist: true
 
   encode:
-    cmd: python mlops/6_Regression/1_Encoding/encoding.py 
+    cmd: python scripts/encode.py
     deps:
-      - src/encoding.py
-      - mlops/data/df_cluster.csv
+      - scripts/encode.py
+      - data/processed
     outs:
-      - mlops/encoded/X_train.csv
-      - mlops/encoded/X_test.csv
-      - mlops/encoded/y_train.csv
-      - mlops/encoded/y_test.csv
+      - path: data/encoded/X_train.csv
+        cache: false
+        persist: true
 
   train_lgbm:
-    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: python scripts/train_lgbm.py
     deps:
-      - src/train_lgbm.py
-      - mlops/encoded/X_train.csv
-      - mlops/encoded/y_train.csv
+      - scripts/train_lgbm.py
+      - data/encoded/X_train.csv
     outs:
-      - mlops/encoded/lgbm_model.joblib
+      - path: data/encoded/lgbm_model.joblib
+        cache: false
+    metrics:
+      - path: metrics/train_lgbm.json
+        cache: false
+    plots:
+      - path: reports/feature_importance.json
+        cache: false
 
-  analyse:
-    cmd: >
-      python src/analyse.py --model lightgbm
+  splitst:
+    cmd: python scripts/splitst.py
     deps:
-      - src/analyse.py
-      - mlops/encoded/X_test.csv
-      - mlops/encoded/y_test.csv
-      - mlops/encoded/lgbm_model.joblib
-
-  split:
-    cmd: >
-      python -m mlops.7_Serie_temporelle.1_SPLIT.load_split  
-      --input-path data/df_sales_clean_ST.csv
-      --output-folder data/split
-      --suffix ${ST_SUFFIX}
-    deps:
-      - data/df_sales_clean_ST.csv
-      - mlops/time_series/load_split.py
+      - scripts/splitst.py
+      - data/processed
     outs:
-      - data/split/train_cluster_0.csv
-      - data/split/test_cluster_0.csv
-
+      - path: data/split
+        cache: false
+        persist: true
 
   decompose:
-    cmd: >
-      python -m mlops.7_Serie_temporelle.2_Decompose.seasonal_decomp
-      --input-folder data/split
-      --output-folder outputs/decomposition
-      --suffix ${ST_SUFFIX}
+    cmd: python scripts/decompose.py
     deps:
-      - mlops/time_series/seasonal_decomp.py
-      - data/split/train_cluster_0.csv
+      - scripts/decompose.py
+      - data/split
     outs:
-      - outputs/decomposition/decomposition_additive_cluster_0.png
-      - outputs/decomposition/decomposition_multiplicative_cluster_0.png
+      - path: outputs/decomposition/decomposition_additive_cluster_0.png
+        cache: false
 
   train_sarimax:
-    cmd: >
-      python -m mlops.7_Serie_temporelle.3_SARIMAX.sarimax_train
-      --input-folder data/split
-      --output-folder outputs/best
-      --suffix ${ST_SUFFIX}
+    cmd: python scripts/train_sarimax.py
     deps:
-      - mlops/time_series/sarimax_train.py
-      - data/split/train_cluster_0.csv
-      - data/split/test_cluster_0.csv
+      - scripts/train_sarimax.py
+      - data/split
     outs:
-      - outputs/best/cluster_0_sarimax.pkl
-      - outputs/best/forecast_cluster_0.csv
+      - path: outputs/best
+        cache: false
+        persist: true
 
   evaluate:
-    cmd: >
-      python -m mlops.time_series.metrics
-      --input-folder exports/st
-      --output-folder exports/st
-      --model-folder exports/st
-      --suffix ""
+    cmd: python scripts/evaluate.py
     deps:
-      - mlops/time_series/metrics.py
-      - exports/st/cluster_0_series.csv
-      - exports/st/cluster_1_series.csv
-      - exports/st/cluster_2_series.csv
-      - exports/st/cluster_3_series.csv
-      - exports/st/cluster_4_series.csv
-      - exports/st/train_cluster_0.csv
-      - exports/st/test_cluster_0.csv
-      - exports/st/train_cluster_1.csv
-      - exports/st/test_cluster_1.csv
-      - exports/st/train_cluster_2.csv
-      - exports/st/test_cluster_2.csv
-      - exports/st/train_cluster_3.csv
-      - exports/st/test_cluster_3.csv
-      - exports/st/train_cluster_4.csv
-      - exports/st/test_cluster_4.csv      
-      - exports/st/cluster_0_sarimax.pkl
-      - exports/st/cluster_1_sarimax.pkl
-      - exports/st/cluster_2_sarimax.pkl
-      - exports/st/cluster_3_sarimax.pkl
-      - exports/st/cluster_4_sarimax.pkl
+      - scripts/evaluate.py
+      - outputs/best
     outs:
-      - exports/st/forecast_cluster_0.png
-      - exports/st/forecast_cluster_1.png
-      - exports/st/forecast_cluster_2.png
-      - exports/st/forecast_cluster_3.png
-      - exports/st/forecast_cluster_4.png
-      - exports/st/sarimax_global_eval.csv
+      - path: outputs/evaluate
+        cache: false
+        persist: true
 

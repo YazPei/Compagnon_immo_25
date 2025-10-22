@@ -11,3 +11,4 @@
 mlops/2_dvc/Dockerfile.dvc
 mlops/2_dvc/Dockerfile.APIdvc
 
+mlops/6_Regression/ARCHIVE/

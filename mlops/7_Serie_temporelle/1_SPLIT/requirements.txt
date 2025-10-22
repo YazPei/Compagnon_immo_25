@@ -4,7 +4,7 @@
 numpy==1.26.4                    # Calcul scientifique
 pandas>=2.2.0                   # Manipulation de données
 scikit-learn>=1.4.0             # Machine learning généraliste
-
+openpyxl
 
 
 # Géospatial

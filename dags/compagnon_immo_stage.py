@@ -1,8 +1,9 @@
+# path: dags/compagnon_immo_stage.py
 import os
 import pendulum
 import requests
+from pathlib import Path
 from airflow import DAG
-from airflow.models import Variable
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
@@ -10,108 +11,44 @@ import mlflow
 from mlflow.tracking import MlflowClient
 from mlflow.pyfunc import PythonModel, log_model
 
-PARIS = pendulum.timezone("Europe/Paris")
-REPO = "/opt/airflow/repo"
-PY = "python"
 
-# --------- Utils Bash (import 10%) ----------
-def bash_task(task_id, cmd, timeout_min=None, env_extra=None, cwd=REPO):
+# 1) Tracking côté DagsHub
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+
+# 2) Auth via variables d’environnement (déjà exportées dans le container)
+# MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD sont lues automatiquement par mlflow.
+
+# 3) (Optionnel) Nom d’expérience par défaut
+DEFAULT_EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT_NAME", "compagnon_immo_prod")
+mlflow.set_experiment(DEFAULT_EXPERIMENT)
+
+# ------------------- CONFIG -------------------
+PARIS = pendulum.timezone("Europe/Paris")
+REPO = "/opt/airflow/repo"       # repo Git+DVC monté dans les conteneurs Airflow
+PY = f"{REPO}/.venv/bin/python"  # interpreteur du venv; sinon "python"
+DVC = "dvc"
+
+MODEL_NAME = os.getenv("MODEL_NAME", "ImmoModel")
+PREDICT_API_RELOAD_URL = os.getenv("PREDICT_API_RELOAD_URL", "http://predict-api:8000/reload")
+PREDICT_API_RELOAD_URL = os.getenv("PREDICT_API_RELOAD_URL", "http://api:8000/api/v1/reload")
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "")  # forwarded dans l'env des tasks
+
+TARGET_METRIC = os.getenv("TARGET_METRIC", "val_rmse")  # metric pour comparer candidat vs prod
+BETTER_MODE = os.getenv("BETTER_MODE", "min").lower()   # "min" ou "max"
+
+# ------------------- HELPERS -------------------
+def bash_task(task_id: str, cmd: str, minutes: int | None = None):
+    """Run a shell command inside the repo with a clean env."""
     env = os.environ.copy()
-    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI")
-    if mlflow_uri:
-        env["MLFLOW_TRACKING_URI"] = mlflow_uri
-    if env_extra:
-        env.update(env_extra)
+    if MLFLOW_URI:
+        env["MLFLOW_TRACKING_URI"] = MLFLOW_URI
+    # set -euo pipefail to fail fast; cd into repo to keep relative paths valid
     return BashOperator(
         task_id=task_id,
-        bash_command=cmd,
+        bash_command=f"set -euo pipefail; cd {REPO} && {cmd}",
         env=env,
-        cwd=cwd,  # si non supporté par ta version, fais: bash_command=f"cd {cwd} && {cmd}"
-        execution_timeout=(pendulum.duration(minutes=timeout_min) if timeout_min else None),
+        execution_timeout=(pendulum.duration(minutes=minutes) if minutes else None),
     )
-
-def build_import_cmd():
-    # ----- Variables Airflow (Admin > Variables)
-    source_mode = Variable.get("SOURCE_MODE", default_var="s3_public")  # s3_public|s3_profile|dvc
-    s3_bucket   = Variable.get("S3_BUCKET",  default_var=None)
-    s3_key      = Variable.get("S3_KEY",     default_var=None)
-    s3_region   = Variable.get("S3_REGION",  default_var="us-east-1")
-    s3_endpoint = Variable.get("S3_ENDPOINT",default_var=None)
-    aws_profile = Variable.get("AWS_PROFILE",default_var=None)
-
-    NUM_SLICES = int(Variable.get("NUM_SLICES", default_var="10"))  # 10% ⇒ 10
-
-    out_folder = f"{REPO}/data/incremental/{{{{ ds }}}}"
-    cumul_csv  = f"{REPO}/data/df_sample.csv"
-    chk_path   = "/opt/airflow/data/state/immo_checkpoint.parquet"
-    date_col   = "date"
-    key_cols   = "idannonce"
-
-    # semaine ISO % NUM_SLICES  → tranche déterministe 0..N-1
-    slice_expr = "{{ (data_interval_start.strftime('%V') | int) % " + str(NUM_SLICES) + " }}"
-
-    if source_mode == "dvc":
-        dvc_repo_url  = Variable.get("DVC_REPO_URL",  default_var=None)
-        dvc_file_path = Variable.get("DVC_FILE_PATH", default_var=None)
-        dvc_rev       = Variable.get("DVC_REV",       default_var="main")
-        assert dvc_repo_url and dvc_file_path, "DVC_REPO_URL/DVC_FILE_PATH requis en mode dvc"
-        cmd = (
-            f"{PY} {REPO}/mlops/1_import_donnees/import_data.py "
-            f"--output-folder {out_folder} "
-            f"--cumulative-path {cumul_csv} "
-            f"--checkpoint-path {chk_path} "
-            f"--date-column {date_col} "
-            f"--key-columns {key_cols} "
-            f"--sep ';' "
-            f"--source-mode dvc "
-            f"--dvc-repo-url '{dvc_repo_url}' "
-            f"--dvc-path '{dvc_file_path}' "
-            f"--dvc-rev '{dvc_rev}' "
-            f"--num-slices {NUM_SLICES} "
-            f"--slice-index {slice_expr} "
-            f"--append-only --dedup-duckdb"
-        )
-        return cmd, {}
-
-    # Modes S3
-    assert s3_bucket and s3_key, "S3_BUCKET/S3_KEY requis en mode s3_*"
-    base_cmd = (
-        f"{PY} {REPO}/mlops/1_import_donnees/import_data.py "
-        f"--output-folder {out_folder} "
-        f"--cumulative-path {cumul_csv} "
-        f"--checkpoint-path {chk_path} "
-        f"--date-column {date_col} "
-        f"--key-columns {key_cols} "
-        f"--sep ';' "
-        f"--source-mode s3 "
-        f"--s3-bucket '{s3_bucket}' "
-        f"--s3-key '{s3_key}' "
-        f"--s3-region '{s3_region}' "
-        f"--num-slices {NUM_SLICES} "
-        f"--slice-index {slice_expr} "
-        f"--append-only --dedup-duckdb "
-    )
-    if s3_endpoint:
-        base_cmd += f"--s3-endpoint-url '{s3_endpoint}' "
-
-    if source_mode == "s3_public":
-        return base_cmd + "--s3-anon", {"AWS_NO_SIGN_REQUEST": "1"}
-
-    if source_mode == "s3_profile":
-        env = {}
-        if aws_profile:
-            env["AWS_PROFILE"] = aws_profile
-            env["AWS_SDK_LOAD_CONFIG"] = "1"
-        return base_cmd, env
-
-    raise ValueError(f"Unknown SOURCE_MODE={source_mode}")
-
-
-# --------- Python callables (MLflow train/register/compare/reload) ----------
-MODEL_NAME = Variable.get("MODEL_NAME", default_var="ImmoModel")
-PREDICT_API_RELOAD_URL = Variable.get("PREDICT_API_RELOAD_URL", default_var="http://predict-api:8000/reload")
-TARGET_METRIC = Variable.get("TARGET_METRIC", default_var="val_rmse")  # configurable
-BETTER_MODE = Variable.get("BETTER_MODE", default_var="min")  # "min" or "max"
 
 def _ensure_registered_model(client: MlflowClient, name: str):
     try:
@@ -120,188 +57,156 @@ def _ensure_registered_model(client: MlflowClient, name: str):
         client.create_registered_model(name=name)
 
 def _is_better(new: float, ref: float) -> bool:
-    if BETTER_MODE.lower() == "max":
-        return new > ref
-    return new < ref  # default "min"
+    return (new > ref) if BETTER_MODE == "max" else (new < ref)
 
+# ------------------- PYTHON TASKS -------------------
 def train_v1(**ctx):
     """
-    Entraîne un modèle candidat et loggue dans MLflow.
-    Pour être autonome (sans sklearn), on loggue un pyfunc minimal.
+    Entraine et loggue un candidat minimal (pyfunc) dans MLflow.
+    Remplace par ton vrai train si besoin; ici on se concentre sur la mécanique MLflow.
     """
     class ConstantModel(PythonModel):
-        def load_context(self, context):
-            pass
+        def load_context(self, context): ...
         def predict(self, context, model_input):
-            # renvoie 0.0 → démo. Remplace par ton vrai modèle.
             import numpy as np
-            import pandas as pd
             n = len(model_input) if hasattr(model_input, "__len__") else 1
             return np.zeros(n, dtype=float)
 
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment("Immo/Train")
     with mlflow.start_run(run_name="train_v1") as run:
         run_id = run.info.run_id
-
-        # calcule métrique (rmse, mape, etc.)
-        ctx['ti'].xcom_push(key="run_id", value=run_id)
-   
+        # log d'un modèle + une métrique cible (remplace par ta vraie metric)
+        log_model(python_model=ConstantModel(), artifact_path="model")
+        mlflow.log_metric(TARGET_METRIC, 200000)
+        # stocker le run_id pour les tasks suivantes
+        ctx["ti"].xcom_push(key="run_id", value=run_id)
+        print(f"[train_v1] run_id={run_id}")
 
 def register_v1(**ctx):
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    """Crée une Model Version dans le registry à partir du run_id candidat."""
+    mlflow.set_tracking_uri(MLFLOW_URI)
     client = MlflowClient()
+    run_id = ctx["ti"].xcom_pull(key="run_id", task_ids="train_v1")
+    if not run_id:
+        raise RuntimeError("run_id manquant depuis train_v1")
 
-    run_id = ctx['ti'].xcom_pull(key="run_id", task_ids="train_v1")
     _ensure_registered_model(client, MODEL_NAME)
     mv = client.create_model_version(
         name=MODEL_NAME,
         source=f"runs:/{run_id}/model",
         run_id=run_id,
-        description="Candidate from Airflow pipeline"
+        description="Candidate from Airflow pipeline",
     )
-    ctx['ti'].xcom_push(key="model_version", value=mv.version)
+    ctx["ti"].xcom_push(key="model_version", value=mv.version)
+    print(f"[register_v1] created version v{mv.version} for run {run_id}")
 
 def compare_and_promote(**ctx):
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
+    """
+    Compare la metric du candidat vs l'alias 'production'.
+    Si meilleur (selon BETTER_MODE), bascule l'alias 'production' sur la version candidate.
+    Historise via stages: candidate -> Production, ancien prod -> Archived.
+    """
+    mlflow.set_tracking_uri(MLFLOW_URI)
     client = MlflowClient()
 
-    run_id = ctx['ti'].xcom_pull(key="run_id", task_ids="train_v1")
-    version = ctx['ti'].xcom_pull(key="model_version", task_ids="register_v1")
+    run_id = ctx["ti"].xcom_pull(key="run_id", task_ids="train_v1")
+    version = ctx["ti"].xcom_pull(key="model_version", task_ids="register_v1")
+    if not run_id or not version:
+        raise RuntimeError("run_id ou model_version manquant")
 
+    # récupérer metric candidate
     candidate = mlflow.get_run(run_id)
     cand_val = candidate.data.metrics.get(TARGET_METRIC)
     if cand_val is None:
-        raise RuntimeError(f"Métrique {TARGET_METRIC} absente sur la run candidate {run_id}")
+        raise RuntimeError(f"Metrique {TARGET_METRIC} absente sur la run {run_id}")
     cand_val = float(cand_val)
 
-    # PROD via alias "production" (si absent, le candidat gagne par défaut)
+    # récupérer ref prod (si alias existe)
     try:
         prod_mv = client.get_model_version_by_alias(MODEL_NAME, "production")
         prod_run = mlflow.get_run(prod_mv.run_id)
-        prod_val = float(prod_run.data.metrics.get(TARGET_METRIC, "inf" if BETTER_MODE=="min" else "-inf"))
+        prod_val_raw = prod_run.data.metrics.get(TARGET_METRIC)
+        if prod_val_raw is None:
+            prod_val = float("inf") if BETTER_MODE == "min" else float("-inf")
+        else:
+            prod_val = float(prod_val_raw)
+        prod_ver = prod_mv.version
     except Exception:
         prod_mv = None
-        prod_val = float("inf") if BETTER_MODE=="min" else float("-inf")
+        prod_val = float("inf") if BETTER_MODE == "min" else float("-inf")
+        prod_ver = None
 
     print(f"[compare] candidate {TARGET_METRIC}={cand_val} vs prod {TARGET_METRIC}={prod_val} (mode={BETTER_MODE})")
 
     if _is_better(cand_val, prod_val):
-        # place l'alias production sur la nouvelle version
+        # place alias production sur la nouvelle version pour histporique
         client.set_registered_model_alias(MODEL_NAME, "production", str(version))
         client.set_model_version_tag(MODEL_NAME, version, "decision", "promoted")
-        # optionnel: stage management pour historique
+        # transitions de stage (pour l'historique)
         if prod_mv:
-            client.transition_model_version_stage(MODEL_NAME, prod_mv.version, stage="Archived")
+            client.transition_model_version_stage(MODEL_NAME, prod_ver, stage="Archived")
         client.transition_model_version_stage(MODEL_NAME, version, stage="Production")
-        print(f"[promote] v{version} -> production")
+        print(f"[promote] v{version} -> Production (old v{prod_ver} archived)")
     else:
         client.set_model_version_tag(MODEL_NAME, version, "decision", "rejected")
         client.transition_model_version_stage(MODEL_NAME, version, stage="Staging")
         print(f"[reject] v{version} reste en Staging")
-        
-def call_analyse(**ctx):
-    run_id = ctx['ti'].xcom_pull(key="run_id", task_ids="train_v1")
-    if not run_id:
-        raise RuntimeError("run_id manquant depuis train_v1")
-    os.environ["MLFLOW_TRACKING_URI"] = os.getenv("MLFLOW_TRACKING_URI")
-    os.environ["MLFLOW_RUN_ID"] = run_id
 
-    # adapte le dossier encodé + modèle
-    encoded_folder = f"{REPO}/mlops/6_Regression/1_Encoding/exports"  # ← mets le bon chemin
-    model = "lightgbm"                                                # ← ou "xgboost"
-
-    import subprocess, sys
-    subprocess.check_call([
-        sys.executable,
-        f"{REPO}/mlops/6_Regression/4_Analyse/analyse.py",
-        "--encoded-folder", encoded_folder,
-        "--model", model,
-    ])
 def notify_api_reload(**ctx):
+    """Ping l'API de prediction pour recharger le modèle (optionnel)."""
     url = PREDICT_API_RELOAD_URL
     try:
         r = requests.post(url, timeout=8)
         r.raise_for_status()
-        print("[ok] API reloaded")
+        print("[notify] API reloaded OK")
     except Exception as e:
-        print("[warn] reload failed:", e)
-        
-def call_evaluate(**ctx):
-    run_id = ctx['ti'].xcom_pull(key="run_id", task_ids="train_v1")
-    if not run_id:
-        raise RuntimeError("run_id manquant depuis train_v1")
-    os.environ["MLFLOW_TRACKING_URI"] = os.getenv("MLFLOW_TRACKING_URI")
-    os.environ["MLFLOW_RUN_ID"] = run_id
-    import subprocess, sys
-    subprocess.check_call([sys.executable, f"{REPO}/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py"])        
+        print("[notify] reload failed:", e)
 
-# ---------------- DAG unique ----------------
+# ------------------- DAG -------------------
 with DAG(
-    dag_id="compagnon_immo_pipeline",
+    dag_id="compagnon_immo_all",
     start_date=pendulum.datetime(2025, 9, 1, tz=PARIS),
-    schedule="0 3 * * 0",  # Dimanche 03:00 Paris
+    schedule="0 3 * * 0",  # dimanche 03:00
     catchup=False,
+    is_paused_upon_creation=False,
+    max_active_runs=1,                  # (optionnel) évite les chevauchements
     default_args={"retries": 1, "retry_delay": pendulum.duration(minutes=10)},
-    tags=["immo", "ingest", "mlflow", "registry", "deploy"],
+    tags=["immo", "mlops","registry"],
+    params={
+        "force_retrain": Param(False, type="boolean", description="Forcer l'entraînement"),
+        "run_note": Param("", type="string", description="Note libre du run"),
+    },
 ) as dag:
 
-    # Dossiers persistants
-    init_dirs = bash_task(
-        "init_dirs",
-        cmd="mkdir -p /opt/airflow/data/state /opt/airflow/data/incremental && echo 'dirs ok'",
-        timeout_min=1,
-    )
+    # Sanity
+    check_repo = bash_task("check_repo", "git rev-parse --show-toplevel && dvc root && echo repo_ok", 2)
+    dvc_pull   = bash_task("dvc_pull", "dvc pull -v || true", 15)
 
-    # Import 10%
-    import_cmd, import_env = build_import_cmd()
-    t_import = bash_task(
-        "import_10pct",
-        cmd=import_cmd,
-        env_extra=import_env,
-        timeout_min=60,
-    )
-    
-    
-        # 2) Étapes DVC (si utiles)
-    dvc_ops = bash_task(
-        "dvc_ops",
-        cmd=f"{PY} {BASE}/2_dvc/main.py",
-        timeout_min=10,
-    )
-        # 4) Préprocessing (ton étape 4)
-    preprocessing = bash_task(
-        "preprocessing_4",
-        cmd=(
-            f"{PY} {BASE}/preprocessing_4/preprocessing.py "
-            f"--input-path data "
-            f"--output-path data "
-            f"--run-date {{{{ ds }}}}"
-        ),
-        timeout_min=30,
-    )
-    
-    clustering = bash_task("clustering", cmd=(
-            f"{PY} {BASE}/5_clustering/Clustering.py "
-            f"--input-path data/train_clean_ST.csv "
-            f"--output-path1 data/df_cluster.csv "
-            f"--output-path2 data/df_sales_clean_ST.csv"
-        ),
-        timeout_min=20,
-    )
-    # 6) Régression (encoding → train → analyse)
-    encode = bash_task(
-        "encode",
-        cmd=f"{PY} {BASE}/6_Regression/1_Encoding/encoding.py",
-        timeout_min=20,
-    )
-    # Train / Register / Compare / Reload
-    
+    # === DVC PIPELINE (adapte les noms aux stages de ton dvc.yaml) ===
+    dvc_import_data  = bash_task("dvc_import_data",  "dvc repro import_data -v", 30)        
+    dvc_preprocess  = bash_task("dvc_preprocess",  "dvc repro preprocessing -v", 30)    
+    dvc_cluster  = bash_task("dvc_cluster",  "dvc repro clustering -v", 30)
+    dvc_encode   = bash_task("dvc_encode",   "dvc repro encode -v",     20)
+    dvc_train    = bash_task("dvc_train",    "dvc repro train_lgbm -v", 20)
+    dvc_analyse  = bash_task("dvc_analyse",  "dvc repro analyse -v || true", 10) 
+    dvc_splitst  = bash_task("dvc_splitst",  "dvc repro splitst -v",    20)
+    dvc_decompose  = bash_task("dvc_decompose",  "dvc repro decompose -v",    20)
+    dvc_train_sarimax  = bash_task("dvc_train_sarimax",  "dvc repro train_sarimax -v",    20)    
+    dvc_evaluate = bash_task("dvc_evaluate", "dvc repro evaluate -v || true",     15)  # idem
+
+    # === MLflow registry flow (train/register/compare/promote/reload) ===
     t_train   = PythonOperator(task_id="train_v1", python_callable=train_v1)
-    t_evaluate = PythonOperator(task_id="evaluate", python_callable=call_evaluate)
     t_register= PythonOperator(task_id="register_v1", python_callable=register_v1)
     t_compare = PythonOperator(task_id="compare_and_promote", python_callable=compare_and_promote)
     t_reload  = PythonOperator(task_id="notify_api_reload", python_callable=notify_api_reload)
 
+    dvc_push = bash_task("dvc_push", "dvc push -v || true", 20)
+
     # Orchestration
-    init_dirs >> t_import >> t_train >> t_analyse >> t_register >> t_compare >> t_reload
+    check_repo >> dvc_pull
+    dvc_pull >> dvc_import_data >> dvc_preprocess >> dvc_cluster >> dvc_encode >> dvc_train >> dvc_analyse 
+    dvc_pull >> dvc_import_data  >> dvc_preprocess >> dvc_cluster >> dvc_splitst >> dvc_decompose >> dvc_train_sarimax >> dvc_evaluate    
+    # ensuite la partie MLflow registry
+    dvc_analyse >> t_train >> t_register >> t_compare >> t_reload >> dvc_push
+

@@ -194,11 +194,48 @@ api-shell: ## Shell dans le conteneur API
 # ===============================
 # 5) DOCKER / MLFLOW / AIRFLOW
 # ===============================
-docker-build: prepare-dirs ## docker compose build
+# ===============================
+# 5) DOCKER / MLFLOW / AIRFLOW  (REMPLACEMENT)
+# ===============================
+
+# Variables internes pour Airflow
+PROFILE_AIRFLOW ?= airflow
+AIRFLOW_HEALTH_URL ?= http://localhost:8081/health
+DAG ?= compagnon_immo_dvc
+TASK ?= import_data
+MAP ?= -1
+
+.PHONY: docker-build airflow-init docker-network docker-up docker-start \
+        airflow-up airflow-wait airflow-down airflow-restart \
+        airflow-logs airflow-ps airflow-smoke-mlflow \
+        dag-list dag-details dag-trigger task-logs
+
+docker-build: prepare-dirs ## docker compose build (toutes les images)
 > @$(DOCKER_COMPOSE_CMD) build
 
-airflow-build: ## build images airflow
-> @$(DOCKER_COMPOSE_CMD) build airflow-webserver airflow-scheduler
+# Vérifie existence + exécutable
+scripts-check: ## Vérifie les scripts infra/*.sh
+> test -x infra/ensure_env.sh || { echo "❌ infra/ensure_env.sh manquant ou non exécutable"; exit 1; }
+> test -x infra/init_repo.sh || { echo "❌ infra/init_repo.sh manquant ou non exécutable"; exit 1; }
+> test -x infra/dags-airflow-permission.sh || { echo "⚠️ infra/dags-airflow-permission.sh absent (optionnel)"; }
+
+# Injecte .env + init_repo côté host AVANT docker (option utile pour ton airflow-init direct)
+airflow-pre: scripts-check ## Pré-init côté host
+> ./infra/ensure_env.sh .env
+> echo "✅ ensure_env.sh OK"
+
+# Démarre airflow complet (utilise tes cibles existantes si tu préfères)
+airflow-all: airflow-pre ## Build + up + wait + liste DAGs
+> $(MAKE) airflow-up
+> $(MAKE) dag-list
+
+
+airflow-init: ## Init DB Airflow + admin/admin
+> @sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
+> @$(DOCKER_COMPOSE_CMD) --profile airflow run --rm airflow-webserver airflow db upgrade
+> @$(DOCKER_COMPOSE_CMD) --profile airflow run --rm airflow-webserver \
+>   airflow users create --username admin --password admin \
+>   --firstname Admin --lastname User --role Admin --email admin@example.com || true
 
 docker-network:
 > @docker network create $(NETWORK) >/dev/null 2>&1 || echo "ℹ️ réseau $(NETWORK) ok"
@@ -208,41 +245,76 @@ docker-up:
 > -@$(DOCKER_COMPOSE_CMD) down --remove-orphans || true
 > @$(DOCKER_COMPOSE_CMD) up -d
 
-docker-start: docker-network docker-up ## démarre l'environnement
+docker-start: docker-network docker-up ## démarre l'environnement générique
 
-mlflow-up: ## Démarre MLflow local (file store)
-> -@docker stop $(MLFLOW_HOST) >/dev/null 2>&1 || true
-> -@docker rm $(MLFLOW_HOST) >/dev/null 2>&1 || true
-> docker run -d --rm \
->   --name $(MLFLOW_HOST) \
->   --network $(NETWORK) \
->   -v $(PWD)/mlruns:/mlflow/mlruns \
->   -p $(MLFLOW_PORT):$(MLFLOW_PORT) \
->   $(MLFLOW_IMAGE) \
->   mlflow server --host 0.0.0.0 --port $(MLFLOW_PORT) \
->     --backend-store-uri sqlite:////mlflow/mlruns/mlflow.db \
->     --default-artifact-root /mlflow/mlruns
+# --- Démarrage Airflow 100% automatisé ---
+airflow-up: env-validate compose-config airflow-build ## Démarre Postgres + init + scheduler + webserver et attend la santé
+> @echo "🚀 Démarrage Airflow (profile=$(PROFILE_AIRFLOW))"
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) up -d postgres-airflow
+> @echo "⏳ Init Airflow (db, variables, user)..."
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) up airflow-init
+> @echo "🔁 Démarrage scheduler + webserver..."
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) up -d airflow-scheduler airflow-webserver
+> $(MAKE) airflow-wait
 
-mlflow-down:
-> -@docker stop $(MLFLOW_HOST) || true
+airflow-wait: ## Attend que le webserver soit healthy (timeout ~60s)
+> @echo "⏳ Attente santé webserver: $(AIRFLOW_HEALTH_URL)"
+> @for i in {1..30}; do \
+>   if $(DOCKER_COMPOSE_CMD) exec airflow-webserver bash -lc 'curl -fsS $(AIRFLOW_HEALTH_URL) >/dev/null 2>&1'; then \
+>     echo "✅ Airflow webserver healthy"; \
+>     exit 0; \
+>   fi; \
+>   sleep 2; \
+> done; \
+> echo "❌ Webserver pas healthy, regarde 'make airflow-logs'"; \
+> exit 1
 
-airflow-down:
-> -@$(DOCKER_COMPOSE_CMD) stop $(AIRFLOW_SERVICES) || true
-> -@$(DOCKER_COMPOSE_CMD) rm -f $(AIRFLOW_SERVICES) || true
+airflow-down: ## Stoppe et supprime Airflow (profile airflow)
+> -@$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) stop postgres-airflow airflow-webserver airflow-scheduler || true
+> -@$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) rm -f postgres-airflow airflow-webserver airflow-scheduler airflow-init || true
+> @echo "🛑 Airflow arrêté"
 
-docker-logs:
-> @$(DOCKER_COMPOSE_CMD) logs -f
+airflow-restart: airflow-down airflow-up ## Redémarre Airflow proprement
 
-airflow-logs:
-> @$(DOCKER_COMPOSE_CMD) logs -f airflow-webserver
+airflow-logs: ## Suit les logs webserver + scheduler
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) logs -f airflow-webserver airflow-scheduler
 
-airflow-init: ## Init DB Airflow + admin/admin
-> @mkdir -p logs/airflow
-> -@sudo chown -R $(AIRFLOW_UID):0 logs/airflow || true
-> @$(DOCKER_COMPOSE_CMD) --profile airflow run --rm airflow-webserver airflow db upgrade
-> @$(DOCKER_COMPOSE_CMD) --profile airflow run --rm airflow-webserver \
->   airflow users create --username admin --password admin \
->   --firstname Admin --lastname User --role Admin --email admin@example.com || true
+airflow-ps: ## État des conteneurs Airflow
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) ps
+
+airflow-smoke-mlflow: ## Run MLflow smoke test vers DagsHub depuis le scheduler
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) exec airflow-scheduler bash -lc '\
+> python - <<PY \
+> import os, mlflow; \
+> print(\"URI:\", os.getenv(\"MLFLOW_TRACKING_URI\")); \
+> mlflow.set_tracking_uri(os.getenv(\"MLFLOW_TRACKING_URI\")); \
+> with mlflow.start_run(run_name=\"smoke-test\"): mlflow.log_metric(\"ping\", 1); \
+> print(\"OK - run pushed to DagsHub\") \
+> PY'
+> @echo "✅ MLflow smoke test envoyé sur DagsHub"
+
+
+## --- demarrage dag manuel
+DAG ?= compagnon_immo_all
+CONF ?= {"force_retrain":false,"run_note":"manual"}
+
+dag-trigger: ## Trigger un DAG manuellement (DAG=<id> CONF='{"k":"v"}')
+> $(DOCKER_COMPOSE_CMD) --profile airflow exec airflow-scheduler \
+>   airflow dags trigger $(DAG) --conf '$(CONF)'
+
+# --- Helpers DAG (automatisation) ---
+dag-list: ## Liste les DAGs
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) exec airflow-scheduler airflow dags list
+
+dag-details: ## Détail du DAG (DAG=<id>)
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) exec airflow-scheduler airflow dags details $(DAG) || true
+
+dag-trigger: ## Trigger un DAG (DAG=<id>)
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) exec airflow-scheduler airflow dags trigger $(DAG)
+
+task-logs: ## Logs d'une task (DAG=<id> TASK=<task_id> MAP=<index>)
+> @$(DOCKER_COMPOSE_CMD) --profile $(PROFILE_AIRFLOW) exec airflow-scheduler airflow tasks logs $(DAG) $(TASK) --map-index $(MAP) || true
+
 
 # ===============================
 # 6) DVC

@@ -1,23 +1,17 @@
+# Airflow image officielle (Debian slim)
 FROM apache/airflow:2.9.2-python3.10
 
 USER root
+# lib system pour lightgbm/xgboost & shap (build wheel si besoin)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential curl ca-certificates \
+    build-essential git curl \
     && rm -rf /var/lib/apt/lists/*
+
 USER airflow
+# Installer deps Python globaux (Airflow a déjà bcp de libs)
+COPY requirements.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt
 
-# Python deps nécessaires pour import S3 et DVC
-# (évite NoCredentialsError en public via notre flag --s3-anon)
-RUN pip install --no-cache-dir \
-    boto3 botocore dvc[s3] \
-    pandas pyarrow fastparquet \
-    mlflow duckdb click
-
-# Repo projet (déjà monté via volumes; COPY optionnel si build sans bind-mount)
-# COPY dags /opt/airflow/dags
-# COPY mlops /opt/airflow/mlops
-# COPY data /opt/airflow/data
-
-ENV PYTHONPATH=/opt/airflow/repo
-WORKDIR /opt/airflow
+# S’assure que le dossier dags existe (le DAG est dans /opt/airflow/repo/dags)
+ENV AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/repo/dags
 

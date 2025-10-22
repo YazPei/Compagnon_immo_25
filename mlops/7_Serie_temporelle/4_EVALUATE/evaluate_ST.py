@@ -264,9 +264,9 @@ def main(input_folder: str, output_folder: str, model_folder: str, suffix: Optio
                 mlflow.log_metric(k, v)
             mlflow.log_artifact(str(outfile), artifact_path="evaluate")
 
-        print(f"✅ {run_name} -> {outfile} | {metrics}")
+        print(f"ok {run_name} -> {outfile} | {metrics}")
 
-    print("✅ Evaluation terminée.")
+    print("OK - Evaluation terminée.")
 
 
 if __name__ == "__main__":

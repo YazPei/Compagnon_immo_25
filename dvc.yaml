@@ -59,27 +59,33 @@ stages:
       - reports/feature_importance.json
     
   analyse:
-    cmd: python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+    cmd: >
+      python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+      && mkdir -p exports/reg
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv
       - data/encoded/y_test.csv
       - models/lgbm_model.joblib
     outs:
-      - exports/reg/shap_summary.png
+      - exports/reg
 
   splitst:
-    cmd: python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+    cmd: >
+      source .venv/bin/activate &&
+      python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+      --st-path exports/df_sales_clean_ST.csv
+      --out-dir data/split
     deps:
       - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
-      - data/df_sales_clean_ST.csv
+      - exports/df_sales_clean_ST.csv
       - data/contours-codes-postaux.geojson
       - data/taux_immo.xlsx
     outs:
       - data/split
 
   decompose:
-    cmd: source .venv/bin/activate && python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py --input-folder data/split --output-folder outputs/decomposition --suffix ${ST_SUFFIX}
+    cmd: python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py --input-folder data/split --output-folder outputs/decomposition --suffix ${ST_SUFFIX}
     deps:
       - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       - data/split/train_periodique_q12.csv
@@ -97,10 +103,11 @@ stages:
       - outputs/best
 
   evaluate:
-    cmd: python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py --input-folder data/split --model-folder outputs/best --output-folder outputs/evaluate --suffix ${ST_SUFFIX}
+    cmd: source .venv/bin/activate && python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py --input-folder data/split --model-folder outputs/best --output-folder outputs/evaluate
     deps:
-      - outputs/best
+      - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       - data/split
+      - outputs/best
     outs:
       - outputs/evaluate
 

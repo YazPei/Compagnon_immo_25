@@ -26,13 +26,13 @@ try:
     import mlflow as _mlflow
     MLFLOW = _mlflow
 except Exception:
-    print("⚠️  MLflow introuvable — exécution sans tracking.")
+    print(" MLflow introuvable — exécution sans tracking.")
     MLFLOW = _NoOpMLflow()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 # ========= CHEMINS =========
-INPUT_PATH     = "data/df_sales_clean_ST.csv"
+INPUT_PATH     = "exports/df_sales_clean_ST.csv"
 TAUX_PATH      = "data/taux_immo.xlsx"
 GEO_PATH       = "data/contours-codes-postaux.geojson"
 OUTPUT_FOLDER  = "data/split"
@@ -381,7 +381,7 @@ def enrich_and_split():
     except Exception:
         pass
 
-    print("✅ Données enrichies et exportées.")
+    print("OK Données enrichies et exportées.")
 
 if __name__ == "__main__":
     enrich_and_split()

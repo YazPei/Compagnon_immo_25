@@ -56,6 +56,7 @@ archives/
 
 # dvc 
 .dvc/config.local
+.dvc/cache/
 dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test

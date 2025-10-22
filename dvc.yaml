@@ -36,29 +36,29 @@ stages:
       - mlflow_outputs/elbow_plot.png
 
   encode:
-    cmd: python mlops/6_Regression/1_Encoding/encoding.py
+    cmd: python mlops/6_Regression/1_Encoding/encoding.py --data-path data/df_cluster.csv --output data/encoded
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
     outs:
-      - data/encoded/X_train.csv
-      - data/encoded/X_test.csv
-      - data/encoded/y_train.csv
-      - data/encoded/y_test.csv
-
+      - data/encoded
+  
   train_lgbm:
-    cmd: python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: >
+      python mlops/6_Regression/2_LGBM/train_lgbm.py
+      && mkdir -p models
+      && mv data/encoded/lgbm_model.joblib models/lgbm_model.joblib   # si ton script écrit encore là
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
     outs:
-      - data/encoded/lgbm_model.joblib
+      - models/lgbm_model.joblib
     metrics:
       - metrics/train_lgbm.json
     plots:
       - reports/feature_importance.json
-
+    
   analyse:
     cmd: python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
     deps:

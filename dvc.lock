@@ -76,34 +76,44 @@ stages:
       size: 82551886
       nfiles: 6
   clustering:
-    cmd: "python mlops/5_clustering/Clustering.py --input-path data/processed --output-path
-      exports/df_cluster.csv\n"
+    cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-path 
+      data/processed --output-path exports/df_cluster.csv
     deps:
+    - path: data/contours-codes-postaux.geojson
+      hash: md5
+      md5: fd8abea558099967148f7f22c881f3e8
+      size: 3010266
+      isexec: true
+    - path: data/processed/df_sales_clean_test.csv
+      hash: md5
+      md5: c0781207a7dd3436443120a8cf25177d
+      size: 16402412
     - path: data/processed/df_sales_clean_train.csv
       hash: md5
-      md5: 25f0f0c111d040affe836bac18745b2a
-      size: 75732754
+      md5: b5062377d9c4e57efd8b49115864a445
+      size: 65638966
     - path: mlops/5_clustering/Clustering.py
       hash: md5
-      md5: 6111d0fd9e934806a4864bb547a74d3a
-      size: 20069
+      md5: ba4d6113bec8062611438885f385da06
+      size: 13209
+      isexec: true
     outs:
     - path: data/df_sales_clean_ST.csv
       hash: md5
-      md5: 48defd022ce98866e3bfc9db390bdb7f
-      size: 143279426
+      md5: 01539bd8598830556edb65f6d958fce2
+      size: 94349292
     - path: exports/df_cluster.csv
       hash: md5
-      md5: cf7ef5fa89d3b63cb16e71ead772b49b
-      size: 146100176
+      md5: 1c3ec7c37a17822d6141692af87abd27
+      size: 97204840
     - path: mlflow_outputs/cluster_input.csv
       hash: md5
-      md5: 13b20c5173e421c7a0f91e33ed64416f
-      size: 560707
+      md5: fe1418f891b7f29ad9a0b10da7ed79d0
+      size: 18
     - path: mlflow_outputs/elbow_plot.png
       hash: md5
-      md5: a82bb257d30dd4ac7fe0cde45d692aae
-      size: 31055
+      md5: 3149bec08a1864f76805b93fc3832769
+      size: 2866
   encode:
     cmd: "python mlops/6_Regression/1_Encoding/encoding.py \n"
     deps:

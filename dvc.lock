@@ -94,8 +94,8 @@ stages:
       size: 65638966
     - path: mlops/5_clustering/Clustering.py
       hash: md5
-      md5: ba4d6113bec8062611438885f385da06
-      size: 13209
+      md5: 7c3fdf0d7397119c2432fd0dbaf70c19
+      size: 14302
       isexec: true
     outs:
     - path: data/df_sales_clean_ST.csv

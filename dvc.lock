@@ -52,35 +52,29 @@ stages:
       md5: 5d4ff9524073dee89a5f8794e35a1385
       size: 142497303
   preprocessing:
-    cmd: "mkdir -p data/processed/reports/figures && python mlops/preprocessing_4/preprocessing.py
-      --input-path data/clean/ --output-path data/processed/\n"
+    cmd: python -m mlops.preprocessing_4.preprocessing --input data --out-dir 
+      data/processed
     deps:
-    - path: data/clean/df_sales_clean.csv
+    - path: data/df_sample.csv
       hash: md5
-      md5: 5d4ff9524073dee89a5f8794e35a1385
-      size: 142497303
+      md5: 75cdcfd24d4d2211c6012fc95966516c
+      size: 120105500
     - path: mlops/preprocessing_4/preprocessing.py
       hash: md5
-      md5: a31851f6feb9abb13e6cf980d1e6f4ef
-      size: 25991
+      md5: 696594694eff4492888be05f94f255dd
+      size: 11944
       isexec: true
     - path: mlops/preprocessing_4/utils.py
       hash: md5
-      md5: 9bb344fccdf9eb1ec6b708e44000308e
-      size: 6916
+      md5: 1035e1f53b2498fa75e580339ff3687f
+      size: 4158
+      isexec: true
     outs:
-    - path: data/processed/df_sales_clean_series.csv
+    - path: data/processed
       hash: md5
-      md5: 20e3e2cdabd129899b700b341136c0b0
-      size: 143505368
-    - path: data/processed/df_sales_clean_test.csv
-      hash: md5
-      md5: 4c66eca3a0fb02542ac90bb05a23f675
-      size: 18944437
-    - path: data/processed/df_sales_clean_train.csv
-      hash: md5
-      md5: 25f0f0c111d040affe836bac18745b2a
-      size: 75732754
+      md5: c79d21f4ace97dc22bf0a55272f8fa17.dir
+      size: 82551886
+      nfiles: 6
   clustering:
     cmd: "python mlops/5_clustering/Clustering.py --input-path data/processed --output-path
       exports/df_cluster.csv\n"

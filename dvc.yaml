@@ -25,6 +25,8 @@ stages:
     deps:
       - mlops/5_clustering/Clustering.py
       - data/processed/df_sales_clean_train.csv
+      - data/processed/df_sales_clean_test.csv        
+      - data/contours-codes-postaux.geojson  # spacial
     outs:
       - exports/df_cluster.csv
       - data/df_sales_clean_ST.csv

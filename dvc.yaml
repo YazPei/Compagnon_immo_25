@@ -1,122 +1,92 @@
+# path: dvc.yaml
+vars:
+  - python: .venv/bin/python
 stages:
   import_data:
-    cmd: >-
-      ./.s3venv/bin/python mlops/1_import_donnees/import_data.py
-      --source-mode s3
-      --s3-key data/merged_sales_data.csv
-      --output-folder data/incremental
-      --cumulative-path data/df_sample.csv
-      --checkpoint-path data/state/immo_checkpoint.parquet
-      --date-column date
-      --key-columns idannonce
-      --sep ';'
+    cmd: IMP_APPEND_ONLY=1 IMP_DEDUP_DUCKDB=1 bash mlops/1_import_donnees/run_import.sh
     deps:
-      - s3://Compagnon_immo_25/data/merged_sales_data.csv
+      - mlops/1_import_donnees/run_import.sh
       - mlops/1_import_donnees/import_data.py
     outs:
       - data/df_sample.csv
+      - data/state/checkpoint.parquet
       - data/incremental
-
-  fusion_geo:
-    cmd: >-
-      ./.s3venv/bin/python mlops/3_fusion/fusion_geo_dvf.py
-      --folder-path1 data
-      --folder-path2 data
-      --output-folder data/clean
-    deps:
-      - mlops/3_fusion/fusion_geo_dvf.py
-      - data/DVF_donnees_macroeco.csv
-      - data/df_sample.csv
-    outs:
-      - data/clean/df_sales_clean.csv
+#    always_changed: true
 
   preprocessing:
-    cmd: >-
-      bash -lc "mkdir -p data/processed/reports/figures &&
-      ./.s3venv/bin/python mlops/preprocessing_4/preprocessing.py
-      --input-path data/clean/
-      --output-path data/processed/"
+    cmd: ${python} -m mlops.preprocessing_4.preprocessing --input data --out-dir data/processed
     deps:
       - mlops/preprocessing_4/preprocessing.py
       - mlops/preprocessing_4/utils.py
-      - data/clean/df_sales_clean.csv
+      - data/df_sample.csv
     outs:
-      - data/processed/df_sales_clean_train.csv
-      - data/processed/df_sales_clean_test.csv
-      - data/processed/df_sales_clean_series.csv
+      - data/processed
 
   clustering:
-    cmd: >-
-      ./.s3venv/bin/python mlops/5_clustering/Clustering.py
-      --input-path data/processed
-      --output-path exports/df_cluster.csv
+    cmd: CLUSTERING_SAFE=1 ${python} mlops/5_clustering/Clustering.py --input-dir data/processed --output-dir exports
     deps:
       - mlops/5_clustering/Clustering.py
-      - data/processed/df_sales_clean_train.csv
+      - data/processed
     outs:
       - exports/df_cluster.csv
-      - data/df_sales_clean_ST.csv
-    metrics:
-      - mlflow_outputs/cluster_input.csv:
-          cache: false
-    plots:
-      - mlflow_outputs/elbow_plot.png
+      - exports/df_sales_clean_ST.csv
+
 
   encode:
-    cmd: >-
-      ./.s3venv/bin/python mlops/6_Regression/1_Encoding/encoding.py
+    cmd: ${python} mlops/6_Regression/1_Encoding/encoding.py --data-path exports/df_cluster.csv --output data/encoded
     deps:
       - mlops/6_Regression/1_Encoding/encoding.py
       - exports/df_cluster.csv
     outs:
-      - data/encoded/X_train.csv
-      - data/encoded/X_test.csv
-      - data/encoded/y_train.csv
-      - data/encoded/y_test.csv
-
+      - data/encoded
+      
   train_lgbm:
-    cmd: >-
-      ./.s3venv/bin/python mlops/6_Regression/2_LGBM/train_lgbm.py
+    cmd: >
+      ${python} mlops/6_Regression/2_LGBM/train_lgbm.py
+      --encoded-folder data/encoded
+      --model-folder models
+      --experiment regression_pipeline
+      && mkdir -p models
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
       - data/encoded/y_train.csv
+      - data/encoded/X_test.csv
+      - data/encoded/y_test.csv
     outs:
-      - data/encoded/lgbm_model.joblib
+      - models/lgbm_model.joblib
     metrics:
-      - metrics/train_lgbm.json:
-          cache: false
+      - metrics/train_lgbm.json
     plots:
-      - reports/feature_importance.json:
-          cache: false
-
+      - reports/feature_importance.json
+    
   analyse:
-    cmd: >-
-      ./.s3venv/bin/python mlops/6_Regression/4_Analyse/analyse.py
-      --model lightgbm
+    cmd: >
+      ${python} mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+      && mkdir -p exports/reg
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv
       - data/encoded/y_test.csv
-      - data/encoded/lgbm_model.joblib
+      - models/lgbm_model.joblib
+    outs:
+      - exports/reg
 
   splitst:
-    cmd: >-
-      ./.s3venv/bin/python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+    cmd: >
+      ${python} mlops/7_Serie_temporelle/1_SPLIT/load_split.py
+      --st-path exports/df_sales_clean_ST.csv
+      --out-dir data/split
     deps:
       - mlops/7_Serie_temporelle/1_SPLIT/load_split.py
-      - data/df_sales_clean_ST.csv
-      - data/processed/contours-codes-postaux.geojson
-      - data/clean/taux_immo.xlsx
+      - exports/df_sales_clean_ST.csv
+      - data/contours-codes-postaux.geojson
+      - data/taux_immo.xlsx
     outs:
       - data/split
 
   decompose:
-    cmd: >-
-      ./.s3venv/bin/python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
-      --input-folder data/split
-      --output-folder outputs/decomposition
-      --suffix ${ST_SUFFIX}
+    cmd: ${python} mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py --input-folder data/split --output-folder outputs/decomposition --suffix ${ST_SUFFIX}
     deps:
       - mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       - data/split/train_periodique_q12.csv
@@ -125,16 +95,7 @@ stages:
       - outputs/decomposition/decomposition_multiplicative_cluster_0.png
 
   train_sarimax:
-    cmd: >-
-      ./.s3venv/bin/python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
-      --input-folder data/split
-      --output-folder outputs/best
-      --suffix ${ST_SUFFIX}
-      --corr-threshold 0.25
-      --top-k-exog 3
-      --max-exog-comb-size 0
-      --stop-on-first-valid
-      --max-models 300
+    cmd: ${python} mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py --input-folder data/split --output-folder outputs/best --suffix ${ST_SUFFIX} --corr-threshold 0.25 --top-k-exog 3 --max-exog-comb-size 0 --stop-on-first-valid --max-models 300
     deps:
       - mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       - data/split/train_periodique_q12.csv
@@ -143,15 +104,11 @@ stages:
       - outputs/best
 
   evaluate:
-    cmd: >-
-      ./.s3venv/bin/python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
-      --input-folder data/split
-      --model-folder outputs/best
-      --output-folder outputs/evaluate
-      --suffix ${ST_SUFFIX}
+    cmd: ${python} mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py --input-folder data/split --model-folder outputs/best --output-folder outputs/evaluate
     deps:
-      - outputs/best
+      - mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       - data/split
+      - outputs/best
     outs:
       - outputs/evaluate
 

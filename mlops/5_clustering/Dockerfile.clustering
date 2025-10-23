@@ -1,25 +1,17 @@
+# path: mlops/5_clustering/Dockerfile.clustering
 FROM python:3.11-slim-bookworm
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# 1. Dépendances système
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    libfreetype6 \
-    libpng16-16 \
-    && rm -rf /var/lib/apt/lists/*
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY mlops/5_clustering/requirements.txt /app/mlops/5_clustering/requirements.txt
+
+# copier code uniquement (pas les datasets DVC)
 COPY mlops/5_clustering /app/mlops/5_clustering
-COPY data/processed data/processed
-COPY exports /app/exports
 
+# dépendances minimales (geopandas optionnel)
+RUN pip install --upgrade pip \
+ && pip install fastapi uvicorn[standard] numpy pandas scikit-learn matplotlib mlflow \
+ && pip install "geopandas>=0.14" shapely pyproj fiona pyogrio || true
 
-RUN pip install --upgrade pip && \
-    pip install -r /app/mlops/5_clustering/requirements.txt
+EXPOSE 8002
+ENTRYPOINT ["uvicorn", "mlops.5_clustering.Clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]
 
-
-ENTRYPOINT ["uvicorn", "clustering_api:app", "--host", "0.0.0.0", "--port", "8002"]

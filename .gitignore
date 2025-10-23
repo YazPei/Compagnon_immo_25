@@ -6,8 +6,9 @@
 env/
 .env.bak
 infra/config/dagshub.yaml
-
-
+.pytest.ini
+aws
+aws/
 # Environnements virtuels
 .venv/
 .venv312/
@@ -16,6 +17,9 @@ env/
 .s3venv/
 .s3venv
 s3venv/
+.s3_venv/
+.s3_venv
+s3_venv/
 # Fichiers de configuration de l'éditeur
 .vscode/
 .idea/
@@ -35,10 +39,13 @@ __pycache__/
 *.joblib
 *.db
 *.cfg
+.pytest_cache/
+.gitignore.save
 
 # Données et sorties
 outputs/
 mlruns/
+mlrunss
 dvc_remote/
 archives/
 
@@ -46,7 +53,7 @@ archives/
 *.csv
 *.xlsx
 *.parquet
-*.zip
+*.zip*
 *.tar.gz
 *.pt
 
@@ -60,6 +67,11 @@ dvc.yaml.bak
 mlflow_outputs/
 Dockerfile.test
 TODO.md
+
 docs/testing-integration.md
 
 .gitignore.save
+*.dvc
+.dvc/
+*.json
+.secrets.baseline

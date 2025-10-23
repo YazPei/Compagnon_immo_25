@@ -1,28 +1,43 @@
 #!/usr/bin/env python3
-# path: import_data.py
-
-
 from __future__ import annotations
-import os
+from boto3.s3.transfer import TransferConfig, S3Transfer
+import math, time
+import os, sys, locale
 import io
 import json
-import time
-import math
 import tempfile
-from contextlib import nullcontext
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
 
 import click
 import pandas as pd
 import mlflow
+import hashlib
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("LC_ALL", "C.UTF-8")
+os.environ.setdefault("LANG", "C.UTF-8")
 
-# ============= Optional deps (lazy import) =============
+
+
+
 def _lazy_import_boto3():
     import boto3
+    from botocore import UNSIGNED
     from botocore.config import Config
-    from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError
-    return boto3, Config, (ClientError, EndpointConnectionError, ReadTimeoutError)
+    from botocore.exceptions import (
+        ClientError,
+        EndpointConnectionError,
+        ReadTimeoutError,
+        NoCredentialsError,
+    )
+    return boto3, UNSIGNED, Config, (ClientError, EndpointConnectionError, ReadTimeoutError, NoCredentialsError)
 
 def _lazy_import_dvc():
     import dvc.api
@@ -33,7 +48,6 @@ def _lazy_import_requests():
     from requests.exceptions import RequestException, Timeout, ConnectionError as ReqConnErr
     return requests, (RequestException, Timeout, ReqConnErr)
 
-# ============= MLflow bootstrap =============
 def setup_mlflow() -> Optional[str]:
     uri = os.getenv("MLFLOW_TRACKING_URI")
     if uri:
@@ -43,7 +57,6 @@ def setup_mlflow() -> Optional[str]:
     mlflow.set_tracking_uri("file://" + artifact_dir)
     return "file://" + artifact_dir
 
-# ============= Checkpoint I/O =============
 def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
     if not path.exists():
         return set(), None
@@ -59,11 +72,10 @@ def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
 
 def save_checkpoint(path: Path, seen_keys: set, last_watermark: Optional[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"key_hash": sorted(seen_keys)}).to_parquet(path, index=False)
+    pd.DataFrame({ "key_hash": sorted(seen_keys) }).to_parquet(path, index=False)
     with open(path.with_suffix(".json"), "w", encoding="utf-8") as f:
-        json.dump({"last_watermark": last_watermark}, f)
+        json.dump({ "last_watermark": last_watermark }, f)
 
-# ============= Utils =============
 def make_key_hash(df: pd.DataFrame, key_cols: List[str]) -> pd.Series:
     if not key_cols:
         return pd.util.hash_pandas_object(df, index=False).astype(str)
@@ -86,7 +98,6 @@ def _is_parquet_path(p: Union[str, Path]) -> bool:
     s = str(p).lower()
     return s.endswith(".parquet") or s.endswith(".pq") or s.endswith(".parq")
 
-# ============= Source opening (multi modes) =============
 class SourceHandle:
     def __init__(self, handle_or_path: Union[IO[str], IO[bytes], Path], is_stream: bool, cleanup=lambda: None):
         self.handle_or_path = handle_or_path
@@ -129,6 +140,18 @@ def open_source_http(*, url: str, timeout: int = 30, retries: int = 5) -> Source
             _backoff_sleep(i + 1)
     raise RuntimeError(f"HTTP download failed after {retries} retries: {last}")
 
+def _as_bool_env(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _stable_bucket_idx(key_str: str, num_slices: int) -> int:
+    # hash stable (sha1) → entier → modulo
+    h = hashlib.sha1(key_str.encode("utf-8", errors="ignore")).digest()
+    return int.from_bytes(h[:8], "big") % max(1, num_slices)
+    
 def open_source_s3(
     *,
     endpoint_url: Optional[str],
@@ -142,33 +165,85 @@ def open_source_s3(
     verify_ssl: bool = True,
     timeout: int = 30,
     retries: int = 5,
+    anon: bool = False,
 ) -> SourceHandle:
-    boto3, Config, BEX = _lazy_import_boto3()
-    cfg = Config(
-        region_name=region,
-        retries={"max_attempts": 10, "mode": "adaptive"},
-        signature_version="s3v4",
-        s3={"addressing_style": "path" if path_style else "virtual"},
-        connect_timeout=10,
-        read_timeout=120,
-    )
-    s = boto3.session.Session()
-    c = s.client(
+    # lazy imports (boto3 + transfer)
+    boto3, UNSIGNED, Config, BEX = _lazy_import_boto3()
+    from boto3.s3.transfer import TransferConfig, S3Transfer
+    import time
+
+    use_anon = bool(anon or _as_bool_env("AWS_NO_SIGN_REQUEST"))
+    if use_anon:
+        cfg = Config(
+            region_name=region,
+            retries={"max_attempts": 10, "mode": "adaptive"},
+            signature_version=UNSIGNED,
+            s3={"addressing_style": "path" if path_style else "virtual"},
+            connect_timeout=10,
+            read_timeout=120,
+        )
+        ak = sk = st = None
+    else:
+        ak = access_key or os.getenv("AWS_ACCESS_KEY_ID")
+        sk = secret_key or os.getenv("AWS_SECRET_ACCESS_KEY")
+        st = session_token or os.getenv("AWS_SESSION_TOKEN")
+        if not ak or not sk:
+            raise RuntimeError(
+                "Aucun identifiant AWS détecté. "
+                "Utilise --s3-anon pour un bucket public ou fournis AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY."
+            )
+        cfg = Config(
+            region_name=region,
+            retries={"max_attempts": 10, "mode": "adaptive"},
+            signature_version="s3v4",
+            s3={"addressing_style": "path" if path_style else "virtual"},
+            connect_timeout=10,
+            read_timeout=120,
+        )
+
+    sess = boto3.session.Session()
+    client = sess.client(
         "s3",
         endpoint_url=endpoint_url or None,
         region_name=region,
-        aws_access_key_id=access_key or os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=secret_key or os.getenv("AWS_SECRET_ACCESS_KEY"),
-        aws_session_token=session_token or os.getenv("AWS_SESSION_TOKEN"),
+        aws_access_key_id=ak,
+        aws_secret_access_key=sk,
+        aws_session_token=st,
         config=cfg,
         verify=verify_ssl,
     )
+
     tf = tempfile.NamedTemporaryFile(prefix="s3_src_", suffix=Path(key).name or ".tmp", delete=False)
     tf.close()
+
     last = None
     for i in range(retries + 1):
         try:
-            c.download_file(bucket, key, tf.name)
+            # taille + log
+            head = client.head_object(Bucket=bucket, Key=key)
+            size = int(head.get("ContentLength", 0))
+            print(f"[info] s3 download: s3://{bucket}/{key} ({size} bytes)")
+
+            # multipart + progression
+            tcfg = TransferConfig(
+                multipart_threshold=8 * 1024 * 1024,
+                multipart_chunksize=16 * 1024 * 1024,
+                max_concurrency=16,
+                use_threads=True,
+            )
+            downloaded = {"n": 0, "t": time.time()}
+
+            def _progress(nbytes: int):
+                downloaded["n"] += nbytes
+                now = time.time()
+                if now - downloaded["t"] >= 1 or downloaded["n"] == size:
+                    done = downloaded["n"]
+                    pct = (done / size * 100.0) if size else 0.0
+                    print(f"\r[dl] {done/1e6:,.1f} MB / {size/1e6:,.1f} MB ({pct:5.1f}%)", end="", flush=True)
+                    downloaded["t"] = now
+
+            S3Transfer(client=client, config=tcfg).download_file(bucket, key, tf.name, callback=_progress)
+            print("\n[ok] s3 download done ->", tf.name)
             return SourceHandle(Path(tf.name), is_stream=False, cleanup=lambda: os.unlink(tf.name))
         except BEX as e:
             last = e
@@ -177,12 +252,13 @@ def open_source_s3(
             _backoff_sleep(i + 1)
     raise RuntimeError(f"S3 download failed after {retries} retries: {last}")
 
+
+
 def open_source_local(path: Path) -> SourceHandle:
     if not path.exists():
         raise FileNotFoundError(path)
     return SourceHandle(path, is_stream=False)
 
-# ============= Chunk reader (CSV/Parquet) =============
 def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chunksize: int = 200_000):
     cs_env = os.getenv("IMPORT_CHUNKSIZE")
     cs = chunksize if not (cs_env and cs_env.isdigit()) else int(cs_env)
@@ -191,7 +267,6 @@ def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chu
     else:
         yield from pd.read_csv(str(handle), sep=sep, chunksize=cs, on_bad_lines="skip", low_memory=False)
 
-# --- append disque pour éviter la concat RAM ---
 def _append_csv(dst: Path, delta: Path, sep: str) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     has_header = dst.exists() and dst.stat().st_size > 0
@@ -199,7 +274,6 @@ def _append_csv(dst: Path, delta: Path, sep: str) -> None:
         chunk.to_csv(dst, sep=sep, index=False, mode="a", header=not has_header)
         has_header = True
 
-# --- (optionnel) dedup disque avec DuckDB ---
 def _dedup_with_duckdb(csv_path: Path, key_cols: list[str], date_col: Optional[str], sep: str) -> None:
     try:
         import duckdb
@@ -211,17 +285,16 @@ def _dedup_with_duckdb(csv_path: Path, key_cols: list[str], date_col: Optional[s
     if key_cols:
         order = f"ORDER BY {date_col} NULLS LAST" if date_col else "ORDER BY rowid() DESC"
         part = ", ".join(key_cols)
-        con.execute(f"""
+        con.execute(f'''
             CREATE OR REPLACE TABLE _dedup AS
             SELECT * FROM (
               SELECT *, row_number() OVER(PARTITION BY {part} {order}) AS _rn
               FROM _all
             ) WHERE _rn = 1;
-        """)
+        ''')
         con.execute("COPY _dedup TO ? (FORMAT CSV, HEADER, DELIMITER ?);", [str(csv_path), sep])
 
 def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_rows: int = 200_000):
-    # pandas ne stream pas les Parquet; on charge puis on “chunk” en mémoire.
     df = pd.read_parquet(handle if is_stream else str(handle))
     n = len(df)
     if n == 0:
@@ -229,28 +302,38 @@ def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_row
     steps = math.ceil(n / batch_rows)
     for i in range(steps):
         yield df.iloc[i * batch_rows : (i + 1) * batch_rows].copy()
+# --- helpers chrono ---
+def _parse_any_date(s: Optional[str]):
+    if not s:
+        return None
+    try:
+        # accepte "2023-06-01", "2023/06/01", "2023-06", etc.
+        return pd.to_datetime(s, errors="coerce", utc=True)
+    except Exception:
+        return None
 
-# ============= Extraction incrémentale =============
+def _month_floor(series: pd.Series):
+    # retourne la date ramenée au 1er du mois (timezone UTC)
+    ser = pd.to_datetime(series, errors="coerce", utc=True)
+    return ser.dt.to_period("M").dt.start_time.dt.tz_localize("UTC")
+
+
 def incremental_extract(
     *,
-    source_mode: str,  # "dvc" | "http" | "s3" | "local"
-    # DVC
+    source_mode: str,
     dvc_repo_url: Optional[str],
     dvc_path: Optional[str],
     dvc_rev: Optional[str],
     dvc_remote: Optional[str],
-    # HTTP
     http_url: Optional[str],
-    # S3
     s3_endpoint_url: Optional[str],
     s3_bucket: Optional[str],
     s3_key: Optional[str],
     s3_region: str,
     s3_path_style: bool,
     s3_verify_ssl: bool,
-    # Local
+    s3_anon: bool,
     local_path: Optional[str],
-    # Common
     delta_folder: Path,
     cumulative_csv: Path,
     checkpoint_path: Path,
@@ -258,10 +341,25 @@ def incremental_extract(
     key_cols: List[str],
     sep: str,
     run_ds: Optional[str],
+    append_only: bool,
+    dedup_duckdb: bool,
+    num_slices: int,
+    slice_index: int,
+    date_from: Optional[str],
+    date_to: Optional[str],
+    last_months: Optional[int],
+    chrono_mode: str,
+    chrono_percent: Optional[float]
 ) -> Tuple[Path, Path, int, int]:
+    """
+    Lit la source (DVC/HTTP/S3/local) en chunks, écrit un delta CSV en streaming,
+    met à jour le cumul selon append_only/dedup_duckdb, et maintient un checkpoint.
+    """
+    # --- checkpoint (seen keys + watermark)
     seen_keys, watermark = load_checkpoint(checkpoint_path)
+    max_date_seen = pd.to_datetime(watermark, utc=True, errors="coerce") if watermark else None
 
-    # Ouvre la source
+    # --- ouvrir la source
     if source_mode == "dvc":
         if not (dvc_repo_url and dvc_path):
             raise ValueError("DVC: dvc_repo_url et dvc_path requis.")
@@ -282,6 +380,7 @@ def incremental_extract(
             region=s3_region or os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
             path_style=s3_path_style,
             verify_ssl=s3_verify_ssl,
+            anon=s3_anon,
         )
         src_path_like = f"s3://{s3_bucket}/{s3_key}"
     elif source_mode == "local":
@@ -291,131 +390,274 @@ def incremental_extract(
         src_path_like = local_path
     else:
         raise ValueError(f"source_mode inconnu: {source_mode}")
+        # --- bornes issues des flags chrono ---
+    date_from_ts = _parse_any_date(date_from)
+    date_to_ts   = _parse_any_date(date_to)
 
-    # Prépare sorties
+    # Si last_months ou chrono_percent est utilisé, on fait un pré-pass uniquement sur la colonne date
+    need_prepass = (last_months is not None) or (chrono_mode in ("head", "tail") and chrono_percent)
+
+    if need_prepass and date_col:
+        # On ré-ouvre une poignée dédiée pour lire uniquement les dates (léger)
+        if source_mode == "dvc":
+            src_dates = open_source_dvc(dvc_repo_url=dvc_repo_url, dvc_path=dvc_path, dvc_rev=dvc_rev, dvc_remote=dvc_remote)
+        elif source_mode == "http":
+            src_dates = open_source_http(url=http_url)
+        elif source_mode == "s3":
+            src_dates = open_source_s3(
+                endpoint_url=s3_endpoint_url or os.getenv("AWS_S3_ENDPOINT"),
+                bucket=s3_bucket, key=s3_key, region=s3_region,
+                path_style=s3_path_style, verify_ssl=s3_verify_ssl, anon=s3_anon
+            )
+        else:
+            src_dates = open_source_local(Path(local_path))
+
+        # Lit uniquement la colonne date (stream/chunks)
+        dates = []
+        if _is_parquet_path(src_path_like):
+            dtmp = pd.read_parquet(
+                src_dates.handle_or_path if src_dates.is_stream else str(src_dates.handle_or_path),
+                columns=[date_col]
+            )
+            if date_col in dtmp.columns:
+                dtmp[date_col] = pd.to_datetime(dtmp[date_col], errors="coerce", utc=True)
+                dates.append(dtmp[date_col].dropna())
+        else:
+            for c in pd.read_csv(
+                src_dates.handle_or_path if src_dates.is_stream else str(src_dates.handle_or_path),
+                sep=sep, usecols=[date_col], chunksize=200_000, low_memory=False
+            ):
+                if date_col in c.columns:
+                    c[date_col] = pd.to_datetime(c[date_col], errors="coerce", utc=True)
+                    dates.append(c[date_col].dropna())
+
+        try:
+            src_dates.cleanup()
+        except Exception:
+            pass
+
+        if dates:
+            all_dates = pd.concat(dates, ignore_index=True)
+            if last_months is not None:
+                # borne = début du (N-ième) mois en partant de la fin
+                mon = _month_floor(all_dates.sort_values())
+                last = mon.max()
+                if pd.notna(last):
+                    # remonte (last_months-1) mois
+                    boundary = (last.to_period("M") - (last_months - 1)).start_time
+                    boundary = boundary.tz_localize("UTC")
+                    # Garde >= boundary
+                    date_from_ts = max(date_from_ts, boundary) if date_from_ts is not None else boundary
+
+            if chrono_mode in ("head", "tail") and chrono_percent:
+                q = float(chrono_percent)
+                q = min(max(q, 1e-6), 1.0)  # clamp
+                qdt = all_dates.quantile(q)  # quantile temporel (UTC)
+                if pd.notna(qdt):
+                    if chrono_mode == "head":
+                        # garder le début de l'historique
+                        date_to_ts = min(date_to_ts, qdt) if date_to_ts is not None else qdt
+                    else:
+                        # garder la fin de l'historique
+                        date_from_ts = max(date_from_ts, qdt) if date_from_ts is not None else qdt
+
+    # --- chemins delta & cumul
     delta_folder.mkdir(parents=True, exist_ok=True)
     delta_path = delta_folder / "df_new.csv"
     cumulative_csv.parent.mkdir(parents=True, exist_ok=True)
+    if delta_path.exists():
+        delta_path.unlink()
 
-    max_date_seen = pd.to_datetime(watermark, utc=True, errors="coerce") if watermark else None
-    new_rows: List[pd.DataFrame] = []
+    # --- itérateur de chunks selon le type
+    is_parquet = _is_parquet_path(src_path_like)
+    chunks_iter = (
+        iter_chunks_parquet(src.handle_or_path, src.is_stream, batch_rows=200_000)
+        if is_parquet
+        else iter_chunks_csv(src.handle_or_path, src.is_stream, sep=sep, chunksize=200_000)
+    )
+
+    # --- boucle streaming
+    wrote_header = False
+    chunks_seen = 0
+    rows_seen = 0
+    t0 = time.time()
 
     try:
-        # Choix CSV/Parquet
-        is_parquet = _is_parquet_path(src_path_like)
-        if is_parquet:
-            chunks_iter = iter_chunks_parquet(src.handle_or_path, src.is_stream, batch_rows=200_000)
-        else:
-            chunks_iter = iter_chunks_csv(src.handle_or_path, src.is_stream, sep=sep, chunksize=200_000)
-
         for chunk in chunks_iter:
             chunk = parse_date(chunk, date_col)
 
+            # Filtres chronologiques appliqués par chunk
+            if date_col and (date_from_ts is not None or date_to_ts is not None):
+                if date_from_ts is not None:
+                    chunk = chunk.loc[chunk[date_col] >= date_from_ts]
+                if date_to_ts is not None:
+                    chunk = chunk.loc[chunk[date_col] <= date_to_ts]
+                if chunk.empty:
+                    continue
+    
+            # Traitement des clés
+            if key_cols:
+                keys_concat = chunk[key_cols].astype(str).fillna("").agg("||".join, axis=1)
+            else:
+                keys_concat = chunk.index.astype(str)  # fallback
+    
+            # Calcul de bucket_mask
+            bucket_mask = keys_concat.apply(
+                lambda s: _stable_bucket_idx(s, max(1, num_slices)) == (slice_index % max(1, num_slices))
+            )
+            chunk = chunk.loc[bucket_mask]
+            if chunk.empty:
+                continue            
+    
+            # Filtre watermark si présent
             if date_col and watermark:
                 wm = pd.to_datetime(watermark, utc=True, errors="coerce")
                 if wm is not None:
                     chunk = chunk.loc[chunk[date_col] > wm]
-            if chunk.empty:
-                continue
-
+                    if chunk.empty:
+                        continue
+            
+            # Détection des nouvelles lignes
             kh = make_key_hash(chunk, key_cols)
             mask_new = ~kh.astype(str).isin(seen_keys)
             delta = chunk.loc[mask_new].copy()
             if delta.empty:
                 continue
-
-            delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
-
+    
+            # Mise à jour de la progression
+            chunks_seen += 1
+            rows_seen += len(delta)
+            if chunks_seen % 5 == 0:
+                print(f"[info] processed {chunks_seen} chunks, {rows_seen:,} new rows in {time.time() - t0:.1f}s")
+    
+            # Watermark courant
             if date_col and date_col in delta.columns:
                 cand = delta[date_col].max()
                 if pd.notna(cand):
                     max_date_seen = cand if max_date_seen is None else max(max_date_seen, cand)
+    
+            # Écriture incrémentale du delta
+            delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
+            delta_out = delta.drop(columns=["__key_hash__"], errors="ignore")
+            delta_out.to_csv(delta_path, sep=sep, index=False, mode="a", header=not wrote_header)
+            wrote_header = True
+    
+            # Mise à jour des clés vues
+            seen_keys.update(delta["__key_hash__"].astype(str).tolist())
+    
+    except Exception as e:
+        print(f"Une erreur s'est produite pendant l'extraction des données : {e}")
+        # Log ou actions supplémentaires selon l'erreur
 
-            new_rows.append(delta)
     finally:
-        # cleanup (tempfiles http/s3)
+        # Nettoyage ou autres actions à réaliser après la boucle
         try:
             src.cleanup()
         except Exception:
             pass
 
-    # Concatène & écrit
-    if new_rows:
-        df_new = pd.concat(new_rows, ignore_index=True)
-        df_new = to_str_cols(df_new, ["code_postal", "INSEE_COM", "departement", "commune"])
 
-        df_new.drop(columns=["__key_hash__"], errors="ignore").to_csv(delta_path, sep=";", index=False)
-
-        if os.getenv("IMP_APPEND_ONLY", "0") == "1":
-            # évite la lecture complète du cumul en RAM
+    # --- fusion dans le cumul
+    if not delta_path.exists() or delta_path.stat().st_size == 0:
+        # aucun nouveau enregistrement
+        delta_path.write_text("", encoding="utf-8")
+    else:
+        if append_only:
             _append_csv(cumulative_csv, delta_path, sep)
-            if os.getenv("IMP_DEDUP_DUCKDB", "0") == "1" and key_cols:
+            if dedup_duckdb and key_cols:
                 try:
+                    print("[info] duckdb dedup starting…")
                     _dedup_with_duckdb(cumulative_csv, key_cols, date_col, sep)
-                except Exception:
-                    pass
+                    print("[ok] duckdb dedup done")
+                except Exception as e:
+                    print(f"[warn] duckdb dedup skipped: {e}")
         else:
-            # mode legacy (RAM)
+            # chemin "ancien" (lecture delta + cumul, puis drop_duplicates)
+            df_new = pd.read_csv(delta_path, sep=sep, low_memory=False)
             if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
                 df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
-                df_all = pd.concat([df_old, df_new.drop(columns=["__key_hash__"], errors="ignore")], ignore_index=True)
+                df_all = pd.concat([df_old, df_new], ignore_index=True)
             else:
-                df_all = df_new.drop(columns=["__key_hash__"], errors="ignore")
+                df_all = df_new
             if key_cols:
                 df_all = df_all.drop_duplicates(subset=key_cols, keep="last")
             else:
                 df_all = df_all.drop_duplicates(keep="last")
             df_all.to_csv(cumulative_csv, sep=sep, index=False)
 
-        # checkpoint
-        seen_keys.update(make_key_hash(df_new, key_cols).astype(str).tolist())
-        last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
-        save_checkpoint(checkpoint_path, seen_keys, last_wm)
-    else:
-        delta_path.write_text("", encoding="utf-8")
+    # --- checkpoint (keys + watermark)
+    last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
+    save_checkpoint(checkpoint_path, seen_keys, last_wm)
 
-    # métriques
-    def _count_rows(csv_path: Path) -> int:
-        if not csv_path.exists() or csv_path.stat().st_size == 0:
+    # --- comptage rapide (évite de relire en Python)
+    def _count_rows_fast(p: Path) -> int:
+        if not p.exists() or p.stat().st_size == 0:
             return 0
-        with open(csv_path, "r", encoding="utf-8") as f:
-            return max(sum(1 for _ in f) - 1, 0)
+        try:
+            import subprocess
+            out = subprocess.check_output(["wc", "-l", str(p)], text=True)
+            n = int(out.strip().split()[0])
+            return max(n - 1, 0)
+        except Exception:
+            # fallback: compteur streaming
+            c = 0
+            with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                for _ in f:
+                    c += 1
+            return max(c - 1, 0)
 
-    rows_delta = _count_rows(delta_path)
-    rows_cumul = _count_rows(cumulative_csv)
+    rows_delta = _count_rows_fast(delta_path)
+    rows_cumul = _count_rows_fast(cumulative_csv)
 
     return delta_path, cumulative_csv, rows_delta, rows_cumul
 
-# ============= CLI =============
 @click.command()
-@click.option("--output-folder", type=click.Path(), required=True, help="Dossier de sortie du DELTA (df_new.csv)")
+@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_sample.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv", help="CSV cumul (df_sample.csv)")
-@click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin du checkpoint (parquet)")
-@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark (ex: date_vente)")
-@click.option("--key-columns", type=str, default="", help="Clés séparées par des virgules (ex: id_transaction,lot)")
-@click.option("--sep", type=str, default=";", help="Séparateur CSV (défaut ';')")
+@click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin checkpoint (parquet)")
+@click.option("--date-column", type=str, default=None, help="Colonne date pour watermark")
+@click.option("--key-columns", type=str, default="", help="Clés CSV séparées par des virgules")
+@click.option("--sep", type=str, default=";", help="Séparateur CSV")
 
-# Choix de la source
 @click.option("--source-mode", type=click.Choice(["dvc", "http", "s3", "local"]), required=True)
 
-# DVC
-@click.option("--dvc-repo-url", type=str, default=None, help="https://dagshub.com/<user>/<repo>")
-@click.option("--dvc-path", type=str, default=None, help="Chemin dans le repo (ex: data/raw.csv)")
+@click.option("--dvc-repo-url", type=str, default=None)
+@click.option("--dvc-path", type=str, default=None)
 @click.option("--dvc-rev", type=str, default="main")
 @click.option("--dvc-remote", type=str, default=None)
 
-# HTTP
-@click.option("--http-url", type=str, default=None, help="URL HTTP(S) du fichier (CSV/Parquet)")
+@click.option("--http-url", type=str, default=None)
 
-# S3 (DagsHub/MinIO/AWS)
-@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_S3_ENDPOINT"), help="Endpoint S3 (DagsHub)")
-@click.option("--s3-bucket", type=str, default=lambda: os.getenv("DAGSHUB_BUCKET"), help="Bucket/repo")
-@click.option("--s3-key", type=str, default=None, help="Key (ex: data/file.csv)")
+@click.option("--s3-endpoint-url", type=str, default=lambda: os.getenv("AWS_ENDPOINT_URL_S3"))
+@click.option("--s3-bucket", type=str, default=lambda: os.getenv("DAGSHUB_BUCKET"))
+@click.option("--s3-key", type=str, default=None)
 @click.option("--s3-region", type=str, default=lambda: os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
-@click.option("--s3-path-style", is_flag=True, default=True, help="Path-style (recommandé S3-compatibles)")
-@click.option("--s3-no-verify-ssl", is_flag=True, default=False, help="Ne pas vérifier le cert TLS (self-signed)")
-# Local
-@click.option("--local-path", type=click.Path(), default=None, help="Chemin local (CSV/Parquet)")
+@click.option("--s3-path-style", is_flag=True, default=True)
+@click.option("--s3-no-verify-ssl", is_flag=True, default=False)
+@click.option("--s3-anon/--no-s3-anon", is_flag=True, default=False)
+
+@click.option("--local-path", type=click.Path(), default=None)
+@click.option("--num-slices", type=int, default=10, show_default=True,
+              help="Nombre de tranches (ex: 10 pour 10%).")
+@click.option("--slice-index", type=int, default=0, show_default=True,
+              help="Index de la tranche à ingérer (0..num_slices-1).")
+              
+@click.option("--append-only/--no-append-only",
+              default=lambda: os.getenv("IMP_APPEND_ONLY","1")=="1")
+@click.option("--dedup-duckdb/--no-dedup-duckdb",
+              default=lambda: os.getenv("IMP_DEDUP_DUCKDB","1")=="1")
+# === Filtres temporels chronologiques ===
+@click.option("--date-from", type=str, default=None,
+              help="Inclure uniquement les lignes avec date >= (ex: 2022-01-01)")
+@click.option("--date-to", type=str, default=None,
+              help="Inclure uniquement les lignes avec date <= (ex: 2024-12-31)")
+@click.option("--last-months", type=int, default=None,
+              help="Garder uniquement les N derniers mois (calculé sur la distribution des dates).")
+@click.option("--chrono-mode", type=click.Choice(["head","tail","none"]), default="none",
+              help="head=prendre les dates les plus anciennes, tail=les plus récentes.")
+@click.option("--chrono-percent", type=float, default=None,
+              help="Proportion chronologique à garder (0< p <=1). Ex: 0.3.")
+
 def main(
     output_folder,
     cumulative_path,
@@ -435,7 +677,11 @@ def main(
     s3_region,
     s3_path_style,
     s3_no_verify_ssl,
+    s3_anon,
     local_path,
+    append_only, dedup_duckdb,
+    num_slices, slice_index,  
+    date_from, date_to, last_months, chrono_mode, chrono_percent,
 ):
     artifact_location = setup_mlflow()
 
@@ -465,6 +711,7 @@ def main(
             s3_region=s3_region,
             s3_path_style=s3_path_style,
             s3_verify_ssl=(not s3_no_verify_ssl),
+            s3_anon=s3_anon,
             local_path=local_path,
             delta_folder=delta_folder,
             cumulative_csv=cumulative_csv,
@@ -473,9 +720,17 @@ def main(
             key_cols=key_cols,
             sep=sep,
             run_ds=run_ds,
+            append_only=append_only,
+            dedup_duckdb=dedup_duckdb,
+            num_slices=num_slices,
+            slice_index=slice_index,
+            date_from=date_from,  
+            date_to=date_to,
+            last_months=last_months,
+            chrono_mode=chrono_mode,
+            chrono_percent=chrono_percent
         )
 
-        # Params
         mlflow.log_param("source_mode", source_mode)
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
@@ -490,19 +745,17 @@ def main(
         mlflow.log_param("date_column", date_column or "")
         mlflow.log_param("key_columns", ",".join(key_cols))
         mlflow.log_param("sep", sep)
+        mlflow.log_param("s3_anon", bool(s3_anon))
 
-        # Metrics
         mlflow.log_metric("rows_delta", rows_delta)
         mlflow.log_metric("rows_cumul", rows_cumul)
 
-        # Artifacts (léger)
-        if delta_path.exists():
+        if Path(delta_path).exists():
             mlflow.log_artifact(str(delta_path))
-        if cumulative_csv.exists():
+        if Path(cumulative_csv).exists():
             mlflow.log_artifact(str(cumulative_csv))
 
         print(f"✅ Delta → {delta_path} (rows={rows_delta}) | Cumul → {cumul_path} (rows={rows_cumul})")
 
 if __name__ == "__main__":
     main()
-

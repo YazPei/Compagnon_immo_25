@@ -1,725 +1,310 @@
-#from preprocessing_4.utils import (
-#    annee_const,
-#    clean_classe,
-#    clean_exposition,
-#    extract_principal,
-#    get_numeric_cols,
-#    calculate_bounds,
-#    compute_medians,
-#    mark_outliers,
-#    clean_outliers,
-#    log_figure,
-#)
+# path: mlops/preprocessing_4/__init__.py
+# package marker (vide)
 
-# === Imports standards
+# path: mlops/preprocessing_4/preprocessing.py
+from __future__ import annotations
+
 import os
 import sys
+import math
+import traceback
 import warnings
+from pathlib import Path
+from typing import Any, Dict
+
 warnings.filterwarnings("ignore")
 
-# === Imports compatibles Docker (headless / no-GUI)
+# --- Matplotlib en mode headless ---
 import matplotlib
-matplotlib.use('Agg')  # Empêche l'ouverture d'une fenêtre GUI, nécessaire en Docker
-
-import pandas as pd
-import click
-import seaborn as sns
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import mlflow
 
-from pathlib import Path
-import math
-from sklearn.model_selection import train_test_split
+# --- seaborn (tolérant si absent) ---
+try:
+    import seaborn as sns
+    _HAS_SEABORN = True
+except Exception:
+    _HAS_SEABORN = False
 
-from utils import *  
+# --- MLflow tolérant/no-op ---
+try:
+    import mlflow  # type: ignore
+    _HAS_MLFLOW = True
+except Exception:
+    _HAS_MLFLOW = False
 
-def _ensure_mlflow_run(experiment_name: str | None = None, run_name: str | None = None):
-    if mlflow.active_run() is None:
-        mlflow.set_experiment(experiment_name or "Preprocessing")
-        mlflow.start_run(run_name=run_name or "preprocessing")
+    class _MLFlowNoOp:
+        def set_tracking_uri(self, *_: Any, **__: Any) -> None: ...
+        def set_experiment(self, *_: Any, **__: Any) -> None: ...
+        def start_run(self, *_: Any, **__: Any) -> None: ...
+        def end_run(self, *_: Any, **__: Any) -> None: ...
+        def active_run(self): return None
+        def log_artifact(self, *_: Any, **__: Any) -> None: ...
+        def log_dict(self, *_: Any, **__: Any) -> None: ...
+        def log_metric(self, *_: Any, **__: Any) -> None: ...
+        def log_param(self, *_: Any, **__: Any) -> None: ...
 
+    mlflow = _MLFlowNoOp()  # type: ignore
 
-def log_figure(fig, path: str | None = None, *, filename: str | None = None, artifact_path: str | None = None,
-    experiment_name: str | None = None, run_name: str | None = None,
-    dpi: int = 120,
-    close: bool = False,
-):
-    """
-    Sauvegarde la figure `fig` vers `path` (ou `filename`) puis la loggue dans MLflow.
-    - Utiliser `path` (recommandé) ou `filename` (alias rétro-compatible).
-    """
-    # Alias rétro-compat
-    if path is None and filename is not None:
-        path = filename
-    if path is None:
-        raise ValueError("log_figure: fournir `path` (ou `filename`).")
+# --- pandas ---
+import pandas as pd
 
-    # S'assurer d'un run MLflow actif
-    _ensure_mlflow_run(experiment_name=experiment_name, run_name=run_name)
+# --- CLI ---
+import click
 
-    # Créer le répertoire si besoin
-    out_dir = os.path.dirname(path)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
+# --- utils (dep garantie par utils.py livré) ---
+from mlops.preprocessing_4.utils import (
+    annee_const, clean_classe, clean_exposition, extract_principal,
+    get_numeric_cols, calculate_bounds, compute_medians, mark_outliers, clean_outliers,
+)
 
-    # Sauvegarde locale
+# ------------- Helpers ---------------------------------------------------------
+def _diag_env() -> Dict[str, Any]:
+    return {
+        "python_exe": sys.executable,
+        "python_ver": sys.version,
+        "cwd": os.getcwd(),
+        "sys_path_head": sys.path[:5],
+        "has_mlflow": _HAS_MLFLOW,
+        "has_seaborn": _HAS_SEABORN,
+        "MLFLOW_TRACKING_URI": os.environ.get("MLFLOW_TRACKING_URI"),
+    }
+
+def _ensure_mlflow_run(experiment_name: str = "Preprocessing", run_name: str = "preprocessing"):
+    if hasattr(mlflow, "active_run") and mlflow.active_run() is None:  # no-op compatible
+        mlflow.set_experiment(experiment_name)
+        mlflow.start_run(run_name=run_name)
+
+def _log_figure_safe(fig, path: Path, artifact_path: str | None = None, close: bool = False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=120, bbox_inches="tight")
     try:
-        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        mlflow.log_artifact(str(path), artifact_path=artifact_path)
+    except Exception:
+        # why: ne pas casser le run si MLflow distant indispo
+        pass
     finally:
         if close:
-            try:
-                import matplotlib.pyplot as plt
-                plt.close(fig)
-            except Exception:
-                pass
+            plt.close(fig)
 
-    # Log MLflow
-    mlflow.log_artifact(path, artifact_path=artifact_path)
+def _barplot(ax, y_labels, x_values, title: str):
+    if _HAS_SEABORN:
+        import seaborn as sns  # local import si installé
+        sns.barplot(y=y_labels, x=x_values, ax=ax)
+    else:
+        ax.barh(range(len(y_labels)), x_values)
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(list(y_labels))
+    ax.set_title(title)
 
-
+# ------------- Pipeline --------------------------------------------------------
 def run_preprocessing_pipeline(input_path: str, output_path: str):
-    # === Config MLflow (DagsHub) ===
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))#, "file:./mlruns"))
-
-
-    # === BEGIN PIPELINE ===
-    file_path = os.path.join(input_path, "df_sales_clean.csv") 
-    df = pd.read_csv(file_path, sep=";", dtype={"INSEE_COM": str})
-    run_suffix = os.getenv("RUN_MODE", "default")
-    GROUP_COL = "INSEE_COM"
-
-    print("Nombres de lignes en double", df.duplicated().sum())
-    df.drop_duplicates(inplace=True)
-    print("Nombres de lignes en double après suppression", df.duplicated().sum())
-    print("Shape du Dataset après élimination des doublons : ", df.shape)
-    
-    ### Proportions des NANs
-    missing_data_percentage_sales = df.isna().sum() * 100 / len(df)
-
-    missing_value_percentage_sales = pd.DataFrame(
-        {
-            "column_name": df.columns,
-            "percent_missing": missing_data_percentage_sales,
-            "dtypes": df.dtypes,
-        }
-    ).sort_values(by="percent_missing", ascending=False)
-
-    # Resetting the index to start from 1 for better readability
-    # and to match the original DataFrame's index
-    missing_value_percentage_sales.index = range(
-        1, len(missing_value_percentage_sales) + 1
-    )
-
-
-    ### visualisation des doublons
-    # 📊 Création de la figure
-    fig, ax = plt.subplots(figsize=(10, 14))
-    sns.barplot(
-        y=missing_value_percentage_sales.column_name,
-        x=missing_value_percentage_sales.percent_missing,
-        hue=missing_value_percentage_sales.column_name,
-        order=missing_value_percentage_sales.column_name,
-        ax=ax
-    )
-
-	# Seuil visuel
-    ax.axvline(x=75, color="red", linestyle="--", label="Threshold (75%)")
-
-    # Style
-    ax.set_title("Répartition des valeurs manquantes dans le dataset", fontsize=10)
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=8)
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=9)
-    ax.set_ylabel("Features")
-    ax.legend()
-    
-    # Sauvegarde
-    figures_dir = Path(output_path) / "reports" / "figures"
-
-    try:
-        figures_dir.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
-        os.system(f"chmod -R u+rwX {figures_dir.parent}")
-        figures_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = f"missing_values_{run_suffix}.png"
-    fig_path = os.path.join(figures_dir, "Nan_distribution.png")
-    fig.savefig(fig_path)
-    
-    # Log MLflow
-    log_figure(
-        fig,
-        filename=filename,
-        artifact_path="figures/missing"
-    )
-    
-    #  Nettoyage mémoire
-    plt.close(fig)
-
-    ### Elimination de colonnes (valeurs manquantes supérieures à 75 %)
-    # Filtrer les colonnes avec un taux de valeurs manquantes inférieur ou égal à 75%
-    columns_to_keep = missing_data_percentage_sales[
-        missing_data_percentage_sales <= 75
-    ].index
-
-    # Mettre à jour le DataFrame en gardant uniquement les colonnes sélectionnées
-    df_1 = df[columns_to_keep]
-
-    print("Colonnes conservées :", list(columns_to_keep))
-    print("\nShape du Dataset après élimination des colonnes :", df_1.shape)
-
-    # PRÉSÉLECTION (VARIABLES EXPLICATIVES À ÉLIMINER)
-    df_2 = df_1.drop(
-        columns=[
-            "idannonce",
-            "annonce_exclusive",
-            "typedebien_lite",
-            "type_annonceur",
-            "categorie_annonceur",
-            "REG",
-            "DEP",
-            "IRIS",
-            "CODE_IRIS",
-            "TYP_IRIS_x",
-            "TYP_IRIS_y",
-            "nb_logements_copro",
-            "GRD_QUART",
-            "UU2010",
-            "duree_int",
-        ],
-        axis=1,
-    )
-
-    df_2.shape
-
-    # VARIABLES EXPLICATIVES À TRAITER
-    # les variables porte_digicode, ascenseur et cave sont des variables binaires typées en 'object'
-    # nous les transofrmins en type boleeen
-    bool_columns = ["porte_digicode", "cave", "ascenseur"]
-    for col in bool_columns:
-        df_2[col] = df_2[col].astype(bool)
-
-    # vérification des types des colonnes converties
-    df_2[bool_columns].dtypes
-
-    ## Dicrétisations
-    ### La variable "annee_construction" est transformée en variable catégorielle nominale
-
-    # suppression des doublons
-    df_2.dropna(subset=["prix_m2_vente"], inplace=True)
-    df_2 = annee_const(df_2)
-    # 2. Application des fonctions sur df_2
-
-    # 2.1 : Nettoyage des colonnes DPE et GES
-    for col in ("dpeL", "ges_class"):
-        if col in df_2.columns:
-            df_2[col] = (
-                df_2[col]
-                .apply(clean_classe)  # Applique clean_classe à chaque valeur
-                .astype("object")  # Force le type chaîne pour les résultats
-            )
-
-    # 2.2 : Extraction de l'énergie de chauffage principale
-    if "chauffage_energie" in df_2.columns:
-        df_2["chauffage_energie_principal"] = (
-            df_2["chauffage_energie"]
-            .apply(extract_principal)  # Garde la première source énergétique
-            .astype("object")
-        )
-    # Correction de l'encodage mal interprété (ex: Ã -> É)
-    df_2["chauffage_energie_principal"] = df_2[
-        "chauffage_energie_principal"
-    ].str.replace("Ã\x89", "É", regex=False)
-
-    # 2.3 : Nettoyage de la colonne exposition
-    if "exposition" in df_2.columns:
-        df_2["exposition"] = (
-            df_2["exposition"]
-            .apply(clean_exposition)  # Standardise les orientations
-            .astype("object")
-        )
-
-        df_3 = df_2.drop(columns=["prix_bien", "mensualiteFinance"], axis=1)
-    df_3.shape
-
-    # Visualisation  de la distribution de la variable cible
-    plt.figure(figsize=(8, 4))
-    sns.histplot(data=df_3, x="prix_m2_vente", bins=30)
-    plt.title("Prix m2_vente Distribution")
-    plt.xticks(rotation=45, fontsize=8)
-    plt.yticks(fontsize=8)
-    plt.tight_layout()
-
-
-
-    figures_dir = Path(output_path) / "reports" / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        figures_dir.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        print(f"⚠️ Permission denied when creating {figures_dir}. Trying to fix permissions.")
-        os.system(f"chmod -R u+rwX {figures_dir.parent}")
-        figures_dir.mkdir(parents=True, exist_ok=True)
-
-
-    fig_path = os.path.join(figures_dir, "prix_m2_distribution.png")
-    plt.savefig(fig_path)
-    plt.close()
-       
-        
-        
-    # visualisation des variables catégorielles
-    numeric_cols = get_numeric_cols(df_3, GROUP_COL)
-
-    # Visualisation des boxplots pour les colonnes restantes
-
-    # Nombre de colonnes par ligne
-    cols_per_row = 2
-
-    # Calcul du nombre de lignes nécessaires
-    num_cols = len(numeric_cols)
-    num_rows = math.ceil(num_cols / cols_per_row)
-
-    # Création des sous-graphiques
-    fig_o, axes = plt.subplots(num_rows, cols_per_row, figsize=(12, 4 * num_rows))
-    axes = axes.flatten()  # Aplatir pour un accès plus simple
-
-    # Boucle pour tracer les boxplots
-    for i, col in enumerate(numeric_cols):
-        df_3.boxplot(column=col, ax=axes[i])
-        axes[i].set_title(f"Boxplot de la colonne '{col}'")
-
-    # Supprimer les axes inutilisés si le nombre de colonnes est impair
-    for j in range(i + 1, len(axes)):
-        fig_o.delaxes(axes[j])
-
-
-        plt.tight_layout()
-
-        # 1. Sauvegarde dans un dossier temporaire (compatible Docker)
-
-        figures_dir = Path(output_path) / "reports" / "figures"
-        figures_dir.mkdir(parents=True, exist_ok=True)
-
-        filename = f"boxplots_outliers_{run_suffix}.png"
-        fig_path = os.path.join(figures_dir, "Boxplot_variables.png")
-        fig_o.savefig(fig_path)
-	
-
-        # 2. Log dans MLflow
-        log_figure(
-        fig_o,
-        filename=filename,
-        artifact_path="figures/boxplots"
-        )
-
-        # 3. Fermeture propre
-        plt.close(fig_o)
-
-
-    ## Anomalies
-    ### Détection des anomalies logiques entre colonnes
-    # Détection d'anomalies logiques dans les données suite aux boxplots
-
-    # Création d'une colonne 'anomalie_logique' contenant True si une incohérence est détectée
-
-    # Copie pour éviter d'altérer la base brute directement
-    df_logic_check = df_3.copy()
-
-    # Initialiser la colonne avec False
-    df_logic_check["anomalie_logique"] = False
-
-    # --- Règle 1 : nb_toilettes > nb_pieces (pas logique dans un logement classique)
-    mask_toilettes = df_logic_check["nb_toilettes"] > df_logic_check["nb_pieces"]
-    df_logic_check.loc[mask_toilettes, "anomalie_logique"] = True
-
-    # --- Règle 2 : surface trop petite (< 10 m²) ou démesurée (> 1000 m²)
-    mask_surface = (df_logic_check["surface"] < 10) | (df_logic_check["surface"] > 1000)
-    df_logic_check.loc[mask_surface, "anomalie_logique"] = True
-
-    # --- Règle 3 : nb_etages = 0 alors que etage > 0 (impossible sans étage)
-    mask_etage = (df_logic_check["nb_etages"] == 0) & (df_logic_check["etage"] > 0)
-    df_logic_check.loc[mask_etage, "anomalie_logique"] = True
-
-    # --- Règle 4 : logement neuf mais année de construction ancienne (avant 2000)
-    mask_neuf = (df_logic_check["logement_neuf"] == True) & (
-        df_logic_check["annee_construction"].isin(
-            [
-                "avant 1948",
-                "1948-1974",
-                "1975-1977",
-                "1978-1982",
-                "1983-1988",
-                "1989-2000",
-            ]
-        )
-    )
-    df_logic_check.loc[mask_neuf, "anomalie_logique"] = True
-
-    # --- Règle 5 : prix_m2_vente très bas ou nul (hors outlier déjà traité)
-    mask_prix = df_logic_check["prix_m2_vente"] < 100
-    df_logic_check.loc[mask_prix, "anomalie_logique"] = True
-
-    # Résumé : Nombre total de lignes concernées
-    nb_anomalies = df_logic_check["anomalie_logique"].sum()
-    print(f"{nb_anomalies} lignes présentent au moins une anomalie logique.")
-    # Aperçu des premières anomalies détectées (dans les logs ou stdout)
-    anomalies_detected = df_logic_check[df_logic_check["anomalie_logique"]].head(10)
-    print("🔎 Aperçu des anomalies logiques détectées :")
-    print(anomalies_detected.to_string(index=False))  # ou .to_markdown() si tu veux joli
-    
-    # Sauvegarde dans un fichier CSV (optionnel)
-    figures_dir = Path(output_path) / "reports" / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = "anomaly_logic_preview.csv"
-    csv_path = os.path.join(figures_dir, "anomaly_logic_preview.csv")
-    anomalies_detected.to_csv(csv_path, index=False)
-    
-    # Logging MLflow
-    mlflow.log_artifact(str(csv_path), artifact_path="extracts/anomaly_logic")
-    
-        
-    ### Détection 	des anomalies de saisie
-    # L'idée ici est de borner les valeurs complètement aberrantes avant d'éliminer les valeurs extrêmes
-    # Colonnes à vérifier pour erreurs d’échelle
-    cols_suspectes = [
-        "etage",
-        "surface",
-        "surface_terrain",
-        "nb_pieces",
-        "balcon",
-        "bain",
-        "dpeC",
-        "nb_etages",
-        "places_parking",
-        "nb_toilettes",
-        "charges_copro",
-        "loyer_m2_median_n6",
-        "nb_log_n6",
-        "taux_rendement_n6",
-        "loyer_m2_median_n7",
-        "nb_log_n7",
-        "taux_rendement_n7",
-        "prix_m2_vente",
-    ]
-
-    # Seuils définis de manière métier ou empirique
-    seuils_max = {
-        "etage": 60,  # étage > 60
-        "surface": 2000,  # surface > 2000 m²
-        "surface_terrain": 500_000,  # terrain > 50 hectares
-        "nb_pieces": 100,  # plus de 100 pièces
-        "balcon": 100,  # plus de 100 balcons
-        "bain": 20,  # plus de 20 salles de bain
-        "dpeC": 10000,  # plus de 10 000 DPE C
-        "nb_etages": 60,  # plus de 60 étages
-        "places_parking": 50,  # plus de 50 places de parking
-        "nb_toilettes": 50,  # plus de 50 toilettes
-        "charges_copro": 10_000,  # charges mensuelles > 10k €
-        "loyer_m2_median_n6": 500,  # loyer m2 > 500 €
-        "nb_log_n6": 15000,  # plus de 15000 logements
-        "taux_rendement_n6": 1,  # taux de rendement > 100%
-        "loyer_m2_median_n7": 500,  # loyer m2 > 500 €
-        "nb_log_n7": 15000,  # plus de 15000 logements
-        "taux_rendement_n7": 1,  # taux de rendement > 100%
-        "prix_m2_vente": 100_000,  # prix au m² > 100k €
-    }
-
-    seuils_min = {
-        "etage": -3,  # étage < -3
-        "balcon": -1,  # balcon < -1
-        "dpeC": -1,  # DPE C < -1
-    }
-
-    # Création d’un DataFrame résumé des cas problématiques
-    problemes = {}
-    mask_valeurs_improbables = pd.Series(
-        False, index=df_3.index
-    )  # Initialiser le masque
-
-    for col in cols_suspectes:
-        # Détection des valeurs au-dessus du seuil maximum
-        if col in seuils_max:
-            mask_above = df_3[col] > seuils_max[col]
-            mask_valeurs_improbables |= mask_above
-            n_anormaux_max = mask_above.sum()
-        else:
-            n_anormaux_max = 0
-
-        # Détection des valeurs en dessous du seuil minimum
-        if col in seuils_min:
-            mask_below = df_3[col] < seuils_min[col]
-            mask_valeurs_improbables |= mask_below
-            n_anormaux_min = mask_below.sum()
-        else:
-            n_anormaux_min = 0
-
-        # Ajouter au rapport si des valeurs aberrantes sont détectées
-        if n_anormaux_max > 0 or n_anormaux_min > 0:
-            problemes[col] = {
-                "nb_anormaux_max": n_anormaux_max,
-                "max_valeur": df_3[col].max(),
-                "nb_anormaux_min": n_anormaux_min,
-                "min_valeur": df_3[col].min(),
-            }
-
-        # Nombre total de lignes identifiées comme improbables
-    nb_lignes_improbables = mask_valeurs_improbables.sum()
-    print(f"{nb_lignes_improbables} lignes contiennent des valeurs improbables.")
-
-    ### Suppression des lignes concernées
-    # --- Création d'un masque combiné pour les anomalies logiques et valeurs improbables ---
-
-    # Masque pour les anomalies logiques
-    mask_anomalies_logiques = df_logic_check["anomalie_logique"]
-
-    # Combinaison des deux masques
-    mask_combined = mask_anomalies_logiques | mask_valeurs_improbables
-
-    # Nombre total de lignes identifiées comme problématiques
-    nb_lignes_problemes = mask_combined.sum()
-    print(
-        f"{nb_lignes_problemes} lignes contiennent des anomalies logiques ou des valeurs improbables."
-    )
-
-    # --- Suppression des lignes identifiées ---
-
-    # Suppression des lignes identifiées
-    df_3 = df_3[~mask_combined]
-
-
-    ## Outliers
-    ### Outliers Regression
-    #### Imputation par mediane par code insee
-    # SPLIT ET PARAMÈTRES
-
-    # SPLIT
-
-    train_data, test_data = train_test_split(df_3, test_size=0.2, random_state=42)
-
-    #  Constantes et paramètres ─────────────
-    LOWER_PERC = 0.001  # 1er dixième de percentile
-    UPPER_PERC = 0.999  # dernier dixième de percentile
-    GROUP_COL = "INSEE_COM"  # colonne de regroupement
-    TARGET_COL = "prix_m2_vente"  # variable à prédire
-    OUTLIER_TAG = -999  # valeur pour différencier les outliers
-
-    # Application des fonctions de nettoyage ----------------
-    ## Bounds
-    bounds = calculate_bounds(train_data, numeric_cols, LOWER_PERC, UPPER_PERC)
-
-    ## Médianes
-    group_medians, global_medians = compute_medians(train_data, bounds, GROUP_COL)
-
-    ## Marquage des outliers
-    train_marked = mark_outliers(train_data, bounds)
-    test_marked = mark_outliers(test_data, bounds)
-
-    ### masque de conservation
-    mask_train_keep = train_marked[f"{TARGET_COL}_outlier_flag"] == 0
-    mask_test_keep = test_marked[f"{TARGET_COL}_outlier_flag"] == 0
-
-    ### application du filtre et suppression des outliers de la target
-    train_marked = train_marked[mask_train_keep]
-    test_marked = test_marked[mask_test_keep]
-
-    # Calcul du nombre d'outliers identifiés par colonne avant leur remplacement
-    outlier_counts = {col: train_marked[f"{col}_outlier_flag"].sum() for col in bounds}
-    
-    mlflow.log_dict(outlier_counts, "metrics/outlier_counts.json")
-
-
-    ## Nettoyage (remplacement des -999) avec les médianes du TRAIN
-    train_clean = clean_outliers(
-        train_marked, bounds, group_medians, global_medians, GROUP_COL
-    )
-    test_clean = clean_outliers(
-        test_marked, bounds, group_medians, global_medians, GROUP_COL
-    )
-
-    # suppression des colonnes de marquage
-    train_clean.drop(columns=[f"{col}_outlier_flag" for col in bounds], inplace=True)
-    test_clean.drop(columns=[f"{col}_outlier_flag" for col in bounds], inplace=True)
-
-    #### Visualisation après traitement outliers
-
-    # Nombre de colonnes par ligne
-    cols_per_row = 2
-
-    # Calcul du nombre de lignes nécessaires
-    num_cols = len(bounds)
-    num_rows = math.ceil(num_cols / cols_per_row)
-
-    # Création des sous-graphiques
-    fig, axes = plt.subplots(num_rows, cols_per_row, figsize=(12, 4 * num_rows))
-    axes = axes.flatten()  # Aplatir pour un accès plus simple
-
-    # Boucle pour tracer les boxplots
-    print(" Visualisation des boxplots après traitement des outliers...")
-    
-    # Création des figures et axes
-    fig, axes = plt.subplots(nrows=math.ceil(len(bounds) / 2), ncols=2, figsize=(14, 6 * math.ceil(len(bounds) / 2)))
-    axes = axes.flatten()
-    
-    # Tracer les boxplots
-    for i, col in enumerate(bounds):
-        train_clean.boxplot(column=col, ax=axes[i])
-        axes[i].set_title(f"Boxplot de la colonne '{col}' après traitement des outliers")
-
-    # Supprimer les axes inutiles
-    for j in range(i + 1, len(axes)):
-        fig.delaxes(axes[j])
-
-    plt.tight_layout()
-    
-
-    figures_dir = Path(output_path) / "reports" / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
-
-
-    filename = f"boxplots_outliers_clean_{run_suffix}.png"
-    fig_path = figures_dir / filename
-    fig.savefig(fig_path)
-
-    # Logging MLflow
-    log_figure(
-        fig,
-        filename=filename,
-        artifact_path="figures/boxplots"
-    )
-
-    # Fermeture propre
-    plt.close(fig)
-
-    ### Outliers Serie temporelle
-    df_3["date"] = pd.to_datetime(df_3["date"], errors="coerce")
-    df_3["Year"] = df_3["date"].dt.year
-    df_3["Month"] = df_3["date"].dt.month
-
-    # SPLIT
-
-    df_3["split"] = df_3["Year"].map(
-        lambda x: "train_data_ST" if x < 2024 else "test_data_ST"
-    )
-    train_data_ST = df_3[df_3["split"] == "train_data_ST"]
-    test_data_ST = df_3[df_3["split"] == "test_data_ST"]
-    df_3 = df_3.drop(columns="split")
-
-    # Application des fonctions de nettoyage ----------------
-    ## Bounds
-    bounds_ST = calculate_bounds(train_data_ST, numeric_cols, LOWER_PERC, UPPER_PERC)
-
-    ## Médianes
-    group_medians_ST, global_medians_ST = compute_medians(
-        train_data_ST, bounds_ST, GROUP_COL
-    )
-
-    ## Marquage des outliers
-    train_marked_ST = mark_outliers(train_data_ST, bounds_ST)
-    test_marked_ST = mark_outliers(test_data_ST, bounds_ST)
-
-    ### masque de conservation
-    mask_train_keep = train_marked_ST[f"{TARGET_COL}_outlier_flag"] == 0
-    mask_test_keep = test_marked_ST[f"{TARGET_COL}_outlier_flag"] == 0
-
-    ### application du filtre et suppression des outliers de la target
-    train_marked_ST = train_marked_ST[mask_train_keep]
-    test_marked_ST = test_marked_ST[mask_test_keep]
-
-    # Calcul du nombre d'outliers identifiés par colonne avant leur remplacement
-    outlier_counts_ST = {
-        col: train_marked_ST[f"{col}_outlier_flag"].sum() for col in bounds_ST
-    }
-
-    ## Nettoyage (remplacement des -999) avec les médianes du TRAIN
-    train_clean_ST = clean_outliers(
-        train_marked_ST, bounds_ST, group_medians_ST, global_medians_ST, GROUP_COL
-    )
-    test_clean_ST = clean_outliers(
-        test_marked_ST, bounds_ST, group_medians_ST, global_medians_ST, GROUP_COL
-    )
-
-    # suppression des colonnes de marquage
-
-    test_clean_ST.drop(
-        columns=[f"{col}_outlier_flag" for col in bounds_ST], inplace=True
-    )
-
-    # Vérification des outliers
-    print("Valeurs extrêmes détectées et remplacées :")
-    for col, count in outlier_counts_ST.items():
-        print(f"Colonne '{col}: {count} outliers détectés et remplacés.")
-    # Vérification des valeurs extrêmes restantes
-    print("Valeurs extrêmes restantes :")
-    for col in bounds_ST:
-        print(
-            f"Colonne '{col}': {train_clean_ST[col].min()} à {train_clean_ST[col].max()}"
-        )
-
-    ## Visualisation de la distribution de la target
-    fig_distribution, ax = plt.subplots(figsize=(8, 4))
-    sns.histplot(data=train_clean["prix_m2_vente"], bins=150, kde=True, ax=ax)
-    ax.set_title("Distribution Prix m2_vente")
-    ax.set_xlim(0, 20000)
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, fontsize=8)
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=8)
-    fig_distribution.tight_layout()
-
-    log_figure(
-        fig_distribution,
-        filename=f"distribution_prix_m2_{run_suffix}.png",
-        artifact_path="figures/distributions",
-    )
-    plt.close(fig_distribution)
-
-    # === Log des stats de distribution de la target ===
-    prix_stats = train_clean["prix_m2_vente"].describe()
-    for stat in ["mean", "std", "min", "25%", "50%", "75%", "max"]:
-        safe_stat = stat.replace("%", "pct")
-        mlflow.log_metric(f"prix_m2_vente_{safe_stat}", prix_stats[stat])
-
-    df_sales_short_ST = pd.concat([train_clean_ST, test_clean_ST], axis=0).reset_index(
-        drop=True
-    )
-
-    # === Tracking MLflow ===
-    mlflow.log_param("input_path", input_path)
+    """
+    Exécute le préprocess : lecture data/df_sample.csv, nettoyage, plots, splits, sauvegardes.
+    Émet des diagnostics clairs en cas d’erreur (file not found, imports, permissions).
+    """
+    print("=== [preprocessing] diagnostics ===")
+    for k, v in _diag_env().items():
+        print(f"{k}: {v}")
+
+    # MLflow URI (si présent)
+    uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if uri:
+        try:
+            mlflow.set_tracking_uri(uri)  # no-op si MLflow no-op
+        except Exception as e:
+            print(f"[WARN] set_tracking_uri failed: {e}")
+
+    _ensure_mlflow_run()
+
+    input_dir = Path(input_path)
     output_dir = Path(output_path)
-    print("✅ Dossier output:", output_dir.resolve())
-    print("✅ Contenu output dir:", list(output_dir.glob("*")))
+    figures_dir = output_dir / "reports" / "figures"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    train_clean.to_csv(output_dir / "df_sales_clean_train.csv", sep=";", index=False)
-    test_clean.to_csv(output_dir / "df_sales_clean_test.csv", sep=";", index=False)
-    df_sales_short_ST.to_csv(output_dir / "df_sales_clean_series.csv", sep=";", index=False)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise RuntimeError(f"Impossible de créer {output_dir} / {figures_dir}: {e}")
 
-    print("✅ Écriture de :", output_dir / "df_sales_clean_train.csv")
-    print("✅ Écriture de :", output_dir / "df_sales_clean_test.csv")
-    print("✅ Écriture de :", output_dir / "df_sales_clean_series.csv")
+    csv_path = input_dir / "df_sample.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Fichier introuvable : {csv_path} (attendu par --input {input_path})")
 
+    print(f"[INFO] Lecture CSV: {csv_path}")
+    try:
+        df = pd.read_csv(csv_path, sep=";", dtype={"INSEE_COM": "string"})
+    except Exception as e:
+        raise RuntimeError(f"Échec lecture CSV {csv_path}: {e}")
 
+    GROUP_COL = "INSEE_COM"
+    TARGET_COL = "prix_m2_vente"
 
-    
-    mlflow.log_artifact(str(output_dir / "df_sales_clean_train.csv"))
-    mlflow.log_artifact(str(output_dir / "df_sales_clean_test.csv"))
-    mlflow.log_artifact(str(output_dir / "df_sales_clean_series.csv"))
+    # --- dédup ---
+    before = len(df)
+    df = df.drop_duplicates()
+    print(f"[INFO] Drop duplicates: {before} -> {len(df)}")
 
-    print(f" Données sauvegardées dans : {output_path}")
+    # --- missing ---
+    miss_pct = df.isna().sum().mul(100.0 / max(len(df), 1))
+    missing_df = (
+        pd.DataFrame({"column_name": df.columns, "percent_missing": miss_pct})
+        .sort_values("percent_missing", ascending=False)
+        .reset_index(drop=True)
+    )
 
-    
+    # plot missing
+    fig1, ax1 = plt.subplots(figsize=(10, 14))
+    _barplot(ax1, missing_df["column_name"], missing_df["percent_missing"], "Valeurs manquantes (%)")
+    # trait vertical 75%
+    ax1.axvline(x=75, color="red", linestyle="--", label="75%")
+    ax1.legend()
+    _log_figure_safe(fig1, figures_dir / "Nan_distribution.png", artifact_path="figures/missing", close=True)
 
-    # === END PIPELINE ===
+    # garder cols <= 75%
+    cols_keep = miss_pct[miss_pct <= 75].index
+    df1 = df[cols_keep].copy()
+
+    # drop colonnes métier si présentes
+    to_drop = [
+        "idannonce","annonce_exclusive","typedebien_lite","type_annonceur","categorie_annonceur",
+        "REG","DEP","IRIS","CODE_IRIS","TYP_IRIS_x","TYP_IRIS_y","nb_logements_copro","GRD_QUART","UU2010","duree_int",
+    ]
+    df2 = df1.drop(columns=[c for c in to_drop if c in df1.columns], errors="ignore")
+
+    # booléens
+    for c in ["porte_digicode","cave","ascenseur"]:
+        if c in df2.columns:
+            # certains CSV mettent "0/1", on force en bool raisonnable
+            df2[c] = df2[c].astype(str).map(lambda x: x.strip() in {"1","True","true","OUI","Oui","yes"}).astype("boolean")
+
+    # cible non nulle
+    if TARGET_COL in df2.columns:
+        df2 = df2.dropna(subset=[TARGET_COL])
+
+    # enrichissements
+    df2 = annee_const(df2)
+    for c in ("dpeL","ges_class"):
+        if c in df2.columns:
+            df2[c] = df2[c].apply(clean_classe).astype("string")
+
+    if "chauffage_energie" in df2.columns:
+        df2["chauffage_energie_principal"] = df2["chauffage_energie"].apply(extract_principal).astype("string")
+        df2["chauffage_energie_principal"] = df2["chauffage_energie_principal"].str.replace("Ã\x89","É", regex=False)
+
+    if "exposition" in df2.columns:
+        df2["exposition"] = df2["exposition"].apply(clean_exposition).astype("string")
+
+    # drop colonnes spécifiques si présentes
+    df3 = df2.drop(columns=[c for c in ["prix_bien","mensualiteFinance"] if c in df2.columns], errors="ignore")
+
+    # distribution cible
+    if TARGET_COL in df3.columns:
+        fig2, ax2 = plt.subplots(figsize=(8,4))
+        if _HAS_SEABORN:
+            import seaborn as sns
+            sns.histplot(df3[TARGET_COL], bins=60, ax=ax2)
+        else:
+            ax2.hist(df3[TARGET_COL].dropna().to_numpy(), bins=60)
+        ax2.set_title("Distribution prix_m2_vente")
+        _log_figure_safe(fig2, figures_dir / "prix_m2_distribution.png", artifact_path="figures/distributions", close=True)
+
+    # colonnes numériques
+    numeric_cols = get_numeric_cols(df3, GROUP_COL)
+    if numeric_cols:
+        cols_per_row = 2
+        rows = math.ceil(len(numeric_cols)/cols_per_row)
+        fig3, axes = plt.subplots(rows, cols_per_row, figsize=(12, 4*rows))
+        axes = axes.flatten()
+        for i, c in enumerate(numeric_cols):
+            df3.boxplot(column=c, ax=axes[i]); axes[i].set_title(f"Boxplot '{c}'")
+        # supprimer axes vides
+        for j in range(i+1, len(axes)):
+            fig3.delaxes(axes[j])
+        fig3.tight_layout()
+        _log_figure_safe(fig3, figures_dir / "Boxplot_variables.png", artifact_path="figures/boxplots", close=True)
+
+    # anomalies logiques
+    df_logic = df3.copy()
+    df_logic["anomalie_logique"] = False
+    if {"nb_toilettes","nb_pieces"}.issubset(df_logic.columns):
+        df_logic.loc[df_logic["nb_toilettes"] > df_logic["nb_pieces"], "anomalie_logique"] = True
+    if "surface" in df_logic.columns:
+        df_logic.loc[(df_logic["surface"] < 10) | (df_logic["surface"] > 1000), "anomalie_logique"] = True
+    if {"nb_etages","etage"}.issubset(df_logic.columns):
+        df_logic.loc[(df_logic["nb_etages"] == 0) & (df_logic["etage"] > 0), "anomalie_logique"] = True
+    if {"logement_neuf","annee_construction"}.issubset(df_logic.columns):
+        old_bins = {"avant 1948","1948-1974","1975-1977","1978-1982","1983-1988","1989-2000"}
+        df_logic.loc[(df_logic["logement_neuf"] == True) & (df_logic["annee_construction"].isin(old_bins)), "anomalie_logique"] = True
+    if TARGET_COL in df_logic.columns:
+        df_logic.loc[df_logic[TARGET_COL] < 100, "anomalie_logique"] = True
+
+    anomalies = df_logic[df_logic["anomalie_logique"]].head(10)
+    anomalies_csv = figures_dir / "anomaly_logic_preview.csv"
+    anomalies.to_csv(anomalies_csv, index=False)
+    try:
+        mlflow.log_artifact(str(anomalies_csv), artifact_path="extracts/anomaly_logic")
+    except Exception:
+        pass
+
+    # split train/test
+    from sklearn.model_selection import train_test_split
+    train_df, test_df = train_test_split(df3, test_size=0.2, random_state=42)
+
+    # bornes & outliers
+    bounds = calculate_bounds(train_df, numeric_cols, 0.001, 0.999) if numeric_cols else {}
+    group_meds, global_meds = compute_medians(train_df, bounds, GROUP_COL)
+    train_marked = mark_outliers(train_df, bounds)
+    test_marked  = mark_outliers(test_df , bounds)
+
+    if TARGET_COL in train_marked:
+        keep_tr = train_marked.get(f"{TARGET_COL}_outlier_flag", 0) == 0
+        keep_te = test_marked.get(f"{TARGET_COL}_outlier_flag", 0) == 0
+        train_marked = train_marked[keep_tr]; test_marked = test_marked[keep_te]
+
+    # logging outliers (si MLflow dispo)
+    try:
+        mlflow.log_dict({c: int(train_marked.get(f"{c}_outlier_flag", 0).sum()) for c in bounds}, "metrics/outlier_counts.json")
+    except Exception:
+        pass
+
+    train_clean = clean_outliers(train_marked, bounds, group_meds, global_meds, GROUP_COL)
+    test_clean  = clean_outliers(test_marked , bounds, group_meds, global_meds, GROUP_COL)
+
+    # drop flags
+    for c in list(bounds.keys()):
+        f = f"{c}_outlier_flag"
+        for d in (train_clean, test_clean):
+            if f in d.columns:
+                d.drop(columns=[f], inplace=True)
+
+    # save
+    out_train = output_dir / "df_sales_clean_train.csv"
+    out_test  = output_dir / "df_sales_clean_test.csv"
+    train_clean.to_csv(out_train, sep=";", index=False)
+    test_clean.to_csv(out_test , sep=";", index=False)
+    print(f"[OK] Écrits: {out_train}, {out_test}")
+
+    try:
+        mlflow.log_artifact(str(out_train))
+        mlflow.log_artifact(str(out_test))
+    except Exception:
+        pass
+
     print("✅ Pipeline preprocessing terminée avec succès")
 
-
 @click.command()
-@click.option('--input-path', type=click.Path(exists=True), prompt='📂 Chemin vers les données')
-@click.option('--output-path', type=click.Path(), prompt='📁 Dossier de sortie')
-def main(input_path, output_path):
-    run_preprocessing_pipeline(input_path=input_path, output_path=output_path)
+@click.option("--input", "input_path", type=click.Path(exists=True, file_okay=False), required=True, help="Dossier input (contient df_sample.csv)")
+@click.option("--out-dir", "output_path", type=click.Path(file_okay=False), required=True, help="Dossier de sortie")
+def main(input_path: str, output_path: str):
+    try:
+        run_preprocessing_pipeline(input_path=input_path, output_path=output_path)
+    except Exception as e:
+        # why: imprimer stacktrace pour DVC
+        print("[FATAL] preprocessing failed:", e)
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
-if mlflow.active_run():
-    mlflow.end_run()
+

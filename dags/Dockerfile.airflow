@@ -1,12 +1,17 @@
-FROM apache/airflow:2.9.0
+# Airflow image officielle (Debian slim)
+FROM apache/airflow:2.9.2-python3.10
+
+USER root
+# lib system pour lightgbm/xgboost & shap (build wheel si besoin)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git curl \
+    && rm -rf /var/lib/apt/lists/*
 
 USER airflow
-# Dockerfile.airflow (relevant lines)
-WORKDIR /opt/airflow
-COPY dags/requirements.txt /opt/airflow/dags/requirements.txt
-RUN pip install --no-cache-dir -r /opt/airflow/dags/requirements.txt
+# Installer deps Python globaux (Airflow a déjà bcp de libs)
+COPY requirements.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt
 
-
-COPY dags/ /opt/airflow/dags/
-
+# S’assure que le dossier dags existe (le DAG est dans /opt/airflow/repo/dags)
+ENV AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/repo/dags
 

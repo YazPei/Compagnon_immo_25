@@ -1,9 +1,8 @@
+# path: requirements.txt
 # Environnement Python recommandé : 3.10; testé avec DVC[gdrive]==3.44.0
-
 
 # Outils enregistrement et sauvegarde de modèles
 joblib>=1.3.0                   # Sauvegarde de modèles
-
 
 # API + Frontend ok
 fastapi==0.111.0                # API REST
@@ -18,12 +17,12 @@ prometheus-fastapi-instrumentator==6.1.0
 # MLOps ok
 mlflow==2.13.0                  # Tracking d’expériences ML
 
-
-
-
 # ML Stack ok
 numpy>=1.26.0,<2.0.0
 pandas==2.2.1
 scikit-learn==1.6.1
 joblib==1.5.1
+
+# NEW: encodage catégoriel (module importé sous 'category_encoders')
+category-encoders>=2.6.3
 

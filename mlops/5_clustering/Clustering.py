@@ -1,396 +1,216 @@
+# path: mlops/5_clustering/Clustering.py
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import os
+from __future__ import annotations
+import os, sys, traceback, math
 from pathlib import Path
-import warnings
+from typing import List, Tuple
+import warnings; warnings.filterwarnings("ignore")
 
-import mlflow
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import geopandas as gpd
-from shapely.geometry import Point
-from sklearn.linear_model import LinearRegression
+import click, numpy as np, pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import silhouette_score
+from sklearn.linear_model import LinearRegression
 
-warnings.filterwarnings("ignore")
-
-
-def setup_mlflow():
-    """
-    Tente d'utiliser MLFLOW_TRACKING_URI si défini, sinon fallback en local (file://mlruns).
-    Crée/choisit l'expérience "Clustering Données Immo".
-    """
-    exp_name = "Clustering Données Immo"
-    uri = os.getenv("MLFLOW_TRACKING_URI")
+# ---- utils log ASCII-safe ----
+def log(*args):
+    msg = " ".join(str(a) for a in args)
+    enc = sys.stdout.encoding or "utf-8"
     try:
-        if uri:
-            mlflow.set_tracking_uri(uri)
-        else:
-            raise RuntimeError("MLFLOW_TRACKING_URI non défini")
-        mlflow.set_experiment(exp_name)
-    except Exception as e:
-        print(f"[WARN] MLflow indisponible ({e}). Fallback en local file://mlruns")
-        local_dir = Path.cwd() / "mlruns"
-        local_dir.mkdir(exist_ok=True)
-        mlflow.set_tracking_uri(f"file://{local_dir}")
-        mlflow.set_experiment(exp_name + " (offline)")
+        print(msg)
+    except UnicodeEncodeError:
+        print(msg.encode(enc, errors="replace").decode(enc, errors="replace"))
+
+def ensure_dirs(*paths: Path) -> None:
+    for p in paths: p.mkdir(parents=True, exist_ok=True)
+
+def load_csv(p: Path, parse_dates: List[str] | None = None) -> pd.DataFrame:
+    if not p.exists(): raise FileNotFoundError(f"Introuvable: {p}")
+    return pd.read_csv(p, sep=";", parse_dates=parse_dates, low_memory=False)
+
+def cp_str(s: pd.Series) -> pd.Series:
+    out = s.astype(str).str.replace(r"\.0$", "", regex=True)
+    return out.where(out.str.match(r"^\d{5}$"), other="inconnu")
+
+def departement_from_cp(cp: pd.Series) -> pd.Series:
+    cp = cp_str(cp)
+    dep = cp.str[:2].where(cp != "inconnu", other="inconnu")
+    # DROM / Corse simplifiés
+    dep = dep.mask(cp.str.startswith("97"), cp.str[:3])  # 971/972/...
+    dep = dep.mask(cp.str.startswith("20"), "2A")  # très grossier
+    return dep.fillna("inconnu")
+
+def month_key(dt: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(dt, errors="coerce")
+    return (dt.dt.year.astype("Int64").astype(str) + "-" +
+            dt.dt.month.astype("Int64").astype(str).str.zfill(2))
+
+def tcam_from_series(df: pd.DataFrame, y_col: str = "prix_m2_vente") -> pd.Series:
+    """
+    Calcule un TCAM (taux de croissance annuel moyen) par zone via une régression
+    log-linéaire sur le temps 't' (mois indexés depuis le min par zone).
+    Retourne une Series indexée par 'zone'.
+    Robuste: si colonnes manquantes, renvoie des NaN.
+    """
+    required = {"zone", "t", y_col}
+    if not required.issubset(df.columns):
+        # colonnes manquantes -> NaN
+        zones = df["zone"].unique() if "zone" in df.columns else []
+        return pd.Series({z: np.nan for z in zones})
+
+    g = df.dropna(subset=[y_col, "t"]).copy()
+    if g.empty:
+        zones = df["zone"].unique()
+        return pd.Series({z: np.nan for z in zones})
+
+    g["logy"] = np.log(g[y_col].astype(float).clip(lower=1e-9))
+
+    def _one(sub: pd.DataFrame) -> float:
+        sub = sub.dropna(subset=["logy", "t"])
+        if len(sub) < 2:
+            return np.nan
+        coef = LinearRegression().fit(sub[["t"]].values, sub["logy"].values).coef_[0]
+        return (np.exp(coef) - 1) * 100 * 12  # mensuel -> annuel en %
+    
+    return g.groupby("zone").apply(_one)
 
 
-def run_clustering_pipeline(input_path: str, output_path: str):
-    # ─────────────────────────────────────────────────────────────────────────────
-    # MLflow setup (résilient)
-    # ─────────────────────────────────────────────────────────────────────────────
-    setup_mlflow()
+def ensure_clusters_always(df_full: pd.DataFrame,
+                           zone_col: str,
+                           k_default: int = 4) -> pd.DataFrame:
+    """Retourne un DF avec colonnes cluster (int) et cluster_label (str), quoi qu'il arrive."""
+    # Features agrégées par zone
+    agg = (df_full
+           .groupby(["ym", zone_col], dropna=False)
+           .agg(prix_m2_vente=("prix_m2_vente", "mean"))
+           .reset_index())
+    if agg.empty:
+        log("WARN: Aucune aggregation produite, fallback quantiles globaux.")
+        # Fallback: clusteriser par quantiles sur prix au niveau individuel
+        quant = pd.qcut(df_full["prix_m2_vente"], q=4, labels=False, duplicates="drop")
+        labels = quant.fillna(0).astype(int)
+        df_full["cluster"] = labels
+        name_map = {0: "bas", 1: "moyen-", 2: "moyen+", 3: "haut"}
+        df_full["cluster_label"] = df_full["cluster"].map(name_map).fillna("moyen")
+        return df_full
 
-    # ─────────────────────────────────────────────────────────────────────────────
-    # Paths d'entrée / sortie
-    # ─────────────────────────────────────────────────────────────────────────────
-    folder_path = str(Path(input_path).resolve())
-    train_file = os.path.join(folder_path, "df_sales_clean_train.csv")
-    test_file = os.path.join(folder_path, "df_sales_clean_test.csv")
-    geo_file = os.path.join(folder_path, "contours-codes-postaux.geojson")
+    # temporel
+    ym = pd.to_datetime(agg["ym"] + "-01", errors="coerce")
+    agg["ym_num"] = ym.dt.year * 12 + ym.dt.month
+    agg["t"] = agg.groupby(zone_col)["ym_num"].transform(lambda x: x - x.min())
+    agg["zone"] = agg[zone_col].astype(str)
+    # TCAM par zone
+    tcam = tcam_from_series(agg, y_col="prix_m2_vente")
+    # Features par zone
+    feats = (agg.groupby(zone_col)
+               .agg(y_mean=("prix_m2_vente","mean"),
+                    y_std =("prix_m2_vente","std"),
+                    y_min =("prix_m2_vente","min"),
+                    y_max =("prix_m2_vente","max"))
+               .reset_index())
+    feats["cv"] = feats["y_std"] / feats["y_mean"]
+    feats["tcam"] = feats[zone_col].map(tcam)
 
-    output_path = Path(output_path)
-    if output_path.suffix.lower() == ".csv":
-        output_dir = output_path.parent
-        out_cluster_csv = output_path
+    X = feats[["y_mean","y_std","y_min","y_max","cv","tcam"]].replace([np.inf,-np.inf], np.nan)
+    Xn = X.dropna()
+    if len(Xn) < 2:
+        log("WARN: Trop peu de zones pour KMeans, fallback quantiles y_mean.")
+        q = pd.qcut(feats["y_mean"], q=min(4, max(1, len(feats))), labels=False, duplicates="drop")
+        feats["cluster"] = q.fillna(0).astype(int)
     else:
-        output_dir = output_path
-        out_cluster_csv = output_dir / "df_cluster.csv"
-    out_st_csv = output_dir / "df_sales_clean_ST.csv"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Vérif fichiers requis
-    for f in [train_file, test_file, geo_file]:
-        if not os.path.exists(f):
-            raise FileNotFoundError(f"Fichier manquant: {f}")
-
-    with mlflow.start_run(run_name="clustering_macro_kpi"):
-        # ─────────────────────────────────────────────────────────────────────────
-        # Chargement des données (chunk-safe)
-        # ─────────────────────────────────────────────────────────────────────────
-        def load_data(file_path, chunksize=100_000):
-            print(f"fonction load_data appelée depuis: {__file__}")
-            try:
-                chunks = pd.read_csv(
-                    file_path,
-                    sep=";",
-                    chunksize=chunksize,
-                    parse_dates=["date"],
-                    on_bad_lines="skip",
-                    low_memory=False,
-                    encoding="utf-8",
-                )
-                parts = list(chunks)
-                if not parts:
-                    print(f"Aucun chunk lu: {file_path}")
-                    return None
-                df = pd.concat(parts).sort_values(by="date")
-                print(f"✅ Fichier lu ({len(df)} lignes): {file_path}")
-                return df
-            except Exception as e:
-                raise RuntimeError(f"Erreur lors du chargement de {file_path}: {e}")
-
-        print("Chargement des données d'entraînement...")
-        train_cluster = load_data(train_file)
-        if train_cluster is None:
-            raise ValueError("Train vide ou invalide")
-        train_cluster["date"] = pd.to_datetime(train_cluster["date"], errors="coerce")
-        train_cluster = train_cluster.dropna(subset=["date"]).copy()
-        train_cluster = train_cluster.set_index("date")
-        train_cluster["Year"] = train_cluster.index.year.astype("int16")
-        train_cluster["Month"] = train_cluster.index.month.astype("int8")
-
-        # Split temporel simple
-        train_cluster_ST = train_cluster[train_cluster["Year"] < 2024].copy()
-        test_cluster_ST = train_cluster[train_cluster["Year"] >= 2024].copy()
-
-        print("\nChargement des données de test...")
-        test_cluster = load_data(test_file)
-        if test_cluster is None:
-            raise ValueError("Test vide ou invalide")
-        test_cluster["date"] = pd.to_datetime(test_cluster["date"], errors="coerce")
-
-        # ─────────────────────────────────────────────────────────────────────────
-        # Enrichissement géo: codePostal via sjoin (points ∈ polygones)
-        # ─────────────────────────────────────────────────────────────────────────
-        print("\nChargement des polygones de codes postaux...")
-        pcodes = gpd.read_file(geo_file)[["codePostal", "geometry"]]
-        pcodes = pcodes.set_geometry("geometry").to_crs(epsg=4326)
-        _ = pcodes.sindex  # index spatial
-        print("Polygones chargés :", pcodes.shape)
-
-        train_cluster_ST = train_cluster_ST.reset_index()
-        test_cluster_ST = test_cluster_ST.reset_index()
-
-        train_cluster_ST["split"] = "train"
-        test_cluster_ST["split"] = "train_test"
-        test_cluster["split"] = "test"
-
-        df_cluster = pd.concat([train_cluster_ST, test_cluster_ST, test_cluster], ignore_index=True)
-
-        # Drop lat/lon manquants et prépare points
-        df_base = df_cluster.dropna(subset=["mapCoordonneesLatitude", "mapCoordonneesLongitude"]).copy()
-        df_base["lat"] = df_base["mapCoordonneesLatitude"]
-        df_base["lon"] = df_base["mapCoordonneesLongitude"]
-        df_base["orig_index"] = df_base.index
-
-        def process_chunk(chunk, pcodes_gdf):
-            chunk = chunk.copy()
-            chunk["geometry"] = gpd.points_from_xy(chunk["lon"], chunk["lat"])
-            gdf = gpd.GeoDataFrame(chunk, geometry="geometry", crs="EPSG:4326")
-            gdf = gdf[gdf.is_valid]
-            if gdf.crs != pcodes_gdf.crs:
-                gdf = gdf.to_crs(pcodes_gdf.crs)
-            _ = gdf.sindex
-            joined = gpd.sjoin(gdf, pcodes_gdf, how="left", predicate="within")
-            return joined[["orig_index", "codePostal"]]
-
-        results = []
-        chunksize = 100_000
-        for i in range(0, len(df_base), chunksize):
-            chunk = df_base.iloc[i:i + chunksize]
-            results.append(process_chunk(chunk, pcodes))
-
-        df_joined = pd.concat(results, ignore_index=True).drop_duplicates("orig_index")
-        df_base = df_base.merge(df_joined, on="orig_index", how="left")
-        df_base = df_base.drop(columns=["orig_index"])
-
-        # Nettoyage date/index + codePostal
-        df_base["date"] = pd.to_datetime(df_base["date"], errors="coerce")
-        df_base = df_base.sort_values("date").set_index("date")
-        df_base["codePostal"] = df_base["codePostal"].astype(str).str.replace(r"\.0$", "", regex=True)
-
-        # ─────────────────────────────────────────────────────────────────────────
-        # Variable hybride zone_mixte (CP détaillé si >=10 obs, sinon département)
-        # ─────────────────────────────────────────────────────────────────────────
-        train_cluster = df_base[df_base["split"] == "train"].copy()
-        test_cluster = df_base[df_base["split"].isin(["test", "train_test"])].copy()
-
-        cp_counts = train_cluster["codePostal"].value_counts()
-        cp_frequents = set(cp_counts[cp_counts >= 10].index)
-
-        def regroup_code(cp: str, frequents_set):
-            cp = str(cp)
-            if cp in frequents_set:
-                return cp
-            if cp.startswith("97") and len(cp) >= 3:
-                return cp[:3]  # DROM
-            if cp.isdigit() and len(cp) == 5:
-                return cp[:2]  # département
-            return "inconnu"
-
-        train_cluster["zone_mixte"] = train_cluster["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
-        )
-        test_cluster["zone_mixte"] = test_cluster["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
-        )
-
-        # Lags dans le train
-        train_cluster = train_cluster.sort_values(["zone_mixte", "date"])
-        train_cluster["prix_lag_1m"] = train_cluster.groupby("zone_mixte")["prix_m2_vente"].shift(1)
-        train_cluster["prix_roll_3m"] = (
-            train_cluster.groupby("zone_mixte")["prix_m2_vente"]
-            .rolling(3, closed="left")
-            .mean()
-            .reset_index(level=0, drop=True)
-        )
-
-        # Agrégations mensuelles
-        train_cluster["Year"] = train_cluster.index.year.astype(int)
-        train_cluster["Month"] = train_cluster.index.month.astype(int)
-
-        train_mensuel = (
-            train_cluster.groupby(["Year", "Month", "zone_mixte"])
-            .agg(
-                prix_m2_vente=("prix_m2_vente", "mean"),
-                volume_ventes=("prix_m2_vente", "count"),
-            )
-            .reset_index()
-        )
-
-        def get_code_postal_final(zone):
-            s = str(zone)
-            if s.isdigit() and len(s) == 5:
-                return s
-            if s.isdigit() and len(s) == 2:
-                return s + "000"
-            if s.startswith("97") and len(s) == 3:
-                return s + "00"
-            return "inconnu"
-
-        train_mensuel["date"] = pd.to_datetime(
-            dict(year=train_mensuel["Year"].astype(int),
-                 month=train_mensuel["Month"].astype(int),
-                 day=1),
-            errors="raise"
-        )
-        train_mensuel["codePostal_recons"] = train_mensuel["zone_mixte"].apply(get_code_postal_final)
-        train_mensuel = train_mensuel.sort_values(["codePostal_recons", "date"])
-        train_mensuel["ym_ordinal"] = train_mensuel["Year"] * 12 + train_mensuel["Month"]
-        train_mensuel["t"] = train_mensuel.groupby("codePostal_recons")["ym_ordinal"].transform(lambda x: x - x.min())
-
-        # TCAM via régression sur log(prix)
-        train_mensuel["log_prix"] = np.log(train_mensuel["prix_m2_vente"])
-
-        def compute_tcam(df_):
-            if len(df_) < 2 or df_["log_prix"].isna().any():
-                return np.nan
-            X = df_[["t"]].values.reshape(-1, 1)
-            y = df_["log_prix"].values
-            coef = LinearRegression().fit(X, y).coef_[0]
-            return (np.exp(coef) - 1) * 100 * 12
-
-        tcam_df = (
-            train_mensuel.groupby("codePostal_recons")
-            .apply(compute_tcam)
-            .reset_index(name="tc_am_reg")
-        )
-
-        # Dataset features pour clustering
-        train_mensuel = (
-            train_mensuel.merge(tcam_df, on="codePostal_recons", how="left")
-            .rename(columns={"prix_m2_vente": "prix_m2_mean"})
-            .dropna(subset=["tc_am_reg"])
-            .reset_index(drop=True)
-        )
-
-        df_cluster_input = (
-            train_mensuel.groupby("codePostal_recons")
-            .agg(
-                prix_m2_mean=("prix_m2_mean", "mean"),
-                prix_m2_std=("prix_m2_mean", "std"),
-                prix_m2_max=("prix_m2_mean", "max"),
-                prix_m2_min=("prix_m2_mean", "min"),
-                avg_lag_1m=("prix_m2_mean", "mean"),   # proxies si besoin
-                avg_roll_3m=("prix_m2_mean", "mean"),
-            )
-            .assign(prix_m2_cv=lambda df: df["prix_m2_std"] / df["prix_m2_mean"])
-            .reset_index()
-            .merge(tcam_df, on="codePostal_recons", how="left")
-        )
-
-        Path("mlflow_outputs").mkdir(exist_ok=True)
-        df_cluster_input.to_csv("mlflow_outputs/cluster_input.csv", index=False, sep=";")
-        mlflow.log_artifact("mlflow_outputs/cluster_input.csv")
-
-        # ─────────────────────────────────────────────────────────────────────────
-        # Clustering KMeans (k choisi avec coude)
-        # ─────────────────────────────────────────────────────────────────────────
-        features = [
-            "prix_m2_std", "prix_m2_max", "prix_m2_min",
-            "tc_am_reg", "prix_m2_cv", "avg_roll_3m", "avg_lag_1m",
-        ]
-        X = df_cluster_input[features].replace([np.inf, -np.inf], np.nan)
-        X_train = X.dropna()
-        train_idx = X_train.index
-
-        scaler = StandardScaler().fit(X_train)
-        X_train_scaled = scaler.transform(X_train)
-
-        inertias = []
-        ks = list(range(2, 10))
+        k_max = min(k_default, len(Xn))
+        if k_max < 2: k_max = 2
+        Xs = StandardScaler().fit_transform(Xn.values)
+        ks = list(range(2, min(8, len(Xn))+1))
+        models, sils = [], []
         for k in ks:
-            km = KMeans(n_clusters=k, random_state=42, n_init=10)
-            km.fit(X_train_scaled)
-            inertias.append(km.inertia_)
+            km = KMeans(n_clusters=k, random_state=42, n_init="auto")
+            lab = km.fit_predict(Xs)
+            models.append(km)
+            try: sils.append(silhouette_score(Xs, lab))
+            except Exception: sils.append(np.nan)
+        k_best = ks[int(np.nanargmax(sils))] if np.isfinite(sils).any() else min(4, len(Xn))
+        if k_best >= len(Xn): k_best = max(2, len(Xn)-1)
+        km = models[ks.index(k_best)]
+        labels = pd.Series(km.predict(Xs), index=Xn.index)
+        feats["cluster"] = 0
+        feats.loc[Xn.index, "cluster"] = labels.astype(int)
 
-        plt.figure()
-        plt.plot(ks, inertias, marker="o")
-        plt.title("Méthode du coude – Inertie intra-cluster")
-        plt.xlabel("Nombre de clusters")
-        plt.ylabel("Inertie")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig("mlflow_outputs/elbow_plot.png")
-        mlflow.log_artifact("mlflow_outputs/elbow_plot.png")
-        plt.close()
+    # labels lisibles
+    order = feats.groupby("cluster")["y_mean"].mean().sort_values().index.tolist()
+    names = ["bas", "moyen-", "moyen+", "haut", "tres haut", "premium"]
+    name_map = {c: names[i % len(names)] for i, c in enumerate(order)}
+    feats["cluster_label"] = feats["cluster"].map(name_map)
 
-        # Fit final (k=4 par défaut)
-        kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
-        labels = kmeans.fit_predict(X_train_scaled)
-        df_cluster_input.loc[train_idx, "cluster"] = labels.astype(int)
+    # Merge vers full DF
+    out = df_full.merge(feats[[zone_col, "cluster", "cluster_label"]],
+                        on=zone_col, how="left")
+    out["cluster"] = out["cluster"].fillna(0).astype(int)
+    out["cluster_label"] = out["cluster_label"].fillna("moyen")
+    return out
+def fallback_quantiles(df_full: pd.DataFrame, zone_col: str) -> pd.DataFrame:
+    # Clusters simples par quantiles sur le prix individuel
+    q = pd.qcut(df_full["prix_m2_vente"], q=4, labels=False, duplicates="drop")
+    df_full = df_full.copy()
+    df_full["cluster"] = q.fillna(0).astype(int)
+    name_map = {0: "bas", 1: "moyen-", 2: "moyen+", 3: "haut"}
+    df_full["cluster_label"] = df_full["cluster"].map(name_map).fillna("moyen")
+    return df_full
 
-        # Mapping lisible
-        cluster_order = (
-            df_cluster_input.groupby("cluster")["prix_m2_mean"]
-            .mean()
-            .sort_values()
-            .index.tolist()
-        )
-        cluster_names = [
-            "Zones rurales, petites villes stagnantes",
-            "Centres urbains établis, zones résidentielles",
-            "Banlieues, zones mixtes",
-            "Zones tendues - secteurs spéculatifs",
-        ]
-        mapping = dict(zip(cluster_order, cluster_names))
-        df_cluster_input["cluster_label"] = df_cluster_input["cluster"].map(mapping)
+@click.command()
+@click.option("--input-dir", type=click.Path(exists=True, file_okay=False), required=True,
+              help="Dossier contenant df_sales_clean_train.csv et df_sales_clean_test.csv")
+@click.option("--output-dir", type=click.Path(), default="data", show_default=True,
+              help="Dossier sortie (écrit df_cluster.csv et df_sales_clean_ST.csv)")
+def main(input_dir: str, output_dir: str):
+    try:
+        in_dir = Path(input_dir)
+        out_dir = Path(output_dir)
+        ensure_dirs(out_dir)
 
-        # Sauvegarde des assignations agrégées (optionnel)
-        df_cluster_input.to_csv("mlflow_outputs/cluster_input_labeled.csv", index=False, sep=";")
-        mlflow.log_artifact("mlflow_outputs/cluster_input_labeled.csv")
+        train = load_csv(in_dir / "df_sales_clean_train.csv", parse_dates=["date"])
+        test  = load_csv(in_dir / "df_sales_clean_test.csv",  parse_dates=["date"])
+        train["split"] = "train"; test["split"] = "test"
+        df = pd.concat([train, test], ignore_index=True)
 
-        # ─────────────────────────────────────────────────────────────────────────
-        # ⚠️ MERGE DES LABELS DANS LES DONNÉES FINALES
-        # ─────────────────────────────────────────────────────────────────────────
-        mapping_df = (
-            df_cluster_input[["codePostal_recons", "cluster", "cluster_label"]]
-            .drop_duplicates(subset=["codePostal_recons"])
-        )
+        # codePostal -> departement (zone simple, toujours disponible si codePostal existe)
+        if "codePostal" in df.columns:
+            df["codePostal"] = cp_str(df["codePostal"])
+        else:
+            df["codePostal"] = "inconnu"
+        df["dep_zone"] = departement_from_cp(df["codePostal"])
+        # clé temporelle mois
+        df["ym"] = month_key(df["date"])
 
-        # Reconstitution du full (train + test) en conservant index pour 'date'
-        df_cluster_full = pd.concat([train_cluster, test_cluster]).copy()
-        if isinstance(df_cluster_full.index, pd.DatetimeIndex):
-            df_cluster_full = df_cluster_full.reset_index().rename(columns={"index": "date"})
+        # Filtres de base
+        if "prix_m2_vente" not in df.columns:
+            raise ValueError("Colonne prix_m2_vente absente.")
+        df = df.dropna(subset=["prix_m2_vente"]).copy()
 
-        # Recrée zone_mixte et codePostal_recons avec la même logique que plus haut
-        df_cluster_full["zone_mixte"] = df_cluster_full["codePostal"].astype(str).apply(
-            lambda x: regroup_code(x, cp_frequents)
-        )
-        df_cluster_full["codePostal_recons"] = df_cluster_full["zone_mixte"].apply(get_code_postal_final)
+        # Clustering robuste
+        SAFE = os.getenv("CLUSTERING_SAFE", "0") == "1"
+        try:
+            out = ensure_clusters_always(df, zone_col="dep_zone", k_default=4)
+        except Exception as e:
+            if SAFE:
+                log(f"[WARN] Pipeline clustering en echec ({e}), fallback quantiles.")
+                out = fallback_quantiles(df, "dep_zone")
+            else:
+                raise
 
-        # Merge labels
-        df_cluster_full = df_cluster_full.merge(mapping_df, on="codePostal_recons", how="left")
-        df_cluster_full["cluster"] = df_cluster_full["cluster"].astype("Int64")
-        df_cluster_full["cluster_label"] = df_cluster_full["cluster_label"].fillna("inconnu")
+        # Exports
+        st_path = out_dir / "df_sales_clean_ST.csv"
+        cl_path = out_dir / "df_cluster.csv"
+        out.drop(columns=["split"], errors="ignore").to_csv(st_path, sep=";", index=False)
+        out.to_csv(cl_path, sep=";", index=False)
 
-        # ─────────────────────────────────────────────────────────────────────────
-        # Exports finaux pour le pipeline
-        # ─────────────────────────────────────────────────────────────────────────
-        # Série temporelle (sans 'split'), labels inclus
-        df_cluster_ST = df_cluster_full.drop(columns=["split"], errors="ignore")
-        df_cluster_ST.to_csv(out_st_csv, sep=";", index=False)
-        mlflow.log_artifact(str(out_st_csv))
-
-        # Données pour régression (on force 'train_test' -> 'train'), labels inclus
-        df_cluster_reg = df_cluster_full.copy()
-        if "split" in df_cluster_reg.columns:
-            df_cluster_reg["split"] = df_cluster_reg["split"].replace("train_test", "train")
-        df_cluster_reg.to_csv(out_cluster_csv, sep=";", index=False)
-        mlflow.log_artifact(str(out_cluster_csv))
-
-        # Duplicatas pour DVC
-        dvc_out_dir = Path("data"); dvc_out_dir.mkdir(parents=True, exist_ok=True)
-        (dvc_out_dir / "df_sales_clean_ST.csv").write_text("", encoding="utf-8")  # ensure path exists (optional)
-        df_cluster_ST.to_csv(dvc_out_dir / "df_sales_clean_ST.csv", sep=";", index=False)
-        df_cluster_reg.to_csv(dvc_out_dir / "df_cluster.csv", sep=";", index=False)
-
-        print("✅ Exports (exports/ + data/ pour DVC) :")
-        print(f"  - exports/df_cluster.csv        → {out_cluster_csv}")
-        print(f"  - exports/df_sales_clean_ST.csv → {out_st_csv}")
-        print(f"  - data/df_cluster.csv           → {dvc_out_dir/'df_cluster.csv'}")
-        print(f"  - data/df_sales_clean_ST.csv    → {dvc_out_dir/'df_sales_clean_ST.csv'}")
-
+        log("OK: ecrit", cl_path, "et", st_path)
+    except Exception as e:
+        log("[FATAL] clustering failed:", e)
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
-    run_clustering_pipeline(
-        input_path="data/processed/",
-        output_path="exports/df_cluster.csv",
-    )
+    main()
 

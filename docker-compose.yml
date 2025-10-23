@@ -4,9 +4,11 @@ services:
     build:
       context: .
       dockerfile: dags/Dockerfile.airflow
+    user: "0:0" 
     env_file:
       - .env
     environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
@@ -23,16 +25,25 @@ services:
       - ./mlops:/opt/airflow/mlops
     command: >
       bash -lc '
-        airflow db upgrade &&
-        bash /opt/airflow/repo/infra/*.sh &&
-        airflow db upgrade &&
-        bash /opt/airflow/repo/infra/init_repo.sh &&
-        airflow variables set SOURCE_MODE "${SOURCE_MODE:-s3_profile}" &&
-        airflow variables set S3_BUCKET "${BUCKET}" &&
-        airflow variables set S3_KEY "${KEY}" &&
-        airflow variables set S3_REGION "${REGION}" &&
-        airflow variables set S3_ENDPOINT "${S3_ENDPOINT}"
-      '
+      set -euo pipefail
+      echo "[init] fix perms"
+      chmod +x /opt/airflow/repo/infra/dags-airflow-permission.sh || true
+      AIRFLOW_GID=0 /opt/airflow/repo/infra/dags-airflow-permission.sh
+
+      echo "[init] db upgrade"
+      airflow db upgrade
+
+      echo "[init] repo bootstrap"
+      test -x /opt/airflow/repo/infra/init_repo.sh || chmod +x /opt/airflow/repo/infra/init_repo.sh
+      bash /opt/airflow/repo/infra/init_repo.sh
+
+      echo "[init] airflow variables"
+      airflow variables set SOURCE_MODE "${SOURCE_MODE:-s3_profile}"
+      airflow variables set S3_BUCKET "${BUCKET}"
+      airflow variables set S3_KEY "${KEY}"
+      airflow variables set S3_REGION "${REGION}"
+      airflow variables set S3_ENDPOINT "${S3_ENDPOINT}"
+      echo "[init] done" '  
     depends_on:
       postgres-airflow:
         condition: service_started

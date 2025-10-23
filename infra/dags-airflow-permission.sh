@@ -1,24 +1,31 @@
-# 1) Donne lecture à tous les fichiers, et "traverse" aux dossiers
-chmod -R a+rX dags
+#!/usr/bin/env bash
 set -euo pipefail
-: "${AIRFLOW_HOME:=/opt/airflow}"
-airflow variables set SOURCE_MODE    "${SOURCE_MODE:-s3_public}"
-airflow variables set S3_BUCKET      "${S3_BUCKET:-mon-bucket}"
-airflow variables set S3_KEY         "${S3_KEY:-path/to/file.csv}"
-airflow variables set S3_REGION      "${S3_REGION:-eu-west-1}"
-airflow variables set S3_ENDPOINT    "${S3_ENDPOINT:-}"
-airflow variables set AWS_PROFILE    "${AWS_PROFILE:-}"
 
-# (au besoin, plus strict/verbeux)
-find dags -type d -exec chmod 755 {} \;
-find dags -type f -name "*.py" -exec chmod 644 {} \;
+# UID/GID de l'utilisateur Airflow dans le conteneur
+AUID="${AIRFLOW_UID:-50000}"
+AGID="${AIRFLOW_GID:-0}"           # groupe 0 = root pour compatibilité
+AF_HOME="/opt/airflow"
 
-# 2) (optionnel) remet l’ownership à ton user
-sudo chown -R "$USER":"$USER" dags
+# Dossiers montés en volumes
+DIRS=(
+  "$AF_HOME/logs"
+  "$AF_HOME/dags"
+  "$AF_HOME/repo"
+  "$AF_HOME/data"
+  "$AF_HOME/exports"
+  "$AF_HOME/mlops"
+)
 
-# 3) (optionnel mais sain) retire les CRLF dans les DAGs
-find dags -type f -name "*.py" -exec sed -i 's/\r$//' {} \;
+echo "[perm] ensure directories exist"
+for d in "${DIRS[@]}"; do
+  mkdir -p "$d"
+done
 
-# 4) Redémarre Airflow pour rescanner
-docker compose restart airflow
+echo "[perm] chown recursively to ${AUID}:${AGID}"
+for d in "${DIRS[@]}"; do
+  chown -R "${AUID}:${AGID}" "$d" || true
+  chmod -R g+rwX "$d" || true
+done
+
+echo "[perm] done"
 

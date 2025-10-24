@@ -1,16 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from pathlib import Path
-from dotenv import load_dotenv
-
-
-# charge les variables depuis .env.yaz si présent
-if Path(".env.yaz").exists():
-    load_dotenv(".env.yaz")
-
-# puis, comme avant :
-import mlflow
-
+"""
+evaluate_ST.py — évaluation SARIMAX / Prophet / fallback
+Version corrigée : support --mlflow-uri, --experiment, --run-id ; mlflow-safe (no-op si absent).
+Usage:
+  python evaluate_ST.py --input-folder data/split --model-folder outputs/best --output-folder outputs/evaluate --mlflow-uri "..." --experiment "ST-Eval"
+"""
+from __future__ import annotations
 import os
 import re
 import glob
@@ -21,45 +17,102 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import mlflow
 
+# metrics
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+# optionally joblib/pickle for loading models
 try:
     import joblib
 except Exception:
     joblib = None
 import pickle
 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+# dotenv (si tu utilises .env.yaz)
+try:
+    from dotenv import load_dotenv
+    if Path(".env.yaz").exists():
+        load_dotenv(".env.yaz")
+except Exception:
+    pass
 
 warnings.filterwarnings("ignore")
-mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 
-# ========= MLflow utils =========
-def setup_mlflow(exp_name: str = "ST-SARIMAX-Evaluation-remote") -> None:
-    """
-    Utilise MLFLOW_TRACKING_URI si défini, sinon fallback local file:./mlruns
-    Crée/sélectionne l'expérience exp_name.
-    """
-    uri = os.getenv("MLFLOW_TRACKING_URI")
+
+# ---------------- MLflow safe wrapper (no-op si absent) ----------------
+class _NoOpRun:
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb): return False
+
+class _NoOpMLflow:
+    def set_tracking_uri(self, *a, **k): pass
+    def set_experiment(self, *a, **k): pass
+    def start_run(self, *a, **k): return _NoOpRun()
+    def active_run(self): return None
+    def end_run(self, *a, **k): pass
+    def log_metric(self, *a, **k): pass
+    def log_param(self, *a, **k): pass
+    def log_artifact(self, *a, **k): pass
+    def set_tag(self, *a, **k): pass
+
+try:
+    import mlflow as _mlflow
+    MLFLOW = _mlflow
+except Exception:
+    MLFLOW = _NoOpMLflow()
+
+
+# ---------------- helpers MLflow ----------------
+def _mlflow_safe_set_tracking_uri(uri: Optional[str]) -> str:
+    """Détermine et fixe URI (arg -> env -> fallback file:./mlruns) et retourne l'URI effective."""
+    uri_eff = uri or os.getenv("MLFLOW_TRACKING_URI", None)
+    if not uri_eff:
+        uri_eff = f"file:{os.path.abspath('./mlruns')}"
     try:
-        if uri:
-            mlflow.set_tracking_uri(uri)
-        else:
-            raise RuntimeError("MLFLOW_TRACKING_URI non défini")
-        mlflow.set_experiment(exp_name)
+        if hasattr(MLFLOW, "set_tracking_uri"):
+            MLFLOW.set_tracking_uri(uri_eff)
     except Exception as e:
-        print(f"[WARN] MLflow indisponible ({e}). Fallback en local file:./mlruns")
-        local_dir = Path.cwd() / "mlruns"
-        local_dir.mkdir(exist_ok=True)
-        mlflow.set_tracking_uri(f"file://{local_dir}")
-        mlflow.set_experiment(exp_name + " (offline)")
+        print(f"[WARN] mlflow.set_tracking_uri failed: {e}")
+    return uri_eff
+
+def _mlflow_safe_set_experiment(name: str) -> None:
+    try:
+        if hasattr(MLFLOW, "set_experiment"):
+            MLFLOW.set_experiment(name)
+    except Exception as e:
+        print(f"[WARN] mlflow.set_experiment failed: {e}")
+
+def _mlflow_log_artifact(path: str, artifact_path: Optional[str] = None):
+    try:
+        if not os.path.exists(path):
+            print(f"[WARN] artifact not found, skip: {path}")
+            return
+        if artifact_path:
+            MLFLOW.log_artifact(path, artifact_path=artifact_path)
+        else:
+            MLFLOW.log_artifact(path)
+    except Exception as e:
+        print(f"[WARN] mlflow.log_artifact failed for {path}: {e}")
+
+def _mlflow_log_metrics(metrics: dict):
+    try:
+        for k, v in metrics.items():
+            MLFLOW.log_metric(k, float(v))
+    except Exception as e:
+        print(f"[WARN] mlflow.log_metric failed: {e}")
+
+def _mlflow_log_params(params: dict):
+    try:
+        for k, v in params.items():
+            MLFLOW.log_param(k, v)
+    except Exception as e:
+        print(f"[WARN] mlflow.log_param failed: {e}")
 
 
-# ========= IO utils =========
+# ---------------- IO helpers ----------------
 def resolve_split_paths(input_folder: str, suffix: Optional[str]) -> Tuple[str, str]:
     """
-    Trouve automatiquement les chemins train/test.
-    Essaie avec suffix, puis *_q12, puis sans suffixe.
+    Trouve automatiquement train/test (essaie variantes avec suffix puis q12 puis sans).
     """
     input_folder = str(Path(input_folder))
     suffix = suffix or ""
@@ -83,11 +136,10 @@ def resolve_split_paths(input_folder: str, suffix: Optional[str]) -> Tuple[str, 
         )
     return train_path, test_path
 
-
 def infer_cluster_ids_from_models(model_folder: str) -> List[Optional[int]]:
     """
     Déduit les cluster_ids depuis les noms des fichiers modèles (regex 'cluster_(\\d+)').
-    Si rien, retourne [None] → évaluation globale.
+    Si aucun modèle trouvé, retourne [None] — on fera une éval globale.
     """
     ids = set()
     for f in glob.glob(os.path.join(model_folder, "*.pkl")):
@@ -96,27 +148,25 @@ def infer_cluster_ids_from_models(model_folder: str) -> List[Optional[int]]:
             ids.add(int(m.group(1)))
     return sorted(ids) if ids else [None]
 
-
 def pick_model_for_cluster(model_folder: str, cid: Optional[int]) -> Optional[str]:
     """
-    Sélectionne un modèle pour le cluster cid. Si cid=None, prend le premier .pkl.
+    Sélectionne un modèle pour le cluster cid. Si cid=None, prend le premier .pkl existant (si présent).
     """
+    files = sorted(glob.glob(os.path.join(model_folder, "*.pkl")))
     if cid is None:
-        files = sorted(glob.glob(os.path.join(model_folder, "*.pkl")))
         return files[0] if files else None
-    # cherche un modèle contenant 'cluster_<cid>'
     pattern = re.compile(rf"cluster_{cid}\b")
-    for f in sorted(glob.glob(os.path.join(model_folder, "*.pkl"))):
+    for f in files:
         if pattern.search(os.path.basename(f)):
             return f
-    # fallback: rien trouvé
     return None
-
 
 def load_model(model_path: str):
     """
     Charge un modèle .pkl via joblib si dispo, sinon pickle.
     """
+    if model_path is None:
+        return None
     if joblib is not None:
         try:
             return joblib.load(model_path)
@@ -126,85 +176,97 @@ def load_model(model_path: str):
         return pickle.load(f)
 
 
-# ========= Forecast utils =========
-def forecast_with_model(model, test_index: pd.DatetimeIndex, steps: int) -> np.ndarray:
+# ---------------- Forecast helpers ----------------
+def forecast_with_model(model, test_index: pd.DatetimeIndex, steps: int, train_series: Optional[pd.Series] = None) -> np.ndarray:
     """
-    Essaie get_forecast(steps) (statsmodels) puis predict, sinon persistance (naïf).
+    Essaie get_forecast/predict, sinon fallback persistance (dernière valeur du train).
+    Si model is None, utilise dernier point de train_series si fourni, sinon 0.0.
     """
+    if model is None:
+        # persistence from train_series
+        if train_series is not None and len(train_series) > 0:
+            last_val = float(pd.to_numeric(train_series.dropna()).iloc[-1])
+        else:
+            last_val = 0.0
+        return np.full(steps, last_val, dtype=float)
+
     # statsmodels SARIMAXResults -> get_forecast
     if hasattr(model, "get_forecast"):
         try:
             fc = model.get_forecast(steps=steps)
             if hasattr(fc, "predicted_mean"):
-                return np.asarray(fc.predicted_mean)
-            # certains objets renvoient directement une array-like
-            arr = np.asarray(fc)
-            if arr.shape[0] == steps:
-                return arr
-        except Exception as e:
-            print(f"[WARN] get_forecast a échoué: {e}")
+                arr = np.asarray(fc.predicted_mean)
+                if arr.shape[0] >= steps:
+                    return arr[:steps]
+                # else fallback to what we can
+                return np.resize(arr, steps).astype(float)
+        except Exception:
+            pass
 
-    # API .predict (nombreux modèles)
+    # predict with start/end (many models accept that)
     if hasattr(model, "predict"):
         try:
-            # Beaucoup de modèles acceptent start/end index (pandas index)
-            yhat = model.predict(start=test_index[0], end=test_index[-1])
-            yhat = np.asarray(yhat)
-            # si la shape diffère, tente steps
-            if yhat.shape[0] != steps and hasattr(model, "predict"):
-                yhat = np.asarray(model.predict(steps=steps))
-            return yhat[:steps]
-        except Exception as e:
-            print(f"[WARN] predict(start/end) a échoué: {e}")
-
-    # Fallback naïf (persistance)
-    print("[WARN] Fallback naïf (persistance dernière valeur train) appliqué.")
-    # On suppose que le modèle possède l'attribut endog / data.endog ou qu'on ne l'a pas → 0
-    last_val = None
-    for attr in ("endog", "data", "model"):
-        obj = getattr(model, attr, None)
-        if obj is None:
-            continue
-        try:
-            if hasattr(obj, "endog"):
-                last_val = np.asarray(obj.endog)[-1]
-                break
-            if hasattr(obj, "y"):
-                last_val = np.asarray(obj.y)[-1]
-                break
+            # try predict with pandas-like start/end
+            try:
+                yhat = model.predict(start=test_index[0], end=test_index[-1])
+            except Exception:
+                yhat = model.predict(steps=steps)
+            arr = np.asarray(yhat, dtype=float)
+            if arr.shape[0] >= steps:
+                return arr[:steps]
+            return np.resize(arr, steps).astype(float)
         except Exception:
-            continue
-    if last_val is None:
+            pass
+
+    # fallback naive
+    if train_series is not None and len(train_series) > 0:
+        last_val = float(pd.to_numeric(train_series.dropna()).iloc[-1])
+    else:
+        # try to infer last from model attributes if possible
         last_val = 0.0
-    return np.full(steps, float(last_val))
+        for attr in ("endog", "data", "y"):
+            obj = getattr(model, attr, None)
+            if obj is None:
+                continue
+            try:
+                arr = np.asarray(getattr(obj, "endog", getattr(obj, "y", obj)))
+                if arr.size > 0:
+                    last_val = float(arr[-1])
+                    break
+            except Exception:
+                continue
+    print("[WARN] fallback naïf (persistance) appliqué.")
+    return np.full(steps, last_val, dtype=float)
 
 
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     mae = float(mean_absolute_error(y_true, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    # MAPE safe (évite division par zéro)
     denom = np.where(np.asarray(y_true) == 0, 1e-8, np.asarray(y_true))
     mape = float(np.mean(np.abs((y_true - y_pred) / denom)) * 100.0)
     return {"mae": mae, "rmse": rmse, "mape": mape}
 
 
-# ========= Main =========
-def main(input_folder: str, output_folder: str, model_folder: str, suffix: Optional[str] = None) -> None:
-    setup_mlflow("ST-SARIMAX-Evaluation")
+# ---------------- Main evaluation flow ----------------
+def evaluate(input_folder: str, output_folder: str, model_folder: str, suffix: Optional[str] = None,
+             mlflow_uri: Optional[str] = None, experiment: str = "ST-SARIMAX-Evaluation", run_id: Optional[str] = None):
+    # Setup mlflow (safe)
+    effective_uri = _mlflow_safe_set_tracking_uri(mlflow_uri)
+    _mlflow_safe_set_experiment(experiment)
 
     y_col = "prix_m2_vente"
     suffix = suffix or ""
     out_dir = Path(output_folder)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Localise les splits (train/test)
+    # find train/test
     train_path, test_path = resolve_split_paths(input_folder, suffix)
     print(f"[INFO] train={train_path}\n[INFO] test ={test_path}")
 
     df_train = pd.read_csv(train_path, sep=";", parse_dates=["date"]).set_index("date")
     df_test = pd.read_csv(test_path, sep=";", parse_dates=["date"]).set_index("date")
 
-    # Déduction des clusters
+    # deduce cluster ids from available models
     cluster_ids = infer_cluster_ids_from_models(model_folder)
     if cluster_ids == [None] and "cluster" in df_train.columns:
         try:
@@ -212,7 +274,7 @@ def main(input_folder: str, output_folder: str, model_folder: str, suffix: Optio
         except Exception:
             cluster_ids = [None]
 
-    # Boucle d’évaluation
+    # loop clusters
     for cid in (cluster_ids if cluster_ids != [None] else [None]):
         if cid is not None and "cluster" in df_train.columns:
             tr = df_train[df_train["cluster"] == cid]
@@ -228,54 +290,67 @@ def main(input_folder: str, output_folder: str, model_folder: str, suffix: Optio
         if y_col not in tr.columns or y_col not in te.columns:
             raise KeyError(f"Colonne cible '{y_col}' absente du train/test.")
 
-        # Sélection/chargement modèle
         model_path = pick_model_for_cluster(model_folder, cid)
         if model_path is None or not os.path.exists(model_path):
-            print(f"[WARN] Aucun modèle trouvé pour cluster={cid}. Fallback naïf.")
-            model = object()  # fantôme pour fallback
+            print(f"[WARN] Aucun modèle trouvé pour cluster={cid}. On utilisera un fallback persistant.")
+            model = None
         else:
             print(f"[INFO] Modèle utilisé (cluster={cid}): {model_path}")
             model = load_model(model_path)
 
-        # Prévisions
+        # forecast
         steps = len(te)
-        y_pred = forecast_with_model(model, te.index, steps)
-        y_pred = np.asarray(y_pred).reshape(-1)
-        if y_pred.shape[0] != steps:
-            y_pred = y_pred[:steps]
-
+        y_pred = forecast_with_model(model, te.index, steps, train_series=tr[y_col] if y_col in tr.columns else None)
+        y_pred = np.asarray(y_pred).reshape(-1)[:steps]
         y_true = np.asarray(te[y_col]).reshape(-1)
+
         metrics = compute_metrics(y_true, y_pred)
 
-        # Enregistrement résultats
-        pred_df = pd.DataFrame(
-            {"date": te.index, "y_true": y_true, "y_pred": y_pred}
-        )
+        # Save predictions
+        pred_df = pd.DataFrame({"date": te.index, "y_true": y_true, "y_pred": y_pred})
         outfile = out_dir / (f"predictions_cluster_{cid}{suffix}.csv" if cid is not None else f"predictions_global{suffix}.csv")
         pred_df.to_csv(outfile, index=False, sep=";")
 
-        # Logs MLflow
-        with mlflow.start_run(run_name=run_name):
-            mlflow.log_param("cluster_id", cid if cid is not None else "global")
-            mlflow.log_param("suffix", suffix)
-            if model_path:
-                mlflow.log_param("model_path", model_path)
-            for k, v in metrics.items():
-                mlflow.log_metric(k, v)
-            mlflow.log_artifact(str(outfile), artifact_path="evaluate")
+        # MLflow logging (safe)
+        try:
+            # if run_id provided, try to attach to it; otherwise create new run
+            if run_id:
+                run_ctx = MLFLOW.start_run(run_id=run_id)
+            else:
+                run_ctx = MLFLOW.start_run(run_name=run_name)
+        except Exception:
+            print("[WARN] mlflow.start_run failed — using no-op run context.")
+            run_ctx = _NoOpRun()
+
+        with run_ctx:
+            try:
+                if hasattr(MLFLOW, "log_param"):
+                    MLFLOW.log_param("cluster_id", cid if cid is not None else "global")
+                    MLFLOW.log_param("suffix", suffix)
+                    if model_path:
+                        MLFLOW.log_param("model_path", model_path)
+                _mlflow_log_metrics(metrics)
+                _mlflow_log_artifact(str(outfile), artifact_path="evaluate")
+            except Exception as e:
+                print(f"[WARN] erreur pendant mlflow logging: {e}")
 
         print(f"ok {run_name} -> {outfile} | {metrics}")
 
     print("OK - Evaluation terminée.")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input-folder", required=True)
-    parser.add_argument("--output-folder", required=True)
-    parser.add_argument("--model-folder", required=True)
-    parser.add_argument("--suffix", default="")
+# ---------------- CLI ----------------
+def cli():
+    parser = argparse.ArgumentParser(description="Evaluate SARIMAX / fallback models.")
+    parser.add_argument("--input-folder", required=True, help="Folder containing train/test periodique CSVs (data/split)")
+    parser.add_argument("--output-folder", required=True, help="Where to write predictions (outputs/evaluate)")
+    parser.add_argument("--model-folder", required=True, help="Where models are stored (outputs/best)")
+    parser.add_argument("--suffix", default="", help="Optional suffix used on split filenames")
+    parser.add_argument("--mlflow-uri", default=None, help="Optional MLFLOW_TRACKING_URI")
+    parser.add_argument("--experiment", default="ST-SARIMAX-Evaluation", help="MLflow experiment name")
+    parser.add_argument("--run-id", default=None, help="Attach to existing run id (optional)")
     args = parser.parse_args()
+    evaluate(args.input_folder, args.output_folder, args.model_folder, suffix=args.suffix, mlflow_uri=args.mlflow_uri, experiment=args.experiment, run_id=args.run_id)
 
-    main(args.input_folder, args.output_folder, args.model_folder, suffix=args.suffix)
-
+if __name__ == "__main__":
+    cli()

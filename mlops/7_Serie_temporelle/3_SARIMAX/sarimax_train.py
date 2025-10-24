@@ -20,6 +20,29 @@ from prophet import Prophet
 from sklearn.preprocessing import StandardScaler
 import joblib
 
+import joblib
+
+# ---------------- MLflow safe wrapper (no-op if absent) ----------------
+class _NoOpRun:
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb): return False
+
+class _NoOpMLflow:
+    def set_tracking_uri(self, *a, **k): pass
+    def set_experiment(self, *a, **k): pass
+    def start_run(self, *a, **k): return _NoOpRun()
+    def active_run(self): return None
+    def end_run(self, *a, **k): pass
+    def log_metric(self, *a, **k): pass
+    def log_param(self, *a, **k): pass
+    def log_artifact(self, *a, **k): pass
+    def set_tag(self, *a, **k): pass
+
+try:
+    import mlflow as _mlflow
+    MLFLOW = _mlflow
+except Exception:
+    MLFLOW = _NoOpMLflow()
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 

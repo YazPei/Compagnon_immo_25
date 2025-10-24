@@ -3,9 +3,22 @@ import os
 import pendulum
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.models.param import Param
+from airflow.operators.python import PythonOperator  
+from pydantic import BaseModel, ConfigDict  # Ajoute ConfigDict pour configurer Pydantic
+
+
+class MyModel(BaseModel):
+    # Ajoute cette ligne pour permettre les types arbitraires (comme pendulum.DateTime)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    ts: pendulum.DateTime  # Maintenant, ce champ est accepté
+
+
 
 PARIS = pendulum.timezone("Europe/Paris")
 REPO = "/opt/airflow/repo"  # monté par docker-compose
+PREDICT_API_RELOAD_URL = os.getenv("PREDICT_API_RELOAD_URL", "http://api:8000/api/v1/reload")
 
 def dvc_task(task_id: str, cmd: str, minutes: int | None = None) -> BashOperator:
     env = os.environ.copy()

@@ -6,8 +6,8 @@ stages:
     deps:
     - path: mlops/1_import_donnees/import_data.py
       hash: md5
-      md5: 5570c399af206f6ac361194f237f6156
-      size: 30058
+      md5: c56eadaff4ac5b906ff9c4c5b111a904
+      size: 29843
       isexec: true
     - path: mlops/1_import_donnees/run_import.sh
       hash: md5
@@ -17,17 +17,17 @@ stages:
     outs:
     - path: data/df_sample.csv
       hash: md5
-      md5: 75cdcfd24d4d2211c6012fc95966516c
-      size: 120105500
+      md5: 97a7138bd7199e7c1bac4b91c1f96ed6
+      size: 120223129
     - path: data/incremental
       hash: md5
-      md5: 7beb10023da9385d457811c910dce7c6.dir
-      size: 120105500
+      md5: 6d77e73f6e9c9025baec68e5124ba892.dir
+      size: 120223129
       nfiles: 1
     - path: data/state/checkpoint.parquet
       hash: md5
-      md5: d70e1b01e5b0d2b59deeb38e06fe766b
-      size: 7547020
+      md5: 0af72f322f3845d85b7d274080a5768d
+      size: 7552838
   fusion_geo:
     cmd: "python mlops/3_fusion/fusion_geo_dvf.py --folder-path1 data --folder-path2
       data --output-folder data/clean\n"
@@ -52,123 +52,114 @@ stages:
       md5: 5d4ff9524073dee89a5f8794e35a1385
       size: 142497303
   preprocessing:
-    cmd: source .venv/bin/activate && python -m 
-      mlops.preprocessing_4.preprocessing --input data --out-dir data/processed
+    cmd: python mlops/preprocessing_4/preprocessing.py --input data --out-dir 
+      data/processed
     deps:
     - path: data/df_sample.csv
       hash: md5
-      md5: 75cdcfd24d4d2211c6012fc95966516c
-      size: 120105500
+      md5: 97a7138bd7199e7c1bac4b91c1f96ed6
+      size: 120223129
     - path: mlops/preprocessing_4/preprocessing.py
       hash: md5
-      md5: 696594694eff4492888be05f94f255dd
-      size: 11944
-      isexec: true
+      md5: 304e7e337eafd2b7d45aef47d1288996
+      size: 13056
     - path: mlops/preprocessing_4/utils.py
       hash: md5
-      md5: 1035e1f53b2498fa75e580339ff3687f
-      size: 4158
-      isexec: true
+      md5: a519ad49911403ddca13fe4d9a1379e1
+      size: 6496
     outs:
     - path: data/processed
       hash: md5
-      md5: da2da46507ecb9a5e13210f485230810.dir
-      size: 82561416
+      md5: 2244af10322ce2a25c8de618faa9a8a2.dir
+      size: 89765696
       nfiles: 6
   clustering:
-    cmd: CLUSTERING_SAFE=1 python mlops/5_clustering/Clustering.py --input-dir 
-      data/processed --output-dir exports
+    cmd: python mlops/5_clustering/Clustering.py --input-dir data/processed 
+      --output-dir exports
     deps:
     - path: data/processed
       hash: md5
-      md5: da2da46507ecb9a5e13210f485230810.dir
-      size: 82561416
+      md5: 2244af10322ce2a25c8de618faa9a8a2.dir
+      size: 89765696
       nfiles: 6
     - path: mlops/5_clustering/Clustering.py
       hash: md5
-      md5: afc6abab470c48bf40f70e2555652727
-      size: 9112
-      isexec: true
+      md5: f363d049e82c41f0d1b72d5862cb4183
+      size: 9647
     outs:
     - path: exports/df_cluster.csv
       hash: md5
-      md5: ab9fb7fc64d096fb500b710035727308
-      size: 99666511
+      md5: a112a3965ad1dcac023da77a2b3d6e70
+      size: 106315320
     - path: exports/df_sales_clean_ST.csv
       hash: md5
-      md5: 05c419ff21f13d8f91d6890ac20276a3
-      size: 96810963
+      md5: 13c4249bbd1a3ca9244d51024c3edfd3
+      size: 103457311
   encode:
     cmd: python mlops/6_Regression/1_Encoding/encoding.py --data-path 
       exports/df_cluster.csv --output data/encoded
     deps:
     - path: exports/df_cluster.csv
       hash: md5
-      md5: ab9fb7fc64d096fb500b710035727308
-      size: 99666511
+      md5: a112a3965ad1dcac023da77a2b3d6e70
+      size: 106315320
     - path: mlops/6_Regression/1_Encoding/encoding.py
       hash: md5
-      md5: 4877345b3beb332717bcd7e5183bd46c
-      size: 15467
-      isexec: true
+      md5: efc385bff02cc3bf521f5993f9dde08f
+      size: 7185
     outs:
     - path: data/encoded
       hash: md5
-      md5: e02f2d0d7217bfc34a1bc6bded31f015.dir
-      size: 298742863
-      nfiles: 6
+      md5: d917413aae1e1ec13f0460921e1eb5b1.dir
+      size: 210817332
+      nfiles: 5
   splitst:
-    cmd: "source .venv/bin/activate && python mlops/7_Serie_temporelle/1_SPLIT/load_split.py
-      --st-path exports/df_sales_clean_ST.csv --out-dir data/split\n"
+    cmd: "python mlops/7_Serie_temporelle/1_SPLIT/load_split.py --st-path exports/df_sales_clean_ST.csv
+      --out-dir data/split && mkdir -p data/split\n"
     deps:
     - path: data/contours-codes-postaux.geojson
       hash: md5
       md5: fd8abea558099967148f7f22c881f3e8
       size: 3010266
-      isexec: true
     - path: data/taux_immo.xlsx
       hash: md5
       md5: e867fbe9e9a89a44a083b9fe60b726c1
       size: 12400
-      isexec: true
     - path: exports/df_sales_clean_ST.csv
       hash: md5
-      md5: 05c419ff21f13d8f91d6890ac20276a3
-      size: 96810963
+      md5: 13c4249bbd1a3ca9244d51024c3edfd3
+      size: 103457311
     - path: mlops/7_Serie_temporelle/1_SPLIT/load_split.py
       hash: md5
       md5: f156ba05cc02e8f8f9f6bb5f48b6754b
       size: 15992
-      isexec: true
     outs:
     - path: data/split
       hash: md5
-      md5: 38764de13a488581287594e33a1427d9.dir
-      size: 158505669
+      md5: f80c83fe7df6ebc2fc0b122e771cb037.dir
+      size: 164050447
       nfiles: 4
   decompose:
     cmd: python mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py 
-      --input-folder data/split --output-folder outputs/decomposition --suffix 
-      _yazrun
+      --input-folder data/split --output-folder outputs/decomposition
     deps:
     - path: data/split/train_periodique_q12.csv
       hash: md5
-      md5: 276b81ce03d0399e65fc0934be708557
-      size: 9670
+      md5: bd657f2ff7d7ee9257936ff336212046
+      size: 9712
     - path: mlops/7_Serie_temporelle/2_Decompose/seasonal_decomp.py
       hash: md5
-      md5: 4ccb5d106ff2f5c33ebd0f9a6c8459bd
-      size: 9547
-      isexec: true
+      md5: c6c06351a703362da9646c6d0a1a4867
+      size: 14582
     outs:
     - path: outputs/decomposition/decomposition_additive_cluster_0.png
       hash: md5
-      md5: e9216f8dfe053f5b0edfefa96caca687
-      size: 52372
+      md5: 011aa7a4552318589808c40adc7dcf0c
+      size: 53509
     - path: outputs/decomposition/decomposition_multiplicative_cluster_0.png
       hash: md5
-      md5: 4a0c7a398c7b6b6feed1776a9060cd58
-      size: 49180
+      md5: d9cd46ccaac5fe587beba516947bad00
+      size: 49965
   train_sarimax:
     cmd: python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py 
       --input-folder data/split --output-folder outputs/best --suffix _yazrun 
@@ -233,8 +224,8 @@ stages:
       md5: b24743a462b0cea529382bf1eab9e6c3
       size: 3086
   analyse:
-    cmd: "python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm && mkdir
-      -p exports/reg\n"
+    cmd: ".venv/bin/python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
+      && mkdir -p exports/reg\n"
     deps:
     - path: data/encoded/X_test.csv
       hash: md5
@@ -260,9 +251,9 @@ stages:
       size: 0
       nfiles: 0
   evaluate:
-    cmd: source .venv/bin/activate && python 
-      mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py --input-folder 
-      data/split --model-folder outputs/best --output-folder outputs/evaluate
+    cmd: .venv/bin/python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py 
+      --input-folder data/split --model-folder outputs/best --output-folder 
+      outputs/evaluate
     deps:
     - path: data/split
       hash: md5
@@ -285,3 +276,5 @@ stages:
       md5: bd72d5e0aa4ce65361ee4e1f4169631e.dir
       size: 479
       nfiles: 1
+  utils:
+    cmd: python mlops/preprocessing_4/utils.py

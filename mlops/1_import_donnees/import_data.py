@@ -1,18 +1,17 @@
-#!/usr/bin/env python3
+##!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 from __future__ import annotations
-from boto3.s3.transfer import TransferConfig, S3Transfer
-import math, time
-import os, sys, locale
-import io
-import json
-import tempfile
+#from tools.lineage import log_lineage
+import os, sys, math, time, json, tempfile, hashlib
 from pathlib import Path
 from typing import List, Optional, Tuple, IO, Union
 
 import click
 import pandas as pd
 import mlflow
-import hashlib
+from mlflow.tracking import MlflowClient
+
+# --- Sorties console en UTF-8 (évite la mojibake) ---
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -25,8 +24,7 @@ os.environ.setdefault("LC_ALL", "C.UTF-8")
 os.environ.setdefault("LANG", "C.UTF-8")
 
 
-
-
+# ============= Helpers imports paresseux (pour éviter deps non installées au load) =============
 def _lazy_import_boto3():
     import boto3
     from botocore import UNSIGNED
@@ -48,7 +46,14 @@ def _lazy_import_requests():
     from requests.exceptions import RequestException, Timeout, ConnectionError as ReqConnErr
     return requests, (RequestException, Timeout, ReqConnErr)
 
+
+# ============================ MLflow ============================
 def setup_mlflow() -> Optional[str]:
+    """
+    Si MLFLOW_TRACKING_URI est défini (Docker/Airflow/DagsHub), on l'utilise tel quel.
+    Sinon, on bascule sur un backend local file://mlruns.
+    Retourne l'artifact_location si on est en local (utile pour create_experiment), sinon None.
+    """
     uri = os.getenv("MLFLOW_TRACKING_URI")
     if uri:
         mlflow.set_tracking_uri(uri)
@@ -57,6 +62,8 @@ def setup_mlflow() -> Optional[str]:
     mlflow.set_tracking_uri("file://" + artifact_dir)
     return "file://" + artifact_dir
 
+
+# ============================ Checkpoint I/O ============================
 def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
     if not path.exists():
         return set(), None
@@ -72,10 +79,12 @@ def load_checkpoint(path: Path) -> Tuple[set, Optional[str]]:
 
 def save_checkpoint(path: Path, seen_keys: set, last_watermark: Optional[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({ "key_hash": sorted(seen_keys) }).to_parquet(path, index=False)
+    pd.DataFrame({"key_hash": sorted(seen_keys)}).to_parquet(path, index=False)
     with open(path.with_suffix(".json"), "w", encoding="utf-8") as f:
-        json.dump({ "last_watermark": last_watermark }, f)
+        json.dump({"last_watermark": last_watermark}, f)
 
+
+# ============================ Utilitaires CSV/Parquet ============================
 def make_key_hash(df: pd.DataFrame, key_cols: List[str]) -> pd.Series:
     if not key_cols:
         return pd.util.hash_pandas_object(df, index=False).astype(str)
@@ -98,6 +107,8 @@ def _is_parquet_path(p: Union[str, Path]) -> bool:
     s = str(p).lower()
     return s.endswith(".parquet") or s.endswith(".pq") or s.endswith(".parq")
 
+
+# ============================ Sources ============================
 class SourceHandle:
     def __init__(self, handle_or_path: Union[IO[str], IO[bytes], Path], is_stream: bool, cleanup=lambda: None):
         self.handle_or_path = handle_or_path
@@ -140,18 +151,6 @@ def open_source_http(*, url: str, timeout: int = 30, retries: int = 5) -> Source
             _backoff_sleep(i + 1)
     raise RuntimeError(f"HTTP download failed after {retries} retries: {last}")
 
-def _as_bool_env(name: str, default: bool = False) -> bool:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
-
-
-def _stable_bucket_idx(key_str: str, num_slices: int) -> int:
-    # hash stable (sha1) → entier → modulo
-    h = hashlib.sha1(key_str.encode("utf-8", errors="ignore")).digest()
-    return int.from_bytes(h[:8], "big") % max(1, num_slices)
-    
 def open_source_s3(
     *,
     endpoint_url: Optional[str],
@@ -167,10 +166,8 @@ def open_source_s3(
     retries: int = 5,
     anon: bool = False,
 ) -> SourceHandle:
-    # lazy imports (boto3 + transfer)
     boto3, UNSIGNED, Config, BEX = _lazy_import_boto3()
     from boto3.s3.transfer import TransferConfig, S3Transfer
-    import time
 
     use_anon = bool(anon or _as_bool_env("AWS_NO_SIGN_REQUEST"))
     if use_anon:
@@ -219,12 +216,10 @@ def open_source_s3(
     last = None
     for i in range(retries + 1):
         try:
-            # taille + log
             head = client.head_object(Bucket=bucket, Key=key)
             size = int(head.get("ContentLength", 0))
             print(f"[info] s3 download: s3://{bucket}/{key} ({size} bytes)")
 
-            # multipart + progression
             tcfg = TransferConfig(
                 multipart_threshold=8 * 1024 * 1024,
                 multipart_chunksize=16 * 1024 * 1024,
@@ -252,13 +247,13 @@ def open_source_s3(
             _backoff_sleep(i + 1)
     raise RuntimeError(f"S3 download failed after {retries} retries: {last}")
 
-
-
 def open_source_local(path: Path) -> SourceHandle:
     if not path.exists():
         raise FileNotFoundError(path)
     return SourceHandle(path, is_stream=False)
 
+
+# ============================ Iterateurs & merge ============================
 def iter_chunks_csv(handle: Union[IO[str], Path], is_stream: bool, sep: str, chunksize: int = 200_000):
     cs_env = os.getenv("IMPORT_CHUNKSIZE")
     cs = chunksize if not (cs_env and cs_env.isdigit()) else int(cs_env)
@@ -302,22 +297,32 @@ def iter_chunks_parquet(handle: Union[IO[str], Path], is_stream: bool, batch_row
     steps = math.ceil(n / batch_rows)
     for i in range(steps):
         yield df.iloc[i * batch_rows : (i + 1) * batch_rows].copy()
-# --- helpers chrono ---
+
+
+# ============================ Chrono helpers ============================
 def _parse_any_date(s: Optional[str]):
     if not s:
         return None
     try:
-        # accepte "2023-06-01", "2023/06/01", "2023-06", etc.
         return pd.to_datetime(s, errors="coerce", utc=True)
     except Exception:
         return None
 
 def _month_floor(series: pd.Series):
-    # retourne la date ramenée au 1er du mois (timezone UTC)
     ser = pd.to_datetime(series, errors="coerce", utc=True)
     return ser.dt.to_period("M").dt.start_time.dt.tz_localize("UTC")
 
+def _as_bool_env(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
 
+def _stable_bucket_idx(key:str, num_buckets: int) -> int:
+    h= hashlib.sha1(key.encode("utf-8")).hexdigest()
+    return int(h, 16) % num_buckets
+
+# ============================ Extraction incrémentale ============================
 def incremental_extract(
     *,
     source_mode: str,
@@ -390,15 +395,14 @@ def incremental_extract(
         src_path_like = local_path
     else:
         raise ValueError(f"source_mode inconnu: {source_mode}")
-        # --- bornes issues des flags chrono ---
+
+    # --- bornes issues des flags chrono ---
     date_from_ts = _parse_any_date(date_from)
     date_to_ts   = _parse_any_date(date_to)
 
-    # Si last_months ou chrono_percent est utilisé, on fait un pré-pass uniquement sur la colonne date
     need_prepass = (last_months is not None) or (chrono_mode in ("head", "tail") and chrono_percent)
-
     if need_prepass and date_col:
-        # On ré-ouvre une poignée dédiée pour lire uniquement les dates (léger)
+        # ré-ouvre uniquement pour lire les dates
         if source_mode == "dvc":
             src_dates = open_source_dvc(dvc_repo_url=dvc_repo_url, dvc_path=dvc_path, dvc_rev=dvc_rev, dvc_remote=dvc_remote)
         elif source_mode == "http":
@@ -412,7 +416,6 @@ def incremental_extract(
         else:
             src_dates = open_source_local(Path(local_path))
 
-        # Lit uniquement la colonne date (stream/chunks)
         dates = []
         if _is_parquet_path(src_path_like):
             dtmp = pd.read_parquet(
@@ -439,26 +442,21 @@ def incremental_extract(
         if dates:
             all_dates = pd.concat(dates, ignore_index=True)
             if last_months is not None:
-                # borne = début du (N-ième) mois en partant de la fin
                 mon = _month_floor(all_dates.sort_values())
                 last = mon.max()
                 if pd.notna(last):
-                    # remonte (last_months-1) mois
                     boundary = (last.to_period("M") - (last_months - 1)).start_time
                     boundary = boundary.tz_localize("UTC")
-                    # Garde >= boundary
                     date_from_ts = max(date_from_ts, boundary) if date_from_ts is not None else boundary
 
             if chrono_mode in ("head", "tail") and chrono_percent:
                 q = float(chrono_percent)
-                q = min(max(q, 1e-6), 1.0)  # clamp
-                qdt = all_dates.quantile(q)  # quantile temporel (UTC)
+                q = min(max(q, 1e-6), 1.0)
+                qdt = all_dates.quantile(q)
                 if pd.notna(qdt):
                     if chrono_mode == "head":
-                        # garder le début de l'historique
                         date_to_ts = min(date_to_ts, qdt) if date_to_ts is not None else qdt
                     else:
-                        # garder la fin de l'historique
                         date_from_ts = max(date_from_ts, qdt) if date_from_ts is not None else qdt
 
     # --- chemins delta & cumul
@@ -486,7 +484,7 @@ def incremental_extract(
         for chunk in chunks_iter:
             chunk = parse_date(chunk, date_col)
 
-            # Filtres chronologiques appliqués par chunk
+            # Filtres chronologiques
             if date_col and (date_from_ts is not None or date_to_ts is not None):
                 if date_from_ts is not None:
                     chunk = chunk.loc[chunk[date_col] >= date_from_ts]
@@ -494,68 +492,63 @@ def incremental_extract(
                     chunk = chunk.loc[chunk[date_col] <= date_to_ts]
                 if chunk.empty:
                     continue
-    
-            # Traitement des clés
+
+            # Clés
             if key_cols:
                 keys_concat = chunk[key_cols].astype(str).fillna("").agg("||".join, axis=1)
             else:
-                keys_concat = chunk.index.astype(str)  # fallback
-    
-            # Calcul de bucket_mask
+                keys_concat = chunk.index.astype(str)
+
+            # Répartition en tranches (bucket stable)
             bucket_mask = keys_concat.apply(
                 lambda s: _stable_bucket_idx(s, max(1, num_slices)) == (slice_index % max(1, num_slices))
             )
             chunk = chunk.loc[bucket_mask]
             if chunk.empty:
-                continue            
-    
-            # Filtre watermark si présent
+                continue
+
+            # Watermark
             if date_col and watermark:
                 wm = pd.to_datetime(watermark, utc=True, errors="coerce")
                 if wm is not None:
                     chunk = chunk.loc[chunk[date_col] > wm]
                     if chunk.empty:
                         continue
-            
+
             # Détection des nouvelles lignes
             kh = make_key_hash(chunk, key_cols)
             mask_new = ~kh.astype(str).isin(seen_keys)
             delta = chunk.loc[mask_new].copy()
             if delta.empty:
                 continue
-    
-            # Mise à jour de la progression
+
             chunks_seen += 1
             rows_seen += len(delta)
             if chunks_seen % 5 == 0:
                 print(f"[info] processed {chunks_seen} chunks, {rows_seen:,} new rows in {time.time() - t0:.1f}s")
-    
+
             # Watermark courant
             if date_col and date_col in delta.columns:
                 cand = delta[date_col].max()
                 if pd.notna(cand):
                     max_date_seen = cand if max_date_seen is None else max(max_date_seen, cand)
-    
+
             # Écriture incrémentale du delta
             delta["__key_hash__"] = kh.loc[mask_new].astype(str).values
             delta_out = delta.drop(columns=["__key_hash__"], errors="ignore")
             delta_out.to_csv(delta_path, sep=sep, index=False, mode="a", header=not wrote_header)
             wrote_header = True
-    
+
             # Mise à jour des clés vues
             seen_keys.update(delta["__key_hash__"].astype(str).tolist())
-    
-    except Exception as e:
-        print(f"Une erreur s'est produite pendant l'extraction des données : {e}")
-        # Log ou actions supplémentaires selon l'erreur
 
+    except Exception as e:
+        print(f"[warn] Erreur pendant l'extraction streaming: {e}")
     finally:
-        # Nettoyage ou autres actions à réaliser après la boucle
         try:
             src.cleanup()
         except Exception:
             pass
-
 
     # --- fusion dans le cumul
     if not delta_path.exists() or delta_path.stat().st_size == 0:
@@ -572,7 +565,6 @@ def incremental_extract(
                 except Exception as e:
                     print(f"[warn] duckdb dedup skipped: {e}")
         else:
-            # chemin "ancien" (lecture delta + cumul, puis drop_duplicates)
             df_new = pd.read_csv(delta_path, sep=sep, low_memory=False)
             if cumulative_csv.exists() and cumulative_csv.stat().st_size > 0:
                 df_old = pd.read_csv(cumulative_csv, sep=sep, low_memory=False)
@@ -589,7 +581,7 @@ def incremental_extract(
     last_wm = max_date_seen.isoformat() if isinstance(max_date_seen, pd.Timestamp) else watermark
     save_checkpoint(checkpoint_path, seen_keys, last_wm)
 
-    # --- comptage rapide (évite de relire en Python)
+    # --- comptage rapide
     def _count_rows_fast(p: Path) -> int:
         if not p.exists() or p.stat().st_size == 0:
             return 0
@@ -599,7 +591,6 @@ def incremental_extract(
             n = int(out.strip().split()[0])
             return max(n - 1, 0)
         except Exception:
-            # fallback: compteur streaming
             c = 0
             with open(p, "r", encoding="utf-8", errors="ignore") as f:
                 for _ in f:
@@ -611,8 +602,10 @@ def incremental_extract(
 
     return delta_path, cumulative_csv, rows_delta, rows_cumul
 
+
+# ============================ CLI ============================
 @click.command()
-@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_sample.csv)")
+@click.option("--output-folder", type=click.Path(), required=True, help="Dossier du DELTA (df_new.csv)")
 @click.option("--cumulative-path", type=click.Path(), default="data/df_sample.csv", help="CSV cumul (df_sample.csv)")
 @click.option("--checkpoint-path", type=click.Path(), required=True, help="Chemin checkpoint (parquet)")
 @click.option("--date-column", type=str, default=None, help="Colonne date pour watermark")
@@ -637,27 +630,18 @@ def incremental_extract(
 @click.option("--s3-anon/--no-s3-anon", is_flag=True, default=False)
 
 @click.option("--local-path", type=click.Path(), default=None)
-@click.option("--num-slices", type=int, default=10, show_default=True,
-              help="Nombre de tranches (ex: 10 pour 10%).")
-@click.option("--slice-index", type=int, default=0, show_default=True,
-              help="Index de la tranche à ingérer (0..num_slices-1).")
-              
-@click.option("--append-only/--no-append-only",
-              default=lambda: os.getenv("IMP_APPEND_ONLY","1")=="1")
-@click.option("--dedup-duckdb/--no-dedup-duckdb",
-              default=lambda: os.getenv("IMP_DEDUP_DUCKDB","1")=="1")
-# === Filtres temporels chronologiques ===
-@click.option("--date-from", type=str, default=None,
-              help="Inclure uniquement les lignes avec date >= (ex: 2022-01-01)")
-@click.option("--date-to", type=str, default=None,
-              help="Inclure uniquement les lignes avec date <= (ex: 2024-12-31)")
-@click.option("--last-months", type=int, default=None,
-              help="Garder uniquement les N derniers mois (calculé sur la distribution des dates).")
-@click.option("--chrono-mode", type=click.Choice(["head","tail","none"]), default="none",
-              help="head=prendre les dates les plus anciennes, tail=les plus récentes.")
-@click.option("--chrono-percent", type=float, default=None,
-              help="Proportion chronologique à garder (0< p <=1). Ex: 0.3.")
+@click.option("--num-slices", type=int, default=10, show_default=True, help="Nombre de tranches (ex: 10 pour 10%).")
+@click.option("--slice-index", type=int, default=0, show_default=True, help="Index de la tranche (0..num_slices-1).")
 
+@click.option("--append-only/--no-append-only", default=lambda: os.getenv("IMP_APPEND_ONLY", "1") == "1")
+@click.option("--dedup-duckdb/--no-dedup-duckdb", default=lambda: os.getenv("IMP_DEDUP_DUCKDB", "1") == "1")
+
+# Filtres chrono
+@click.option("--date-from", type=str, default=None, help="Garder date >= (ex: 2022-01-01)")
+@click.option("--date-to", type=str, default=None, help="Garder date <= (ex: 2024-12-31)")
+@click.option("--last-months", type=int, default=None, help="Garder uniquement les N derniers mois.")
+@click.option("--chrono-mode", type=click.Choice(["head", "tail", "none"]), default="none", help="head=ancien, tail=récent.")
+@click.option("--chrono-percent", type=float, default=None, help="Proportion chronologique (0<p<=1).")
 def main(
     output_folder,
     cumulative_path,
@@ -680,24 +664,28 @@ def main(
     s3_anon,
     local_path,
     append_only, dedup_duckdb,
-    num_slices, slice_index,  
+    num_slices, slice_index,
     date_from, date_to, last_months, chrono_mode, chrono_percent,
 ):
+    # === MLflow experiment (nom ASCII pour éviter les soucis d’encodage) ===
+    experiment_name = "Import_donnees"
     artifact_location = setup_mlflow()
 
-    key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
-    delta_folder = Path(output_folder)
-    cumulative_csv = Path(cumulative_path)
-    checkpoint_path = Path(checkpoint_path)
-
-    experiment_name = "Import données"
     if artifact_location and mlflow.get_experiment_by_name(experiment_name) is None:
         mlflow.create_experiment(name=experiment_name, artifact_location=artifact_location)
     mlflow.set_experiment(experiment_name)
 
     run_ds = os.getenv("AIRFLOW_CTX_EXECUTION_DATE", os.getenv("ds", "manual"))
 
-    with mlflow.start_run(run_name=f"Import incrémental [{source_mode}]"):
+    key_cols = [c.strip() for c in key_columns.split(",") if c.strip()]
+    delta_folder = Path(output_folder)
+    cumulative_csv = Path(cumulative_path)
+    checkpoint_path = Path(checkpoint_path)
+
+    with mlflow.start_run(run_name=f"Import incrementale [{source_mode}]"):
+        print("Début du run MLflow...")
+#        try:
+#            log_lineage("data/df_sample.csv","data/schema.json")
         delta_path, cumul_path, rows_delta, rows_cumul = incremental_extract(
             source_mode=source_mode,
             dvc_repo_url=dvc_repo_url,
@@ -718,19 +706,22 @@ def main(
             checkpoint_path=checkpoint_path,
             date_col=date_column,
             key_cols=key_cols,
-            sep=sep,
             run_ds=run_ds,
+#            key_cols=[c.strip() for c in key_columns.split(',') if c.strip()],
+            sep=sep,
+#            run_ds=os.getenv("AIRFLOW_CTX_EXECUTION_DATE", os.getenv("ds", "manual")),
             append_only=append_only,
             dedup_duckdb=dedup_duckdb,
             num_slices=num_slices,
             slice_index=slice_index,
-            date_from=date_from,  
+            date_from=date_from,
             date_to=date_to,
             last_months=last_months,
             chrono_mode=chrono_mode,
             chrono_percent=chrono_percent
         )
 
+        # Params
         mlflow.log_param("source_mode", source_mode)
         mlflow.log_param("dvc_repo_url", dvc_repo_url or "")
         mlflow.log_param("dvc_path", dvc_path or "")
@@ -747,9 +738,11 @@ def main(
         mlflow.log_param("sep", sep)
         mlflow.log_param("s3_anon", bool(s3_anon))
 
+        # Metrics
         mlflow.log_metric("rows_delta", rows_delta)
         mlflow.log_metric("rows_cumul", rows_cumul)
 
+        # Artefacts
         if Path(delta_path).exists():
             mlflow.log_artifact(str(delta_path))
         if Path(cumulative_csv).exists():
@@ -757,5 +750,7 @@ def main(
 
         print(f"✅ Delta → {delta_path} (rows={rows_delta}) | Cumul → {cumul_path} (rows={rows_cumul})")
 
+
 if __name__ == "__main__":
     main()
+

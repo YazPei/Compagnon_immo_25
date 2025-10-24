@@ -1,25 +1,26 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# mlops/preprocessing_4/utils.py
 from __future__ import annotations
-
 import re
 from typing import Dict, Tuple, Iterable
 import numpy as np
 import pandas as pd
 
+# ----------------- helpers simples -----------------
 _YEAR_BINS = [-np.inf, 1947, 1974, 1977, 1982, 1988, 2000, 2005, 2012, 2021, np.inf]
-_YEAR_LABS = ["avant_1948", "1948_1974", "1975_1977", "1978_1982", "1983_1988",
-              "1989_2000", "2001_2005", "2006_2012", "2013_2021", "apres_2021"]
+_YEAR_LABS = ["avant 1948", "1948-1974", "1975-1977", "1978-1982", "1983-1988",
+              "1989-2000", "2001-2005", "2006-2012", "2013-2021", "après 2021"]
 
 def _to_numeric(s: pd.Series) -> pd.Series:
+    """Retourne une Series en float64 (NaN si non convertible)."""
     return pd.to_numeric(s, errors="coerce").astype("float64")
 
+# ----------------- API utilisée par preprocessing.py -----------------
 def annee_const(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     src_candidates = ["annee_construction", "anneeConstruction", "annee_const", "year_built", "ANNEE_CONS"]
     src = next((c for c in src_candidates if c in df.columns), None)
     if src is None:
-        df["annee_construction"] = pd.Categorical(["1989_2000"] * len(df), categories=_YEAR_LABS, ordered=True)
+        df["annee_construction"] = pd.Categorical(["1989-2000"] * len(df), categories=_YEAR_LABS, ordered=True)
         return df
 
     col = df[src]
@@ -30,26 +31,24 @@ def annee_const(df: pd.DataFrame) -> pd.DataFrame:
         num = _to_numeric(col.where(~ok_mask))
         buck = pd.cut(num, bins=_YEAR_BINS, labels=_YEAR_LABS)
         out[~ok_mask] = buck.astype(str)
-        out = out.fillna("1989_2000")
+        out = out.fillna("1989-2000")
         df["annee_construction"] = pd.Categorical(out, categories=_YEAR_LABS, ordered=True)
         return df
 
     num = _to_numeric(col)
     buck = pd.cut(num, bins=_YEAR_BINS, labels=_YEAR_LABS)
-    df["annee_construction"] = pd.Categorical(buck.astype(str).fillna("1989_2000"),
+    df["annee_construction"] = pd.Categorical(buck.astype(str).fillna("1989-2000"),
                                               categories=_YEAR_LABS, ordered=True)
     return df
 
 def clean_classe(x) -> str:
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return "NP"
+    if x is None or (isinstance(x, float) and np.isnan(x)): return "NP"
     s = str(x).strip().upper()
     m = re.search(r"[A-G]", s)
     return m.group(0) if m else "NP"
 
 def clean_exposition(x) -> str:
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return "NA"
+    if x is None or (isinstance(x, float) and np.isnan(x)): return "NA"
     s = str(x).lower()
     s = s.replace("ouest", "o").replace("est", "e").replace("sud", "s").replace("nord", "n")
     s = s.replace("west", "o").replace("east", "e").replace("south", "s").replace("north", "n")
@@ -61,16 +60,17 @@ def clean_exposition(x) -> str:
     return letters.upper() if letters else "NA"
 
 def extract_principal(x) -> str:
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return "inconnu"
+    if x is None or (isinstance(x, float) and np.isnan(x)): return "inconnu"
     s = re.split(r"[+,/;|-]+", str(x))
     s = [t.strip() for t in s if t.strip()]
     return (s[0] if s else "inconnu").lower()
 
 def get_numeric_cols(df: pd.DataFrame, group_col: str | None = None) -> list:
+    """Retourne colonnes numériques utiles (convertibles en float)."""
     nums = []
     for c in df.columns:
         try:
+            # test conversion rapide
             s = pd.to_numeric(df[c].dropna().head(50), errors="coerce")
             if s.notna().any():
                 nums.append(c)
@@ -81,6 +81,7 @@ def get_numeric_cols(df: pd.DataFrame, group_col: str | None = None) -> list:
     return nums
 
 def calculate_bounds(df: pd.DataFrame, cols: Iterable[str], q_low: float = 0.001, q_high: float = 0.999) -> Dict[str, Tuple[float, float]]:
+    """Bornes quantiles par colonne (robuste aux bools / objets)."""
     bounds: Dict[str, Tuple[float, float]] = {}
     for c in cols:
         if c not in df.columns:
@@ -93,10 +94,12 @@ def calculate_bounds(df: pd.DataFrame, cols: Iterable[str], q_low: float = 0.001
             lo = float(s_nonull.quantile(q_low))
             hi = float(s_nonull.quantile(q_high))
         except Exception:
+            # fallback: IQR
             q1 = float(s_nonull.quantile(0.25))
             q3 = float(s_nonull.quantile(0.75))
             iqr = q3 - q1
             lo, hi = float(q1 - 1.5 * iqr), float(q3 + 1.5 * iqr)
+        # sanity: if bounds degénérées, use a small padding
         if not np.isfinite(lo) or not np.isfinite(hi) or lo >= hi:
             med = float(s_nonull.median(skipna=True))
             if np.isfinite(med):
@@ -165,3 +168,4 @@ def clean_outliers(df: pd.DataFrame,
         else:
             out.loc[idx, c] = global_medians.get(c, np.nan)
     return out
+

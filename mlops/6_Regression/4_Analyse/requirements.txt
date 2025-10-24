@@ -5,7 +5,7 @@ numpy==1.26.4                    # Calcul scientifique
 pandas>=2.2.0                   # Manipulation de données
 scipy==1.15.2                   # Outils mathématiques complémentaires
 scikit-learn>=1.4.0             # Machine learning généraliste
-
+sys
 # Visualisation
 matplotlib>=3.8.0               # Tracé de graphes classiques ok
 seaborn>=0.13.0                 # Visualisation statistique ok

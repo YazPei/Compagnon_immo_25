@@ -90,6 +90,17 @@ async def create_estimation(
     prix = max(50000.0, surface * 5000.0)
     indice_confiance = 0.75
 
+    # Enregistrer une métrique de prédiction simulée
+    from app.api.monitoring.prometheus_registry import metrics_collector
+    import time
+    start_time = time.time()
+    metrics_collector.record_model_prediction(
+        model_name="dummy_model",
+        model_version="1.0.0",
+        duration=time.time() - start_time,
+        success=True,
+    )
+
     return {
         "input": {
             "surface": surface,

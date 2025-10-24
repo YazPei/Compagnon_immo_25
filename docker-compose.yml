@@ -187,41 +187,42 @@ services:
       "
     profiles: ["ci"]
 
-  # Prometheus pour la collecte de métriques
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./SERVICES/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    networks:
-      - ml_net
-    profiles: ["monitoring"]
+  # Prometheus pour la collecte de métriques (désactivé - conflit avec le service monitoring)
+  # prometheus:
+  #   image: prom/prometheus:v2.45.0
+  #   user: "${UID:-1000}:${GID:-1000}"
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./SERVICES/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #     - '--storage.tsdb.retention.time=200h'
+  #     - '--web.enable-lifecycle'
+  #   networks:
+  #     - ml_net
+  #   profiles: ["monitoring"]
 
-  # Grafana pour la visualisation des métriques
-  grafana:
-    image: grafana/grafana:10.1.0
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./SERVICES/monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./SERVICES/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    depends_on:
-      - prometheus
-    networks:
-      - ml_net
-    profiles: ["monitoring"]
+  # Grafana pour la visualisation des métriques (désactivé - conflit avec le service monitoring)
+  # grafana:
+  #   image: grafana/grafana:10.1.0
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./SERVICES/monitoring/grafana/provisioning:/etc/grafana/provisioning
+  #     - ./SERVICES/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - ml_net
+  #   profiles: ["monitoring"]
 
   # --------- Pipeline de lancement ----------
   run_full:
@@ -437,10 +438,80 @@ services:
       - ml_net
     profiles: ["series"]
 
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./SERVICES/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./SERVICES/monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - ml_net
+    profiles: ["monitoring"]
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./SERVICES/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./SERVICES/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - ml_net
+    profiles: ["monitoring"]
+
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./SERVICES/monitoring/alertmanager.yml:/etc/alertmanager/config.yml
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - ml_net
+    profiles: ["monitoring"]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.41
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - ml_net
+    profiles: ["monitoring"]
+
+  locust:
+    image: locustio/locust:2.15.1
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./SERVICES/monitoring/locustfile.py:/mnt/locust/locustfile.py
+    command: -f /mnt/locust/locustfile.py --host=http://api:8000
+    networks:
+      - ml_net
+    profiles: ["monitoring"]
+
 # Définir les volumes une seule fois à la racine
 volumes:
   postgres_data:
   mlflow_artifacts:
+  grafana_data:
 
 # Définir les networks une seule fois à la racine
 networks:

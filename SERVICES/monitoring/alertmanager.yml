@@ -1,0 +1,38 @@
+global:
+  smtp_smtp:
+    host: smtp.gmail.com
+    port: 587
+    username: 'your-email@gmail.com'
+    password: 'your-app-password'
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'email'
+
+receivers:
+- name: 'email'
+  email_configs:
+  - to: 'admin@your-domain.com'
+    from: 'alerts@your-domain.com'
+    smarthost: smtp.gmail.com:587
+    auth_username: 'your-email@gmail.com'
+    auth_password: 'your-app-password'
+    require_tls: true
+
+- name: 'slack'
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#alerts'
+    send_resolved: true
+    title: '{{ .GroupLabels.alertname }}'
+    text: '{{ .CommonAnnotations.description }}'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname']

@@ -1,0 +1,69 @@
+groups:
+- name: api_alerts
+  rules:
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status_code=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value }}% (threshold: 10%)"
+
+  - alert: HighLatency
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2.0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency detected"
+      description: "95th percentile latency is {{ $value }}s (threshold: 2s)"
+
+  - alert: APIDown
+    expr: up{job="api"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "API is down"
+      description: "API service is not responding"
+
+- name: ml_alerts
+  rules:
+  - alert: ModelPredictionErrors
+    expr: rate(model_errors_total[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High model prediction error rate"
+      description: "Model prediction error rate is {{ $value }} (threshold: 0.05)"
+
+  - alert: NoModelsLoaded
+    expr: models_loaded_total == 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "No ML models loaded"
+      description: "No machine learning models are currently loaded"
+
+- name: system_alerts
+  rules:
+  - alert: HighMemoryUsage
+    expr: (1 - system_memory_available_bytes / system_memory_total_bytes) > 0.9
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage is {{ $value }}% (threshold: 90%)"
+
+  - alert: HighCPUUsage
+    expr: rate(process_cpu_user_seconds_total[5m]) / rate(process_cpu_seconds_total[5m]) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage"
+      description: "CPU usage is {{ $value }}% (threshold: 80%)"

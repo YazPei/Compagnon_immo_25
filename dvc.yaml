@@ -45,9 +45,7 @@ stages:
       
   train_lgbm:
     cmd: >
-      python mlops/6_Regression/2_LGBM/train_lgbm.py \
-      --encoded-folder data/encoded --model-folder models \
-      && mkdir -p models
+      python3 mlops/6_Regression/2_LGBM/train_lgbm.py --encoded-folder data/encoded --model-folder models
     deps:
       - mlops/6_Regression/2_LGBM/train_lgbm.py
       - data/encoded/X_train.csv
@@ -63,9 +61,8 @@ stages:
     
   analyse:
     cmd: >
-      python mlops/6_Regression/4_Analyse/analyse.py \
-      --encoded-folder data/encoded --model lightgbm --model-folder models \
-      && mkdir -p exports/reg
+      python mlops/6_Regression/4_Analyse/analyse.py
+#      && mkdir -p exports/reg
     deps:
       - mlops/6_Regression/4_Analyse/analyse.py
       - data/encoded/X_test.csv

@@ -20,7 +20,9 @@ from prophet import Prophet
 from sklearn.preprocessing import StandardScaler
 import joblib
 
-import joblib
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 
 # ---------------- MLflow safe wrapper (no-op if absent) ----------------
 class _NoOpRun:

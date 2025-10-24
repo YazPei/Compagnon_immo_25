@@ -28,29 +28,6 @@ stages:
       hash: md5
       md5: 0af72f322f3845d85b7d274080a5768d
       size: 7552838
-  fusion_geo:
-    cmd: "python mlops/3_fusion/fusion_geo_dvf.py --folder-path1 data --folder-path2
-      data --output-folder data/clean\n"
-    deps:
-    - path: data/DVF_donnees_macroeco.csv
-      hash: md5
-      md5: ded39ac70c6931a3c63deeb31e9d43bf
-      size: 13090771
-      isexec: true
-    - path: data/df_sample.csv
-      hash: md5
-      md5: b3b4585e6ddb9279d2285e69f07d1914
-      size: 111280786
-      isexec: true
-    - path: mlops/3_fusion/fusion_geo_dvf.py
-      hash: md5
-      md5: 36ca98d4489b16a84b8e4653e02da6fc
-      size: 5058
-    outs:
-    - path: data/clean/df_sales_clean.csv
-      hash: md5
-      md5: 5d4ff9524073dee89a5f8794e35a1385
-      size: 142497303
   preprocessing:
     cmd: python mlops/preprocessing_4/preprocessing.py --input data --out-dir 
       data/processed
@@ -162,88 +139,85 @@ stages:
       size: 49965
   train_sarimax:
     cmd: python mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py 
-      --input-folder data/split --output-folder outputs/best --suffix _yazrun 
-      --corr-threshold 0.25 --top-k-exog 3 --max-exog-comb-size 0 
-      --stop-on-first-valid --max-models 300
+      --input-folder data/split --output-folder outputs/best --corr-threshold 
+      0.25 --top-k-exog 3 --max-exog-comb-size 0 --stop-on-first-valid 
+      --max-models 300
     deps:
     - path: data/split/test_periodique_q12.csv
       hash: md5
-      md5: ccaeadf4f9cb30766842c511211780f2
-      size: 2921
+      md5: c048809e02d4e684ff3f1f19d81b05c1
+      size: 2928
     - path: data/split/train_periodique_q12.csv
       hash: md5
-      md5: 276b81ce03d0399e65fc0934be708557
-      size: 9670
+      md5: bd657f2ff7d7ee9257936ff336212046
+      size: 9712
     - path: mlops/7_Serie_temporelle/3_SARIMAX/sarimax_train.py
       hash: md5
-      md5: 31b0624303ff6795528b65545d6652bb
-      size: 24710
-      isexec: true
+      md5: 435b62091c77496545648c2b9b20ebab
+      size: 25466
     outs:
     - path: outputs/best
       hash: md5
-      md5: 1c308a707407faba0f4a861a1163df88.dir
-      size: 148833
-      nfiles: 3
+      md5: 808fec39d3b1eeffc380f79265365f7f.dir
+      size: 104338
+      nfiles: 2
   train_lgbm:
-    cmd: "python mlops/6_Regression/2_LGBM/train_lgbm.py --encoded-folder data/encoded
-      --model-folder models --experiment regression_pipeline && mkdir -p models\n"
+    cmd: "python3 mlops/6_Regression/2_LGBM/train_lgbm.py --encoded-folder data/encoded
+      --model-folder models\n"
     deps:
     - path: data/encoded/X_test.csv
       hash: md5
-      md5: ae8d995261f4a4445745acc608fcdc81
-      size: 58969328
+      md5: 3fb18dc71f877d6456e5b9a2ec01f2cf
+      size: 41391483
     - path: data/encoded/X_train.csv
       hash: md5
-      md5: 6e87a0e1a2f63490b4fde45c56c42549
-      size: 235893151
+      md5: 5cb29c1ef924db3b508f2a4b07f88d8c
+      size: 165561604
     - path: data/encoded/y_test.csv
       hash: md5
-      md5: 03bb414081e8fdf78ef2387e6ce2758d
-      size: 767777
+      md5: 042d00673fe25f340252f8823dac40a9
+      size: 768418
     - path: data/encoded/y_train.csv
       hash: md5
-      md5: c70eddb3edbab05e3447c7cfaa59a098
-      size: 3071597
+      md5: 41c2ba786d5e15ece395bb4a9964dd9d
+      size: 3073828
     - path: mlops/6_Regression/2_LGBM/train_lgbm.py
       hash: md5
-      md5: 18367c8cdd4a4bab61a97e1a70da66c1
-      size: 9174
+      md5: d3e2e69bfcc117a09a741e34372c9f3e
+      size: 9480
       isexec: true
     outs:
     - path: metrics/train_lgbm.json
       hash: md5
-      md5: 425548da0b7cb79148b29f0b9b74dd75
-      size: 427
+      md5: 8bea2e5579d6b653a087f9cab4198517
+      size: 428
     - path: models/lgbm_model.joblib
       hash: md5
-      md5: 7397a04d4109c34233b6b3802b6c5963
-      size: 2336910
+      md5: 2a4224a68dbd2bf36723f953912ca298
+      size: 2347733
     - path: reports/feature_importance.json
       hash: md5
-      md5: b24743a462b0cea529382bf1eab9e6c3
-      size: 3086
+      md5: b28f95846aa5459962bf15d8561df1cc
+      size: 2482
   analyse:
-    cmd: ".venv/bin/python mlops/6_Regression/4_Analyse/analyse.py --model lightgbm
-      && mkdir -p exports/reg\n"
+    cmd: "python mlops/6_Regression/4_Analyse/analyse.py\n"
     deps:
     - path: data/encoded/X_test.csv
       hash: md5
-      md5: ae8d995261f4a4445745acc608fcdc81
-      size: 58969328
+      md5: 3fb18dc71f877d6456e5b9a2ec01f2cf
+      size: 41391483
     - path: data/encoded/y_test.csv
       hash: md5
-      md5: 03bb414081e8fdf78ef2387e6ce2758d
-      size: 767777
+      md5: 042d00673fe25f340252f8823dac40a9
+      size: 768418
     - path: mlops/6_Regression/4_Analyse/analyse.py
       hash: md5
-      md5: 0a5f9b2c93337883300fac4725806920
-      size: 4927
-      isexec: true
+      md5: c1310d91450f58703f1fc7443a57eb32
+      size: 7731
     - path: models/lgbm_model.joblib
       hash: md5
-      md5: 7397a04d4109c34233b6b3802b6c5963
-      size: 2336910
+      md5: 2a4224a68dbd2bf36723f953912ca298
+      size: 2347733
     outs:
     - path: exports/reg
       hash: md5
@@ -251,30 +225,29 @@ stages:
       size: 0
       nfiles: 0
   evaluate:
-    cmd: .venv/bin/python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py 
+    cmd: python mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py 
       --input-folder data/split --model-folder outputs/best --output-folder 
       outputs/evaluate
     deps:
     - path: data/split
       hash: md5
-      md5: 38764de13a488581287594e33a1427d9.dir
-      size: 158505669
+      md5: f80c83fe7df6ebc2fc0b122e771cb037.dir
+      size: 164050447
       nfiles: 4
     - path: mlops/7_Serie_temporelle/4_EVALUATE/evaluate_ST.py
       hash: md5
-      md5: 8f842442356c04b5ec5176d54a0b754e
-      size: 10229
-      isexec: true
+      md5: 7d73d18baffc8337bae51e0d6aae4f6f
+      size: 13781
     - path: outputs/best
       hash: md5
-      md5: 1c308a707407faba0f4a861a1163df88.dir
-      size: 148833
-      nfiles: 3
+      md5: 808fec39d3b1eeffc380f79265365f7f.dir
+      size: 104338
+      nfiles: 2
     outs:
     - path: outputs/evaluate
       hash: md5
-      md5: bd72d5e0aa4ce65361ee4e1f4169631e.dir
-      size: 479
+      md5: 6521dd9f27045de7a93b5e6cfd66d7c5.dir
+      size: 663
       nfiles: 1
   utils:
     cmd: python mlops/preprocessing_4/utils.py

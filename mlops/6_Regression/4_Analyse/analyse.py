@@ -72,9 +72,9 @@ def _ensure_parent_dir(p: str | Path) -> None:
 @click.option("--model", type=click.Choice(["lightgbm", "xgboost"]), default="lightgbm",
               show_default=True, help="Famille de modèle à analyser.")
 @click.option("--model-folder", type=click.Path(exists=True, file_okay=False),
-              default="models", show_default=True, help="Dossier où le modèle entraîné est sauvegardé.")
+              default="exports/reg", show_default=True, help="Dossier où le modèle entraîné est sauvegardé.")
 @click.option("--model-path", type=click.Path(exists=True, dir_okay=False),
-              default=None, help="Chemin direct vers le .joblib (prioritaire sur --model/--model-folder).")
+              default="models", help="Chemin direct vers le .joblib (prioritaire sur --model/--model-folder).")
 @click.option("--mlflow-uri", default=None, help="(optionnel) MLFLOW_TRACKING_URI ou laisser pour fallback local.")
 @click.option("--experiment", default="regression_pipeline", show_default=True,
               help="Nom d'experience MLflow.")

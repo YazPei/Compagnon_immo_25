@@ -15,6 +15,15 @@ from sklearn.metrics import r2_score, mean_squared_error
 from lightgbm import LGBMRegressor
 import joblib
 import mlflow
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train the LightGBM model.")
+
+    parser.add_argument('--input-data', type=str, required=True, help='Path to the input data')
+    # Check if --encoded-folder is defined in the script.
+    args = parser.parse_args()
+    return args
 
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI"))
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -222,8 +231,8 @@ def main(encoded_folder, model_folder, experiment, tuner, n_iter, cv, random_sta
         with open("metrics/train_lgbm.json", "w", encoding="utf-8") as f:
             json.dump(metrics, f, indent=2)
 
-        print("✅ Entraînement terminé. Modèle & params sauvegardés.")
-        print("📈 Metrics JSON écrit:", Path("metrics/train_lgbm.json").resolve())
+        print("Entraînement terminé. Modèle & params sauvegardés.")
+        print("Metrics JSON écrit:", Path("metrics/train_lgbm.json").resolve())
 
 if __name__ == "__main__":
     main()

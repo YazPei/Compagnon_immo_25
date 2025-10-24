@@ -322,4 +322,79 @@ fusion-run: docker-dvc-check ## Lancer la fusion des données via script externe
 clustering-run: docker-dvc-check ## Lancer le clustering via script externe
 	docker run --rm -v $(PWD):/app -w /app $(DVC_IMAGE) bash SERVICES/clustering/run_clustering.sh
 
+.PHONY: help install start stop restart logs clean check test
+
+# Variables
+COMPOSE_FILE = docker-compose.yml
+SERVICES = app prometheus grafana alertmanager jaeger locust loki
+
+help: ## Afficher l'aide
+	@echo "Commandes disponibles:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+install: ## Installer et configurer le monitoring
+	@echo "🚀 Installation du monitoring..."
+	@bash scripts/setup_monitoring.sh
+
+start: ## Démarrer tous les services
+	@echo "▶️  Démarrage des services..."
+	@docker-compose up -d
+	@sleep 10
+	@make check
+
+stop: ## Arrêter tous les services
+	@echo "⏹️  Arrêt des services..."
+	@docker-compose down
+
+restart: ## Redémarrer tous les services
+	@echo "🔄 Redémarrage des services..."
+	@docker-compose restart
+	@sleep 10
+	@make check
+
+logs: ## Afficher les logs de tous les services
+	@docker-compose logs -f
+
+logs-service: ## Afficher les logs d'un service spécifique (usage: make logs-service SERVICE=prometheus)
+	@docker-compose logs -f $(SERVICE)
+
+clean: ## Nettoyer les volumes et images
+	@echo "🧹 Nettoyage..."
+	@docker-compose down -v
+	@docker system prune -f
+	@docker volume prune -f
+
+check: ## Vérifier l'état des services
+	@echo "🔍 Vérification des services..."
+	@bash scripts/check_services.sh
+
+test: ## Lancer les tests de charge
+	@echo "🧪 Lancement des tests de charge..."
+	@open http://localhost:8089 || xdg-open http://localhost:8089 || echo "Ouvrez http://localhost:8089 dans votre navigateur"
+
+monitoring: ## Ouvrir toutes les interfaces de monitoring
+	@echo "📊 Ouverture des interfaces..."
+	@open http://localhost:9090 || xdg-open http://localhost:9090 &
+	@open http://localhost:3000 || xdg-open http://localhost:3000 &
+	@open http://localhost:9093 || xdg-open http://localhost:9093 &
+	@open http://localhost:16686 || xdg-open http://localhost:16686 &
+
+dev: ## Mode développement (rebuild + start)
+	@echo "🔧 Mode développement..."
+	@docker-compose up -d --build
+	@make check
+
+prod: ## Mode production
+	@echo "🚀 Mode production..."
+	@docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+backup: ## Sauvegarder les données
+	@echo "💾 Sauvegarde..."
+	@mkdir -p backups/$(shell date +%Y%m%d_%H%M%S)
+	@docker run --rm -v compagnon_immo_25_prometheus_data:/data -v $(PWD)/backups/$(shell date +%Y%m%d_%H%M%S):/backup alpine tar czf /backup/prometheus.tar.gz -C /data .
+	@docker run --rm -v compagnon_immo_25_grafana_data:/data -v $(PWD)/backups/$(shell date +%Y%m%d_%H%M%S):/backup alpine tar czf /backup/grafana.tar.gz -C /data .
+
+status: ## Afficher le statut des conteneurs
+	@docker-compose ps
+
 

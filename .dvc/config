@@ -1,12 +1,12 @@
 [core]
-    remote = dagshub
+    remote = origin
     autostage = true
 [cache]
     dir = cache
     protected = false
     type = copy
 ['remote "origin"']
-    url = https://dagshub.com/YazPei/compagnon_immo.dvc
+    url = https://dagshub.com/user/compagnon_immo_25.dvc
 ['remote "dagshub"']
     url = webdavs://dagshub.com/yazpei/Compagnon_immo_25.dvc
     user = ""
